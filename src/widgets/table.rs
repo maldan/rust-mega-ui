@@ -1,7 +1,7 @@
 use glam::Vec2;
 
 use crate::theme;
-use crate::types::Rect;
+use crate::types::{CursorIcon, Rect, Response};
 use crate::{new_layer, LayoutDir, Ui};
 
 #[derive(Clone, Copy)]
@@ -62,17 +62,28 @@ impl Ui {
         self.table_stack.pop();
     }
 
-    pub fn table_row(&mut self, add: impl FnOnce(&mut Self)) {
+    pub fn table_row(&mut self, add: impl FnOnce(&mut Self)) -> Response {
         let Some(ctx) = self.table_stack.last() else {
-            return;
+            return Response::default();
         };
         let widths = ctx.widths.clone();
         let row_i = ctx.row_i;
         let total_w = widths.iter().sum::<f32>();
         let row_h = self.s(theme::TABLE_ROW_H);
         let row = self.allocate(Vec2::new(total_w.max(1.0), row_h));
+        let id = self.current_id(&format!("#row{row_i}"));
 
         let hovered = self.hovered_rect(row);
+        if hovered {
+            self.hover_id = Some(id);
+            self.want_capture = true;
+            self.set_cursor(CursorIcon::Pointer);
+        }
+        if hovered && self.input.mouse_pressed {
+            self.active_id = Some(id);
+        }
+        let clicked = self.active_id == Some(id) && hovered && self.input.mouse_released;
+
         let bg = if hovered {
             theme::TABLE_ROW_HOVER
         } else if row_i % 2 == 0 {
@@ -88,6 +99,12 @@ impl Ui {
             ctx.row_i += 1;
         }
         add(self);
+
+        Response {
+            hovered,
+            clicked,
+            changed: clicked,
+        }
     }
 
     pub fn table_cell(&mut self, add: impl FnOnce(&mut Self)) {

@@ -7,11 +7,78 @@
 #[path = "framework.rs"]
 mod framework;
 
+use std::fs;
+use std::path::{Path, PathBuf};
 use std::time::Instant;
 
 use framework::{Host, Scene};
 use glam::Vec2;
-use mega_ui::{Ui, Window};
+use mega_ui::{ScrollAxes, TableColumn, Ui, Window};
+
+struct FsEntry {
+    name: String,
+    path: PathBuf,
+    is_dir: bool,
+    size: u64,
+}
+
+fn list_dir(path: &Path) -> Vec<FsEntry> {
+    let mut out = Vec::new();
+    let Ok(rd) = fs::read_dir(path) else {
+        return out;
+    };
+    for e in rd.flatten() {
+        let path = e.path();
+        let name = e.file_name().to_string_lossy().into_owned();
+        if name.starts_with('.') {
+            continue;
+        }
+        let meta = e.metadata().ok();
+        let is_dir = meta.as_ref().map(|m| m.is_dir()).unwrap_or(false);
+        let size = meta.map(|m| m.len()).unwrap_or(0);
+        out.push(FsEntry {
+            name,
+            path,
+            is_dir,
+            size,
+        });
+    }
+    out.sort_by(|a, b| match (a.is_dir, b.is_dir) {
+        (true, false) => std::cmp::Ordering::Less,
+        (false, true) => std::cmp::Ordering::Greater,
+        _ => a.name.to_lowercase().cmp(&b.name.to_lowercase()),
+    });
+    out
+}
+
+fn format_size(bytes: u64) -> String {
+    const KB: u64 = 1024;
+    const MB: u64 = KB * 1024;
+    const GB: u64 = MB * 1024;
+    if bytes >= GB {
+        format!("{:.1} GB", bytes as f64 / GB as f64)
+    } else if bytes >= MB {
+        format!("{:.1} MB", bytes as f64 / MB as f64)
+    } else if bytes >= KB {
+        format!("{:.1} KB", bytes as f64 / KB as f64)
+    } else {
+        format!("{bytes} B")
+    }
+}
+
+fn default_root() -> PathBuf {
+    if let Ok(cwd) = std::env::current_dir() {
+        if fs::read_dir(&cwd).is_ok() {
+            return cwd;
+        }
+    }
+    if let Some(home) = std::env::var_os("USERPROFILE").map(PathBuf::from) {
+        if home.is_dir() {
+            return home;
+        }
+    }
+    PathBuf::from("C:\\")
+}
 
 struct Demo {
     name: String,
@@ -25,6 +92,10 @@ struct Demo {
     started: Instant,
     last_menu: String,
     confirm_open: bool,
+    /// 0 = tree, 1 = table
+    fm_view: usize,
+    fm_path: PathBuf,
+    show_fm: bool,
 }
 
 impl Default for Demo {
@@ -43,6 +114,26 @@ impl Default for Demo {
             started: Instant::now(),
             last_menu: String::from("(none)"),
             confirm_open: false,
+            fm_view: 0,
+            fm_path: default_root(),
+            show_fm: true,
+        }
+    }
+}
+
+fn draw_fs_tree(ui: &mut Ui, path: &Path, depth: u32) {
+    if depth > 8 {
+        ui.label("…");
+        return;
+    }
+    for entry in list_dir(path) {
+        let id = entry.path.to_string_lossy();
+        if entry.is_dir {
+            ui.tree_node_icon(&id, "folder", &entry.name, |ui| {
+                draw_fs_tree(ui, &entry.path, depth + 1);
+            });
+        } else {
+            ui.tree_leaf_icon(&id, "file", &entry.name);
         }
     }
 }
@@ -50,6 +141,10 @@ impl Default for Demo {
 impl Scene for Demo {
     fn title() -> &'static str {
         "mega-ui demo"
+    }
+
+    fn window_size() -> (f64, f64) {
+        (1280.0, 800.0)
     }
 
     fn init(ui: &mut Ui) {
@@ -77,6 +172,11 @@ impl Scene for Demo {
                         let _ = ui.menu_item("Clear List");
                     });
                 });
+                ui.separator();
+                if ui.menu_item_icon("folder", "File Manager").clicked() {
+                    state.show_fm = true;
+                    state.last_menu = String::from("File / File Manager");
+                }
                 ui.separator();
                 if ui.menu_item_icon("close", "Delete project…").clicked() {
                     state.confirm_open = true;
@@ -110,6 +210,9 @@ impl Scene for Demo {
                     state.show_help = !state.show_help;
                     state.last_menu = String::from("View / Toggle Help");
                 }
+                if ui.menu_item("Toggle File Manager").clicked() {
+                    state.show_fm = !state.show_fm;
+                }
                 ui.menu("Theme", |ui| {
                     if ui.menu_item("Dark").clicked() {
                         state.theme = 0;
@@ -126,7 +229,7 @@ impl Scene for Demo {
         ui.window(
             Window::new("Widgets")
                 .pos(Vec2::new(24.0, 40.0))
-                .size(Vec2::new(320.0, 440.0))
+                .size(Vec2::new(300.0, 420.0))
                 .resizable(true)
                 .collapsible(true),
             |ui| {
@@ -164,16 +267,133 @@ impl Scene for Demo {
 
         ui.window(
             Window::new("Help")
-                .pos(Vec2::new(370.0, 40.0))
-                .size(Vec2::new(280.0, 180.0))
+                .pos(Vec2::new(340.0, 40.0))
+                .size(Vec2::new(260.0, 160.0))
                 .open(&mut state.show_help),
             |ui| {
                 ui.label("Drag window titles to move.");
-                ui.label("Resize from the bottom-right.");
-                ui.label("Menu: click File/Edit/View.");
-                ui.label("Hover opens submenus.");
+                ui.label("File Manager: tree or table.");
+                ui.label("Folders open; files do not.");
                 ui.separator();
                 ui.label(&format!("FPS ~ {:.0}", (1.0 / dt.max(1e-4)).min(999.0)));
+            },
+        );
+
+        ui.window(
+            Window::new("File Manager")
+                .pos(Vec2::new(620.0, 40.0))
+                .size(Vec2::new(520.0, 520.0))
+                .resizable(true)
+                .open(&mut state.show_fm),
+            |ui| {
+                ui.toggle("View", &mut state.fm_view, &["Tree", "Table"]);
+                ui.separator();
+                let path_str = state.fm_path.to_string_lossy().into_owned();
+                ui.label(&path_str);
+                ui.separator();
+
+                let avail = ui.available_size();
+                let list_w = avail.x.max(100.0);
+                let list_h = (avail.y - 4.0).max(80.0);
+
+                if state.fm_view == 0 {
+                    ui.scroll_area(
+                        "fm_tree",
+                        Vec2::new(list_w, list_h),
+                        ScrollAxes::Vertical,
+                        |ui| {
+                            let entries = list_dir(&state.fm_path);
+                            if entries.is_empty() {
+                                ui.label("(empty or unreadable)");
+                            } else {
+                                draw_fs_tree(ui, &state.fm_path, 0);
+                            }
+                        },
+                    );
+                } else {
+                    let entries = list_dir(&state.fm_path);
+                    let mut nav: Option<PathBuf> = None;
+
+                    ui.scroll_area(
+                        "fm_table",
+                        Vec2::new(list_w, list_h),
+                        ScrollAxes::Vertical,
+                        |ui| {
+                            if entries.is_empty() {
+                                ui.label("(empty or unreadable)");
+                            }
+                            ui.table(
+                            "files",
+                            &[
+                                TableColumn {
+                                    name: "Name",
+                                    width: 3.0,
+                                },
+                                TableColumn {
+                                    name: "Type",
+                                    width: 1.0,
+                                },
+                                TableColumn {
+                                    name: "Size",
+                                    width: 1.0,
+                                },
+                            ],
+                            |ui| {
+                                if state.fm_path.parent().is_some() {
+                                    if ui
+                                        .table_row(|ui| {
+                                            ui.table_cell(|ui| {
+                                                ui.horizontal(|ui| {
+                                                    ui.icon("folder", 14.0);
+                                                    ui.label("..");
+                                                });
+                                            });
+                                            ui.table_cell(|ui| ui.label("Up"));
+                                            ui.table_cell(|ui| ui.label(""));
+                                        })
+                                        .clicked()
+                                    {
+                                        nav = state.fm_path.parent().map(|p| p.to_path_buf());
+                                    }
+                                }
+
+                                for entry in &entries {
+                                    let kind = if entry.is_dir { "Folder" } else { "File" };
+                                    let size = if entry.is_dir {
+                                        String::from("—")
+                                    } else {
+                                        format_size(entry.size)
+                                    };
+                                    let icon = if entry.is_dir { "folder" } else { "file" };
+                                    let name = entry.name.clone();
+                                    let is_dir = entry.is_dir;
+                                    let path = entry.path.clone();
+
+                                    if ui
+                                        .table_row(|ui| {
+                                            ui.table_cell(|ui| {
+                                                ui.horizontal(|ui| {
+                                                    ui.icon(icon, 14.0);
+                                                    ui.label(&name);
+                                                });
+                                            });
+                                            ui.table_cell(|ui| ui.label(kind));
+                                            ui.table_cell(|ui| ui.label(&size));
+                                        })
+                                        .clicked()
+                                        && is_dir
+                                    {
+                                        nav = Some(path);
+                                    }
+                                }
+                            },
+                        );
+                    });
+
+                    if let Some(p) = nav {
+                        state.fm_path = p;
+                    }
+                }
             },
         );
 
