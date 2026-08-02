@@ -131,6 +131,8 @@ pub trait Scene {
     fn window_size() -> (f64, f64) {
         (960.0, 640.0)
     }
+    /// Called once after `Ui::new`.
+    fn init(_ui: &mut Ui) {}
     /// Build widgets for this frame. Return `true` to keep redrawing.
     fn build(ui: &mut Ui, state: &mut Self, viewport: Vec2, dt: f32) -> bool;
 }
@@ -147,10 +149,12 @@ pub struct Host<S: Scene> {
 
 impl<S: Scene> Host<S> {
     pub fn new(state: S) -> Self {
+        let mut ui = Ui::new();
+        S::init(&mut ui);
         Self {
             window: None,
             gpu: None,
-            ui: Ui::new(),
+            ui,
             state,
             input: FrameInput::default(),
             last_frame: Instant::now(),

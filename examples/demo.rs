@@ -50,20 +50,24 @@ impl Scene for Demo {
         "mega-ui demo"
     }
 
+    fn init(ui: &mut Ui) {
+        ui.load_builtin_icons();
+    }
+
     fn build(ui: &mut Ui, state: &mut Self, _viewport: Vec2, dt: f32) -> bool {
         ui.menu_bar(|ui| {
             ui.menu("File", |ui| {
-                if ui.menu_item("New").clicked() {
+                if ui.menu_item_icon("plus", "New").clicked() {
                     state.last_menu = String::from("File / New");
                 }
-                if ui.menu_item("Open…").clicked() {
+                if ui.menu_item_icon("folder", "Open…").clicked() {
                     state.last_menu = String::from("File / Open");
                 }
                 ui.menu("Open Recent", |ui| {
-                    if ui.menu_item("project.mega").clicked() {
+                    if ui.menu_item_icon("file", "project.mega").clicked() {
                         state.last_menu = String::from("File / Open Recent / project.mega");
                     }
-                    if ui.menu_item("demo.mega").clicked() {
+                    if ui.menu_item_icon("file", "demo.mega").clicked() {
                         state.last_menu = String::from("File / Open Recent / demo.mega");
                     }
                     ui.separator();
@@ -72,7 +76,7 @@ impl Scene for Demo {
                     });
                 });
                 ui.separator();
-                if ui.menu_item("Exit").clicked() {
+                if ui.menu_item_icon("close", "Exit").clicked() {
                     state.last_menu = String::from("File / Exit");
                 }
             });
@@ -115,12 +119,20 @@ impl Scene for Demo {
         ui.window(
             Window::new("Widgets")
                 .pos(Vec2::new(24.0, 40.0))
-                .size(Vec2::new(320.0, 420.0))
+                .size(Vec2::new(320.0, 440.0))
                 .resizable(true)
                 .collapsible(true),
             |ui| {
                 ui.label("mega-ui demo");
                 ui.label(&format!("Last menu: {}", state.last_menu));
+                ui.separator();
+                ui.horizontal(|ui| {
+                    ui.icon("folder", 18.0);
+                    ui.icon("file", 18.0);
+                    ui.icon("plus", 18.0);
+                    ui.icon("close", 18.0);
+                    ui.label("builtin icons");
+                });
                 ui.separator();
                 ui.text_input("name", &mut state.name);
                 ui.checkbox("Enabled", &mut state.enabled);

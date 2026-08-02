@@ -91,7 +91,7 @@ impl Ui {
     }
 
     pub fn menu_item_enabled(&mut self, label: &str, enabled: bool) -> Response {
-        let Some(item) = self.menu_row(label, enabled, false) else {
+        let Some(item) = self.menu_row_with_icon(label, None, enabled, false) else {
             return Response::default();
         };
 
@@ -100,6 +100,31 @@ impl Ui {
             self.close_all_menus();
         }
 
+        Response {
+            hovered: item.hovered,
+            clicked,
+            changed: clicked,
+        }
+    }
+
+    /// Clickable leaf item with a leading SVG icon.
+    pub fn menu_item_icon(&mut self, icon: &str, label: &str) -> Response {
+        self.menu_item_icon_enabled(icon, label, self.enabled())
+    }
+
+    pub fn menu_item_icon_enabled(
+        &mut self,
+        icon: &str,
+        label: &str,
+        enabled: bool,
+    ) -> Response {
+        let Some(item) = self.menu_row_with_icon(label, Some(icon), enabled, false) else {
+            return Response::default();
+        };
+        let clicked = enabled && item.hovered && self.input.mouse_released;
+        if clicked {
+            self.close_all_menus();
+        }
         Response {
             hovered: item.hovered,
             clicked,
@@ -265,7 +290,7 @@ impl Ui {
     }
 
     fn menu_submenu(&mut self, label: &str, add: impl FnOnce(&mut Self)) {
-        let Some(item) = self.menu_row(label, self.enabled(), true) else {
+        let Some(item) = self.menu_row_with_icon(label, None, self.enabled(), true) else {
             return;
         };
         let parent_id = self.menu_stack.last().map(|m| m.id).unwrap();
@@ -374,11 +399,23 @@ impl Ui {
         }
     }
 
-    fn menu_row(&mut self, label: &str, enabled: bool, submenu: bool) -> Option<MenuRow> {
+    fn menu_row_with_icon(
+        &mut self,
+        label: &str,
+        icon: Option<&str>,
+        enabled: bool,
+        submenu: bool,
+    ) -> Option<MenuRow> {
         let ctx = self.menu_stack.last()?;
         let id = self.current_id(label);
         let item_h = self.s(theme::MENU_ITEM_H);
         let pad = self.s(10.0);
+        let icon_s = self.s(14.0);
+        let icon_gap = if icon.is_some() {
+            icon_s + self.s(8.0)
+        } else {
+            0.0
+        };
         let width = ctx.width;
         let y = ctx.cursor_y;
         let origin_x = ctx.origin.x;
@@ -387,7 +424,7 @@ impl Ui {
             Vec2::new((width - self.s(6.0)).max(1.0), item_h),
         );
 
-        let label_w = self.text_width(label);
+        let label_w = self.text_width(label) + icon_gap;
         if let Some(ctx) = self.menu_stack.last_mut() {
             ctx.cursor_y += item_h;
             ctx.max_label_w = ctx.max_label_w.max(label_w);
@@ -404,7 +441,6 @@ impl Ui {
             if let Some(ctx) = self.menu_stack.last_mut() {
                 ctx.pointer_inside = true;
             }
-            // Hovering a non-submenu row closes sibling submenus.
             if !submenu {
                 if let Some(ctx) = self.menu_stack.last() {
                     let parent = ctx.id;
@@ -419,8 +455,22 @@ impl Ui {
         } else {
             theme::TEXT_DISABLED
         };
+
+        let mut text_x = rect.min.x + pad;
+        if let Some(icon_id) = icon {
+            let icon_rect = Rect::from_min_size(
+                Vec2::new(
+                    rect.min.x + pad,
+                    rect.min.y + (item_h - icon_s) * 0.5,
+                ),
+                Vec2::splat(icon_s),
+            );
+            self.draw_icon_at(icon_id, icon_rect, color, true);
+            text_x += icon_gap;
+        }
+
         self.text_overlay(
-            Vec2::new(rect.min.x + pad, rect.min.y + (item_h - text_h) * 0.5),
+            Vec2::new(text_x, rect.min.y + (item_h - text_h) * 0.5),
             label,
             color,
         );

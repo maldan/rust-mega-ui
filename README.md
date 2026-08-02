@@ -213,6 +213,12 @@ Clipboard: в `UiInput.clipboard` кладёшь текст при paste; из `
 ## Виджеты (кратко)
 
 ```rust
+ui.load_builtin_icons(); // folder, file, close, plus — once at startup
+// or: ui.load_icons([("save", include_bytes!("save.svg"))]);
+
+ui.icon("folder", 18.0);
+ui.menu_item_icon("file", "Open…");
+
 ui.menu_bar(|ui| {
     ui.menu("File", |ui| {
         if ui.menu_item("New").clicked() {}

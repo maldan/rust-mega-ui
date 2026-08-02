@@ -53,31 +53,35 @@ impl Scene for DockDemo {
         (1100.0, 720.0)
     }
 
+    fn init(ui: &mut Ui) {
+        ui.load_builtin_icons();
+    }
+
     fn build(ui: &mut Ui, state: &mut Self, viewport: Vec2, dt: f32) -> bool {
         ui.set_scale(state.scale);
 
         ui.menu_bar(|ui| {
             ui.menu("File", |ui| {
-                if ui.menu_item("New Scene").clicked() {
+                if ui.menu_item_icon("plus", "New Scene").clicked() {
                     state.last_menu = String::from("File / New Scene");
                     state.log.push_str("new scene\n");
                 }
-                if ui.menu_item("Open…").clicked() {
+                if ui.menu_item_icon("folder", "Open…").clicked() {
                     state.last_menu = String::from("File / Open");
                     state.log.push_str("open…\n");
                 }
                 ui.menu("Open Recent", |ui| {
-                    if ui.menu_item("level_01.mega").clicked() {
+                    if ui.menu_item_icon("file", "level_01.mega").clicked() {
                         state.last_menu = String::from("File / Open Recent / level_01.mega");
                         state.log.push_str("open level_01.mega\n");
                     }
-                    if ui.menu_item("sandbox.mega").clicked() {
+                    if ui.menu_item_icon("file", "sandbox.mega").clicked() {
                         state.last_menu = String::from("File / Open Recent / sandbox.mega");
                         state.log.push_str("open sandbox.mega\n");
                     }
                 });
                 ui.separator();
-                if ui.menu_item("Exit").clicked() {
+                if ui.menu_item_icon("close", "Exit").clicked() {
                     state.last_menu = String::from("File / Exit");
                     state.log.push_str("exit\n");
                 }

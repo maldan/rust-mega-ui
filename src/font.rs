@@ -129,6 +129,39 @@ impl Font {
         d
     }
 
+    /// Pack an R8 alpha bitmap into the atlas. Returns UVs or `None` if full.
+    pub(crate) fn pack_alpha(&mut self, pixels: &[u8], gw: u32, gh: u32) -> Option<([f32; 2], [f32; 2])> {
+        if gw == 0 || gh == 0 || pixels.len() < (gw * gh) as usize {
+            return Some((self.white_uv, self.white_uv));
+        }
+        let pad = 1u32;
+        if self.pack_x + gw + pad > self.atlas_w {
+            self.pack_x = 1;
+            self.pack_y += self.row_h + pad;
+            self.row_h = 0;
+        }
+        if self.pack_y + gh + pad > self.atlas_h {
+            return None;
+        }
+        let x = self.pack_x;
+        let y = self.pack_y;
+        for row in 0..gh {
+            let src = (row * gw) as usize;
+            let dst = ((y + row) * self.atlas_w + x) as usize;
+            self.atlas[dst..dst + gw as usize]
+                .copy_from_slice(&pixels[src..src + gw as usize]);
+        }
+        self.pack_x += gw + pad;
+        self.row_h = self.row_h.max(gh);
+        self.dirty = true;
+        let aw = self.atlas_w as f32;
+        let ah = self.atlas_h as f32;
+        Some((
+            [x as f32 / aw, y as f32 / ah],
+            [(x + gw) as f32 / aw, (y + gh) as f32 / ah],
+        ))
+    }
+
     fn ascent_at(&self, px: f32) -> f32 {
         match self.font.horizontal_line_metrics(px) {
             Some(m) => m.ascent,

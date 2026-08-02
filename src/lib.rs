@@ -1,6 +1,7 @@
 mod dock;
 mod draw;
 mod font;
+mod icon;
 pub(crate) mod theme;
 mod types;
 mod widgets;
@@ -20,6 +21,7 @@ use glam::Vec2;
 
 use draw::push_round_rect;
 use font::Font;
+use icon::Icons;
 use widgets::table::TableCtx;
 
 pub(crate) struct Layer {
@@ -107,6 +109,7 @@ pub struct Ui {
     pub(crate) scale: f32,
     pub(crate) enabled_stack: Vec<bool>,
     pub(crate) font: Font,
+    pub(crate) icons: Icons,
     pub(crate) scroll_wheel_target: Option<Id>,
     pub(crate) scroll_hover: Option<Id>,
     pub(crate) needs_repaint: bool,
@@ -162,6 +165,7 @@ impl Ui {
             scale: 1.0,
             enabled_stack: Vec::new(),
             font: Font::load_default(theme::FONT_SIZE),
+            icons: Icons::default(),
             scroll_wheel_target: None,
             scroll_hover: None,
             needs_repaint: false,
