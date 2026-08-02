@@ -219,6 +219,11 @@ ui.load_builtin_icons(); // folder, file, close, plus — once at startup
 ui.icon("folder", 18.0);
 ui.menu_item_icon("file", "Open…");
 
+ui.modal(Window::new("Confirm").size(s).open(&mut show), |ui| {
+    ui.label("Are you sure?");
+    if ui.button("OK").clicked() { ui.close_modal(); }
+});
+
 ui.menu_bar(|ui| {
     ui.menu("File", |ui| {
         if ui.menu_item("New").clicked() {}

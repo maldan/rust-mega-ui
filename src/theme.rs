@@ -7,6 +7,7 @@ pub const WIN_RADIUS: f32 = 5.0;
 pub const WIN_TITLE_H: f32 = 24.0;
 pub const WIN_MIN_W: f32 = 140.0;
 pub const WIN_MIN_H: f32 = 80.0;
+pub const MODAL_DIM: [f32; 4] = [0.0, 0.0, 0.0, 0.55];
 
 pub const BTN: [f32; 4] = [0.25, 0.25, 0.25, 1.0];
 pub const BTN_HOVER: [f32; 4] = [0.32, 0.32, 0.32, 1.0];

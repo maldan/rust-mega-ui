@@ -24,6 +24,7 @@ struct Demo {
     show_help: bool,
     started: Instant,
     last_menu: String,
+    confirm_open: bool,
 }
 
 impl Default for Demo {
@@ -41,6 +42,7 @@ impl Default for Demo {
             show_help: true,
             started: Instant::now(),
             last_menu: String::from("(none)"),
+            confirm_open: false,
         }
     }
 }
@@ -75,6 +77,11 @@ impl Scene for Demo {
                         let _ = ui.menu_item("Clear List");
                     });
                 });
+                ui.separator();
+                if ui.menu_item_icon("close", "Delete project…").clicked() {
+                    state.confirm_open = true;
+                    state.last_menu = String::from("File / Delete project");
+                }
                 ui.separator();
                 if ui.menu_item_icon("close", "Exit").clicked() {
                     state.last_menu = String::from("File / Exit");
@@ -145,6 +152,9 @@ impl Scene for Demo {
                         state.clicks += 1;
                     }
                 });
+                if ui.button("Confirm…").clicked() {
+                    state.confirm_open = true;
+                }
                 ui.label(&format!("Clicks: {}", state.clicks));
                 ui.separator();
                 ui.label("Plot");
@@ -164,6 +174,28 @@ impl Scene for Demo {
                 ui.label("Hover opens submenus.");
                 ui.separator();
                 ui.label(&format!("FPS ~ {:.0}", (1.0 / dt.max(1e-4)).min(999.0)));
+            },
+        );
+
+        ui.modal(
+            Window::new("Confirm")
+                .size(Vec2::new(320.0, 160.0))
+                .open(&mut state.confirm_open),
+            |ui| {
+                ui.label("Delete this project?");
+                ui.label("This cannot be undone.");
+                ui.separator();
+                ui.horizontal(|ui| {
+                    if ui.button("Cancel").clicked() {
+                        ui.close_modal();
+                        state.last_menu = String::from("Confirm / Cancel");
+                    }
+                    if ui.button("Delete").clicked() {
+                        ui.close_modal();
+                        state.clicks = 0;
+                        state.last_menu = String::from("Confirm / Delete");
+                    }
+                });
             },
         );
 

@@ -102,7 +102,73 @@ impl Ui {
         )
     }
 
-    pub fn window(&mut self, mut cfg: Window<'_>, add: impl FnOnce(&mut Self)) {
+    pub fn window(&mut self, cfg: Window<'_>, add: impl FnOnce(&mut Self)) {
+        let closable = cfg.open.is_some();
+        self.window_ex(cfg, false, closable, add);
+    }
+
+    /// Modal dialog: dimmed full-screen backdrop, always on top, blocks background input.
+    /// Pass `.open(&mut flag)` so it can be closed (title ✕ or [`Self::close_modal`]).
+    pub fn modal(&mut self, mut cfg: Window<'_>, add: impl FnOnce(&mut Self)) {
+        if cfg.open.as_ref().is_some_and(|o| !**o) {
+            return;
+        }
+        let closable = cfg.open.is_some();
+
+        let vp = self.input.viewport;
+        if !self.windows.contains_key(&Id::new(cfg.title)) {
+            cfg.default_pos = Vec2::new(
+                ((vp.x - cfg.default_size.x) * 0.5).max(0.0),
+                ((vp.y - cfg.default_size.y) * 0.5).max(0.0),
+            );
+        }
+
+        let dim = Rect::from_min_size(Vec2::ZERO, vp);
+        let uv = self.font.white_uv();
+        push_round_rect(
+            &mut self.modal_layer,
+            dim,
+            0.0,
+            theme::MODAL_DIM,
+            true,
+            true,
+            uv,
+            None,
+        );
+        self.want_capture = true;
+
+        // Don't hold `open` during content — apply close afterwards.
+        let inner = Window {
+            title: cfg.title,
+            default_pos: cfg.default_pos,
+            default_size: cfg.default_size,
+            resizable: cfg.resizable,
+            collapsible: false,
+            open: None,
+        };
+        self.window_ex(inner, true, closable, add);
+
+        if self.modal_request_close {
+            self.modal_open = false;
+            self.modal_id = None;
+            if let Some(open) = cfg.open.as_mut() {
+                **open = false;
+            }
+        }
+    }
+
+    /// Close the current modal (call from inside its content closure).
+    pub fn close_modal(&mut self) {
+        self.modal_request_close = true;
+    }
+
+    fn window_ex(
+        &mut self,
+        mut cfg: Window<'_>,
+        is_modal: bool,
+        closable: bool,
+        add: impl FnOnce(&mut Self),
+    ) {
         if cfg.open.as_ref().is_some_and(|o| !**o) {
             return;
         }
@@ -113,10 +179,21 @@ impl Ui {
         if !self.win_order.contains(&window_id) {
             self.win_order.push(window_id);
         }
+        if is_modal {
+            self.bring_to_front(window_id);
+            self.modal_id = Some(window_id);
+            self.modal_open = true;
+        }
 
-        let input_ok = self.window_input_ok(window_id);
+        let input_ok = if is_modal {
+            true
+        } else {
+            self.window_input_ok(window_id)
+        };
         let prev_block = self.block_input;
-        if !input_ok {
+        if is_modal {
+            self.block_input = false;
+        } else if !input_ok {
             self.block_input = true;
         }
 
@@ -133,9 +210,12 @@ impl Ui {
         let mut pos = entry.pos;
         let mut size = entry.size;
         let mut collapsed = entry.collapsed;
+        if is_modal {
+            collapsed = false;
+            cfg.collapsible = false;
+        }
 
         let title_h = self.s(theme::WIN_TITLE_H);
-        let closable = cfg.open.is_some();
         let sc = self.scale;
 
         let mut btn_i = 0;
@@ -149,6 +229,11 @@ impl Ui {
             if resp.clicked() {
                 if let Some(open) = cfg.open.as_mut() {
                     **open = false;
+                }
+                if is_modal {
+                    self.modal_request_close = true;
+                    self.modal_open = false;
+                    self.modal_id = None;
                 }
                 self.windows
                     .insert(window_id, WinState { pos, size, collapsed });
@@ -202,8 +287,9 @@ impl Ui {
                 pos + Vec2::new(size.x - handle, size.y - handle),
                 Vec2::splat(handle),
             );
-            let hover =
-                !self.block_input && !self.mouse_over_absorb() && resize_rect.contains(self.input.mouse_pos);
+            let hover = !self.block_input
+                && !self.mouse_over_absorb()
+                && resize_rect.contains(self.input.mouse_pos);
             if hover {
                 self.want_capture = true;
                 self.set_cursor(CursorIcon::ResizeNwse);

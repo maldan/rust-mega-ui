@@ -84,6 +84,11 @@ pub struct Ui {
     pub(crate) win_order: Vec<Id>,
     pub(crate) win_rects: HashMap<Id, Rect>,
     pub(crate) window_layers: Vec<(Id, Vec<DrawCommand>)>,
+    pub(crate) modal_layer: Vec<DrawCommand>,
+    pub(crate) modal_id: Option<Id>,
+    /// True if a modal was shown last frame / this frame (blocks background input).
+    pub(crate) modal_open: bool,
+    pub(crate) modal_request_close: bool,
     pub(crate) hover_window: Option<Id>,
     pub(crate) focus_window: Option<Id>,
     pub(crate) block_input: bool,
@@ -140,6 +145,10 @@ impl Ui {
             win_order: Vec::new(),
             win_rects: HashMap::new(),
             window_layers: Vec::new(),
+            modal_layer: Vec::new(),
+            modal_id: None,
+            modal_open: false,
+            modal_request_close: false,
             hover_window: None,
             focus_window: None,
             block_input: false,
@@ -264,6 +273,7 @@ impl Ui {
         self.draw_list.clear();
         self.overlay.clear();
         self.window_layers.clear();
+        self.modal_layer.clear();
         self.id_stack.clear();
         self.layers.clear();
         self.clip_stack.clear();
@@ -274,11 +284,17 @@ impl Ui {
         self.cursor_icon = CursorIcon::Default;
         self.scroll_hover = None;
         self.needs_repaint = false;
-        self.block_input = false;
         self.clipboard_out = None;
         self.enabled_stack.clear();
         self.menu_bar_stack.clear();
         self.menu_stack.clear();
+
+        let modal_blocking = self.modal_open;
+        self.modal_id = None;
+        self.modal_open = false;
+        self.modal_request_close = false;
+        // Block background until/unless a modal runs and unlocks its own content.
+        self.block_input = modal_blocking;
 
         self.hover_window = self
             .win_order
@@ -300,8 +316,10 @@ impl Ui {
             self.focus_id = None;
             if !blocked {
                 self.focus_window = self.hover_window;
-                if let Some(id) = self.hover_window {
-                    self.bring_to_front(id);
+                if !modal_blocking {
+                    if let Some(id) = self.hover_window {
+                        self.bring_to_front(id);
+                    }
                 }
             }
         }
@@ -326,28 +344,46 @@ impl Ui {
         }
         self.scroll_wheel_target = self.scroll_hover;
 
-        // background (dock etc.) then windows back→front, then overlays
+        // background → windows (skip modal id) → modal dim+window → overlays
+        let modal_id = self.modal_id;
         let mut composed = std::mem::take(&mut self.draw_list);
         for id in &self.win_order {
+            if Some(*id) == modal_id {
+                continue;
+            }
             if let Some((_, cmds)) = self.window_layers.iter().find(|(i, _)| i == id) {
                 composed.extend_from_slice(cmds);
             }
         }
         for (id, cmds) in &self.window_layers {
+            if Some(*id) == modal_id {
+                continue;
+            }
             if !self.win_order.contains(id) {
+                composed.extend_from_slice(cmds);
+            }
+        }
+        composed.append(&mut self.modal_layer);
+        // Modal window draw cmds live in window_layers too — append after dim.
+        if let Some(mid) = modal_id {
+            if let Some((_, cmds)) = self.window_layers.iter().find(|(i, _)| *i == mid) {
                 composed.extend_from_slice(cmds);
             }
         }
         composed.append(&mut self.overlay);
         self.draw_list = composed;
 
-        // Remember popup hit area so the next frame's press can't steal focus underneath.
-        self.overlay_block = self.mouse_absorb;
+        // Popups + full-screen modal dim both block the next press under them.
+        self.overlay_block = if self.modal_open {
+            Some(Rect::from_min_size(Vec2::ZERO, self.input.viewport))
+        } else {
+            self.mouse_absorb
+        };
 
         UiOutput {
             draw_list: std::mem::take(&mut self.draw_list),
-            want_capture_mouse: self.want_capture,
-            want_capture_keyboard: self.focus_id.is_some(),
+            want_capture_mouse: self.want_capture || self.modal_open,
+            want_capture_keyboard: self.focus_id.is_some() || self.modal_open,
             cursor: self.cursor_icon,
             needs_repaint: self.needs_repaint,
             clipboard: self.clipboard_out.take(),
@@ -360,6 +396,9 @@ impl Ui {
     }
 
     pub(crate) fn window_input_ok(&self, id: Id) -> bool {
+        if self.modal_open {
+            return self.modal_id == Some(id);
+        }
         self.hover_window == Some(id) || self.focus_window == Some(id)
     }
 

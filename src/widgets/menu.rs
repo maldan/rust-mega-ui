@@ -164,7 +164,8 @@ impl Ui {
             b.cursor_x += btn_w;
         }
 
-        let hovered = self.hovered_overlay(btn) || self.hovered_rect(btn);
+        let hovered =
+            !self.block_input && (self.hovered_overlay(btn) || self.hovered_rect(btn));
         if hovered {
             self.want_capture = true;
             self.set_cursor(CursorIcon::Pointer);
