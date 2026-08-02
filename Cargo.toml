@@ -18,3 +18,7 @@ winit = "0.30"
 [[example]]
 name = "demo"
 path = "examples/demo.rs"
+
+[[example]]
+name = "demo_dock"
+path = "examples/demo_dock.rs"

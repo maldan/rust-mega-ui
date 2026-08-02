@@ -117,7 +117,8 @@ fn layout_node(
 
             // Hit-test against last frame's split strip (approx from current ratio).
             let preview = split_rects(rect, *axis, *ratio, gap, min);
-            let hovered = !ui.block_input && preview.1.contains(ui.input.mouse_pos);
+            let hovered =
+                !ui.block_input && !ui.mouse_over_absorb() && preview.1.contains(ui.input.mouse_pos);
             if hovered {
                 ui.want_capture = true;
                 ui.set_cursor(match *axis {

@@ -6,6 +6,10 @@ use crate::{LayoutDir, Ui};
 
 impl Ui {
     pub fn separator(&mut self) {
+        if !self.menu_stack.is_empty() {
+            self.menu_separator();
+            return;
+        }
         let fill_w = self.layer().fill_w;
         let width = if fill_w > 0.0 && matches!(self.layer().dir, LayoutDir::Vertical) {
             fill_w

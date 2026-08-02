@@ -35,10 +35,11 @@ glam = "0.33"
 use mega_ui::{Ui, UiInput, DrawCommand, CursorIcon};
 ```
 
-Локальная демка (winit + wgpu, только dev-зависимости):
+Локальные демки (winit + wgpu, только dev-зависимости):
 
 ```bash
-cargo run --example demo
+cargo run --example demo        # виджеты
+cargo run --example demo_dock   # dock + ui.set_scale
 ```
 
 Рабочий пример целиком также можно смотреть в проекте `engine` рядом с этой либой (`app_ui.rs` + `main.rs` + `shader.wgsl`).
@@ -212,6 +213,21 @@ Clipboard: в `UiInput.clipboard` кладёшь текст при paste; из `
 ## Виджеты (кратко)
 
 ```rust
+ui.menu_bar(|ui| {
+    ui.menu("File", |ui| {
+        if ui.menu_item("New").clicked() {}
+        if ui.menu_item("Open…").clicked() {}
+        ui.menu("Open Recent", |ui| {
+            if ui.menu_item("a.mega").clicked() {}
+        });
+        ui.separator(); // inside a menu → menu separator
+        if ui.menu_item("Exit").clicked() {}
+    });
+    ui.menu("Edit", |ui| {
+        if ui.menu_item("Undo").clicked() {}
+    });
+});
+
 ui.window(Window::new("Settings").pos(p).size(s).resizable(true), |ui| {
     ui.label("Hello");
     if ui.button("OK").clicked() {}

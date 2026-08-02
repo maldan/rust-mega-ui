@@ -73,3 +73,12 @@ pub const DOCK_SPLIT: f32 = 4.0;
 pub const DOCK_SPLIT_COL: [f32; 4] = [0.08, 0.08, 0.08, 1.0];
 pub const DOCK_SPLIT_HOT: [f32; 4] = [0.30, 0.45, 0.70, 1.0];
 pub const DOCK_TAB_H: f32 = 24.0;
+
+pub const MENU_BAR_BG: [f32; 4] = [0.14, 0.14, 0.14, 1.0];
+pub const MENU_BAR_H: f32 = 26.0;
+pub const MENU_ITEM_H: f32 = 24.0;
+pub const MENU_SEP_H: f32 = 8.0;
+pub const MENU_MIN_W: f32 = 140.0;
+pub const MENU_HOVER: [f32; 4] = [0.22, 0.28, 0.40, 1.0];
+pub const MENU_ACTIVE: [f32; 4] = [0.28, 0.34, 0.48, 1.0];
+pub const MENU_SEP: [f32; 4] = [0.06, 0.06, 0.06, 1.0];

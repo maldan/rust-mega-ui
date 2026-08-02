@@ -176,7 +176,10 @@ impl Ui {
         };
 
         let title_bar = Rect::from_min_size(pos, Vec2::new(size.x, title_h));
-        let title_hover = !self.block_input && title_bar.contains(self.input.mouse_pos) && !on_chrome;
+        let title_hover = !self.block_input
+            && !self.mouse_over_absorb()
+            && title_bar.contains(self.input.mouse_pos)
+            && !on_chrome;
 
         if title_hover && self.input.mouse_pressed {
             self.active_id = Some(title_id);
@@ -199,7 +202,8 @@ impl Ui {
                 pos + Vec2::new(size.x - handle, size.y - handle),
                 Vec2::splat(handle),
             );
-            let hover = !self.block_input && resize_rect.contains(self.input.mouse_pos);
+            let hover =
+                !self.block_input && !self.mouse_over_absorb() && resize_rect.contains(self.input.mouse_pos);
             if hover {
                 self.want_capture = true;
                 self.set_cursor(CursorIcon::ResizeNwse);

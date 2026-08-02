@@ -111,6 +111,13 @@ pub struct Ui {
     pub(crate) scroll_hover: Option<Id>,
     pub(crate) needs_repaint: bool,
     pub(crate) clipboard_out: Option<String>,
+    pub(crate) menu_bar_stack: Vec<widgets::menu::MenuBarCtx>,
+    pub(crate) menu_stack: Vec<widgets::menu::MenuPopupCtx>,
+    pub(crate) menu_bar_open: HashMap<Id, Option<Id>>,
+    pub(crate) menu_sub_open: HashMap<Id, Option<Id>>,
+    pub(crate) menu_popup_size: HashMap<Id, Vec2>,
+    /// Last frame's popup absorb — blocks window focus on press before menus rebuild.
+    pub(crate) overlay_block: Option<Rect>,
 }
 
 impl Default for Ui {
@@ -159,6 +166,12 @@ impl Ui {
             scroll_hover: None,
             needs_repaint: false,
             clipboard_out: None,
+            menu_bar_stack: Vec::new(),
+            menu_stack: Vec::new(),
+            menu_bar_open: HashMap::new(),
+            menu_sub_open: HashMap::new(),
+            menu_popup_size: HashMap::new(),
+            overlay_block: None,
         }
     }
 
@@ -260,6 +273,8 @@ impl Ui {
         self.block_input = false;
         self.clipboard_out = None;
         self.enabled_stack.clear();
+        self.menu_bar_stack.clear();
+        self.menu_stack.clear();
 
         self.hover_window = self
             .win_order
@@ -274,10 +289,16 @@ impl Ui {
             .copied();
 
         if self.input.mouse_pressed {
+            let blocked = self
+                .overlay_block
+                .map(|r| r.contains(self.input.mouse_pos))
+                .unwrap_or(false);
             self.focus_id = None;
-            self.focus_window = self.hover_window;
-            if let Some(id) = self.hover_window {
-                self.bring_to_front(id);
+            if !blocked {
+                self.focus_window = self.hover_window;
+                if let Some(id) = self.hover_window {
+                    self.bring_to_front(id);
+                }
             }
         }
 
@@ -315,6 +336,9 @@ impl Ui {
         }
         composed.append(&mut self.overlay);
         self.draw_list = composed;
+
+        // Remember popup hit area so the next frame's press can't steal focus underneath.
+        self.overlay_block = self.mouse_absorb;
 
         UiOutput {
             draw_list: std::mem::take(&mut self.draw_list),
@@ -441,6 +465,9 @@ impl Ui {
         if self.block_input {
             return false;
         }
+        if self.mouse_over_absorb() {
+            return false;
+        }
         if !rect.contains(self.input.mouse_pos) {
             return false;
         }
@@ -449,12 +476,14 @@ impl Ui {
                 return false;
             }
         }
-        if let Some(abs) = self.mouse_absorb {
-            if abs.contains(self.input.mouse_pos) {
-                return false;
-            }
-        }
         true
+    }
+
+    /// True when the pointer is over an overlay popup (menu / select / …).
+    pub(crate) fn mouse_over_absorb(&self) -> bool {
+        self.mouse_absorb
+            .map(|r| r.contains(self.input.mouse_pos))
+            .unwrap_or(false)
     }
 
     /// Hit-test for overlay popups (ignores mouse_absorb).
