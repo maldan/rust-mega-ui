@@ -45,6 +45,10 @@ impl Ui {
             theme::CHECK
         };
         self.round_rect(box_rect.inset(1.0), self.s(2.0), fill);
+        if *checked {
+            let mark = box_rect.inset(self.s(2.0));
+            self.draw_icon_at("check", mark, theme::CHECK_MARK, false);
+        }
 
         self.text(
             Vec2::new(box_rect.max.x + gap, rect.min.y + (height - text_h) * 0.5),

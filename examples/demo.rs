@@ -260,6 +260,11 @@ impl Scene for Demo {
                             ui.icon("file", 18.0);
                             ui.icon("plus", 18.0);
                             ui.icon("close", 18.0);
+                            ui.icon("chevron_left", 18.0);
+                            ui.icon("chevron_right", 18.0);
+                            ui.icon("chevron_up", 18.0);
+                            ui.icon("chevron_down", 18.0);
+                            ui.icon("check", 18.0);
                             ui.label("icons");
                         });
                         ui.separator();

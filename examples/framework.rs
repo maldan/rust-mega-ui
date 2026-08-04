@@ -503,9 +503,9 @@ impl<S: Scene> Host<S> {
                     depth_slice: None,
                     ops: wgpu::Operations {
                         load: wgpu::LoadOp::Clear(wgpu::Color {
-                            r: 0.10,
-                            g: 0.11,
-                            b: 0.13,
+                            r: 0.04,
+                            g: 0.04,
+                            b: 0.04,
                             a: 1.0,
                         }),
                         store: wgpu::StoreOp::Store,

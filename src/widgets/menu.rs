@@ -477,14 +477,15 @@ impl Ui {
         );
 
         if submenu {
-            self.text_overlay(
+            let arrow_s = self.s(12.0);
+            let arrow_rect = Rect::from_min_size(
                 Vec2::new(
                     rect.max.x - self.s(16.0),
-                    rect.min.y + (item_h - text_h) * 0.5,
+                    rect.min.y + (item_h - arrow_s) * 0.5,
                 ),
-                ">",
-                theme::TITLE_TEXT,
+                Vec2::splat(arrow_s),
             );
+            self.draw_icon_at("chevron_right", arrow_rect, theme::TEXT_DIM, true);
         }
 
         Some(MenuRow { id, rect, hovered })

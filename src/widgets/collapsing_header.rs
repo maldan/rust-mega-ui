@@ -1,7 +1,7 @@
 use glam::Vec2;
 
 use crate::theme;
-use crate::types::CursorIcon;
+use crate::types::{CursorIcon, Rect};
 use crate::{LayoutDir, Ui};
 
 impl Ui {
@@ -47,13 +47,18 @@ impl Ui {
         self.round_rect(rect, radius, theme::BTN_BORDER);
         self.round_rect(rect.inset(1.0), (radius - 1.0).max(0.0), color);
 
-        let arrow = if open { "v" } else { ">" };
-        let th = self.text_height();
-        self.text(
-            Vec2::new(rect.min.x + indent, rect.min.y + (height - th) * 0.5),
-            arrow,
-            theme::TEXT,
+        let arrow_s = self.s(12.0);
+        let arrow_rect = Rect::from_min_size(
+            Vec2::new(
+                rect.min.x + indent,
+                rect.min.y + (height - arrow_s) * 0.5,
+            ),
+            Vec2::splat(arrow_s),
         );
+        let arrow = if open { "chevron_down" } else { "chevron_right" };
+        self.draw_icon_at(arrow, arrow_rect, theme::TEXT_DIM, false);
+
+        let th = self.text_height();
         self.text(
             Vec2::new(rect.min.x + self.s(24.0), rect.min.y + (height - th) * 0.5),
             label,
