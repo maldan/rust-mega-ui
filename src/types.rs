@@ -51,6 +51,14 @@ impl Rect {
         }
     }
 
+    /// Snap edges to the pixel grid (crisper fills / borders).
+    pub fn round_px(self) -> Self {
+        Self {
+            min: Vec2::new(self.min.x.round(), self.min.y.round()),
+            max: Vec2::new(self.max.x.round(), self.max.y.round()),
+        }
+    }
+
     pub fn contains(self, p: Vec2) -> bool {
         p.x >= self.min.x && p.y >= self.min.y && p.x < self.max.x && p.y < self.max.y
     }

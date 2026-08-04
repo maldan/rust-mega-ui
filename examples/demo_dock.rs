@@ -8,28 +8,39 @@
 mod framework;
 
 use framework::{Host, Scene};
-use glam::Vec2;
-use mega_ui::{DockNode, DockState, ScrollAxes, Ui, Window};
+use glam::{Vec2, Vec3};
+use mega_ui::{DockNode, DockState, ScrollAxes, TableColumn, TextStyle, Ui, Window};
 
 struct DockDemo {
     dock: DockState,
     scale: f32,
     name: String,
     fov: f32,
+    exposure: f32,
+    near_clip: f32,
+    far_clip: f32,
     wireframe: bool,
+    shadows: bool,
+    quality: usize,
+    render_mode: usize,
+    position: Vec3,
+    rotation: Vec3,
+    notes: String,
     log: String,
     last_menu: String,
+    progress: f32,
+    t: f32,
 }
 
 impl Default for DockDemo {
     fn default() -> Self {
         let dock = DockState::new(DockNode::split_h(
-            0.68,
+            0.62,
             DockNode::leaf(&["Viewport", "Scene"]),
             DockNode::split_v(
-                0.58,
+                0.55,
                 DockNode::leaf(&["Inspector", "Settings"]),
-                DockNode::leaf(&["Console"]),
+                DockNode::leaf(&["Console", "Assets"]),
             ),
         ));
         Self {
@@ -37,9 +48,20 @@ impl Default for DockDemo {
             scale: 1.0,
             name: String::from("Main Camera"),
             fov: 60.0,
+            exposure: 1.0,
+            near_clip: 0.1,
+            far_clip: 1000.0,
             wireframe: false,
+            shadows: true,
+            quality: 1,
+            render_mode: 0,
+            position: Vec3::new(0.0, 1.6, 4.0),
+            rotation: Vec3::new(-12.0, 180.0, 0.0),
+            notes: String::from("Scene notes…\n"),
             log: String::from("dock ready\ndrag splitters to resize panes\n"),
             last_menu: String::from("(none)"),
+            progress: 0.0,
+            t: 0.0,
         }
     }
 }
@@ -50,7 +72,7 @@ impl Scene for DockDemo {
     }
 
     fn window_size() -> (f64, f64) {
-        (1100.0, 720.0)
+        (1280.0, 800.0)
     }
 
     fn init(ui: &mut Ui) {
@@ -58,6 +80,9 @@ impl Scene for DockDemo {
     }
 
     fn build(ui: &mut Ui, state: &mut Self, viewport: Vec2, dt: f32) -> bool {
+        state.t += dt;
+        state.progress = (0.5 + (state.t * 0.4).sin() * 0.45).clamp(0.0, 1.0);
+
         ui.set_scale(state.scale);
 
         ui.menu_bar(|ui| {
@@ -86,6 +111,18 @@ impl Scene for DockDemo {
                     state.log.push_str("exit\n");
                 }
             });
+            ui.menu("Edit", |ui| {
+                if ui.menu_item("Duplicate").clicked() {
+                    state.log.push_str("duplicate\n");
+                }
+                if ui.menu_item("Delete").clicked() {
+                    state.log.push_str("delete\n");
+                }
+                ui.separator();
+                ui.add_enabled(false, |ui| {
+                    let _ = ui.menu_item("Locked action");
+                });
+            });
             ui.menu("View", |ui| {
                 ui.menu("UI Scale", |ui| {
                     if ui.menu_item("100%").clicked() {
@@ -105,6 +142,11 @@ impl Scene for DockDemo {
                 if ui.menu_item("Toggle Wireframe").clicked() {
                     state.wireframe = !state.wireframe;
                     state.last_menu = String::from("View / Toggle Wireframe");
+                    state.log.push_str(&format!("wireframe = {}\n", state.wireframe));
+                }
+                if ui.menu_item("Toggle Shadows").clicked() {
+                    state.shadows = !state.shadows;
+                    state.log.push_str(&format!("shadows = {}\n", state.shadows));
                 }
             });
         });
@@ -115,7 +157,7 @@ impl Scene for DockDemo {
         ui.window(
             Window::new("UI Scale")
                 .pos(Vec2::new(16.0, bar_h + 12.0))
-                .size(Vec2::new(260.0, 130.0)),
+                .size(Vec2::new(280.0, 180.0)),
             |ui| {
                 ui.label(&format!("scale = {:.2}", state.scale));
                 ui.label(&format!("menu: {}", state.last_menu));
@@ -138,6 +180,9 @@ impl Scene for DockDemo {
                         state.scale = 2.0;
                     }
                 });
+                ui.separator();
+                ui.label("Bake progress");
+                ui.progress_bar(state.progress);
                 ui.label(&format!("FPS ~ {:.0}", (1.0 / dt.max(1e-4)).min(999.0)));
             },
         );
@@ -148,16 +193,36 @@ impl Scene for DockDemo {
             dock,
             name,
             fov,
+            exposure,
+            near_clip,
+            far_clip,
             wireframe,
+            shadows,
+            quality,
+            render_mode,
+            position,
+            rotation,
+            notes,
             log,
             scale,
+            progress,
             ..
         } = state;
 
         let dock_size = Vec2::new(viewport.x, (viewport.y - 26.0 * *scale).max(1.0));
         ui.dock_space("main", dock_size, dock, |ui, tab| match tab {
             "Viewport" => {
-                ui.label("Viewport");
+                ui.label_styled(
+                    "Viewport",
+                    TextStyle {
+                        color: [0.85, 0.85, 0.85, 1.0],
+                        size: 16.0,
+                    },
+                );
+                ui.separator();
+                ui.horizontal(|ui| {
+                    ui.toggle("mode", render_mode, &["Shaded", "Wire", "Lit"]);
+                });
                 ui.separator();
                 ui.texture(0, ui.available_size());
             }
@@ -165,43 +230,159 @@ impl Scene for DockDemo {
                 ui.label("Scene hierarchy");
                 ui.separator();
                 ui.tree_node("world", "World", |ui| {
-                    ui.tree_node("camera", "Camera", |ui| {
+                    ui.tree_node_icon("camera", "file", "Camera", |ui| {
                         ui.label(name.as_str());
                     });
-                    ui.tree_node("lights", "Lights", |ui| {
-                        ui.label("Sun");
-                        ui.label("Fill");
+                    ui.tree_node_icon("lights", "folder", "Lights", |ui| {
+                        ui.tree_leaf_icon("sun", "file", "Sun");
+                        ui.tree_leaf_icon("fill", "file", "Fill");
+                        ui.tree_leaf_icon("rim", "file", "Rim");
                     });
-                    ui.tree_node("meshes", "Meshes", |ui| {
-                        ui.label("Cube");
-                        ui.label("Plane");
+                    ui.tree_node_icon("meshes", "folder", "Meshes", |ui| {
+                        ui.collapsing_header("Primitives", |ui| {
+                            ui.tree_leaf_icon("cube", "file", "Cube");
+                            ui.tree_leaf_icon("plane", "file", "Plane");
+                            ui.tree_leaf_icon("sphere", "file", "Sphere");
+                        });
+                        ui.collapsing_header("Imported", |ui| {
+                            ui.tree_leaf_icon("char", "file", "Character");
+                            ui.tree_leaf_icon("prop", "file", "Prop_A");
+                        });
                     });
                 });
             }
             "Inspector" => {
-                ui.label("Inspector");
-                ui.separator();
-                ui.text_input("name", name);
-                ui.slider("FOV", fov, 20.0..=120.0);
-                ui.checkbox("Wireframe", wireframe);
-                ui.separator();
-                ui.label(&format!("scale (ui) = {:.2}", *scale));
+                let size = ui.available_size();
+                ui.scroll_area("inspector", size, ScrollAxes::Vertical, |ui| {
+                    ui.label("Inspector");
+                    ui.separator();
+                    ui.text_input("name", name);
+                    ui.slider("FOV", fov, 20.0..=120.0);
+                    ui.slider("Exposure", exposure, 0.0..=4.0);
+                    ui.separator();
+                    ui.label("Near / Far (drag_float)");
+                    ui.drag_float("near", near_clip, 0.01);
+                    ui.drag_float("far", far_clip, 1.0);
+                    ui.separator();
+                    ui.label("Position");
+                    ui.vec3("pos", position, 0.1);
+                    ui.label("Rotation");
+                    ui.vec3("rot", rotation, 1.0);
+                    ui.separator();
+                    ui.checkbox("Wireframe", wireframe);
+                    ui.checkbox("Shadows", shadows);
+                    ui.select("Quality", quality, &["Low", "Medium", "High", "Ultra"]);
+                    ui.separator();
+                    ui.label(&format!("scale (ui) = {:.2}", *scale));
+                    ui.label(&format!(
+                        "pos = ({:.1}, {:.1}, {:.1})",
+                        position.x, position.y, position.z
+                    ));
+                });
             }
             "Settings" => {
-                ui.label("Settings");
-                ui.separator();
-                ui.label("Drag dock splitters to resize.");
-                ui.label("Tabs switch active leaf content.");
-                ui.label("Menu bar + UI Scale window set scale.");
+                ui.tabs("settings_tabs", &["General", "Notes", "About"], |ui, tab| match tab {
+                    0 => {
+                        ui.label("General");
+                        ui.separator();
+                        ui.toggle("theme_like", render_mode, &["Shaded", "Wire", "Lit"]);
+                        ui.slider("UI Scale", scale, 0.75..=2.0);
+                        ui.checkbox("Wireframe", wireframe);
+                        ui.checkbox("Shadows", shadows);
+                        ui.separator();
+                        ui.label("Bake");
+                        ui.progress_bar(*progress);
+                        ui.separator();
+                        ui.label("Drag dock splitters to resize.");
+                        ui.label("Tabs switch active leaf content.");
+                    }
+                    1 => {
+                        ui.label("Scene notes (text_area)");
+                        ui.separator();
+                        let h = ui.available_size().y.max(100.0);
+                        ui.text_area("notes", notes, Vec2::new(0.0, h));
+                    }
+                    _ => {
+                        ui.label_styled(
+                            "mega-ui dock demo",
+                            TextStyle {
+                                color: [0.85, 0.75, 0.35, 1.0],
+                                size: 18.0,
+                            },
+                        );
+                        ui.separator();
+                        ui.label("Exercises dock + most widgets.");
+                        ui.label("Inspector: floats, vec3, select.");
+                        ui.label("Assets: table + scroll.");
+                        ui.label("Console: scroll log.");
+                    }
+                });
             }
             "Console" => {
-                ui.label("Console");
+                ui.horizontal(|ui| {
+                    ui.label("Console");
+                    if ui.button("Clear").clicked() {
+                        log.clear();
+                        log.push_str("cleared\n");
+                    }
+                    if ui.button("Ping").clicked() {
+                        log.push_str("ping\n");
+                    }
+                });
                 ui.separator();
                 let size = ui.available_size();
                 ui.scroll_area("log", size, ScrollAxes::Vertical, |ui| {
                     for line in log.lines() {
                         ui.label(line);
                     }
+                });
+            }
+            "Assets" => {
+                ui.label("Assets");
+                ui.separator();
+                let size = ui.available_size();
+                ui.scroll_area("assets", size, ScrollAxes::Vertical, |ui| {
+                    ui.table(
+                        "asset_table",
+                        &[
+                            TableColumn {
+                                name: "Name",
+                                width: 2.5,
+                            },
+                            TableColumn {
+                                name: "Type",
+                                width: 1.0,
+                            },
+                            TableColumn {
+                                name: "Size",
+                                width: 1.0,
+                            },
+                        ],
+                        |ui| {
+                            let rows = [
+                                ("cube.mesh", "Mesh", "12 KB"),
+                                ("grid.mesh", "Mesh", "4 KB"),
+                                ("sun.light", "Light", "1 KB"),
+                                ("main.mat", "Material", "2 KB"),
+                                ("sky.hdr", "Texture", "2.1 MB"),
+                                ("char.fbx", "Model", "8.4 MB"),
+                                ("footstep.wav", "Audio", "120 KB"),
+                                ("ui_atlas.png", "Texture", "512 KB"),
+                            ];
+                            for (name, kind, size) in rows {
+                                let _ = ui.table_row(|ui| {
+                                    ui.table_cell(|ui| {
+                                        ui.horizontal(|ui| {
+                                            ui.icon("file", 14.0);
+                                            ui.label(name);
+                                        });
+                                    });
+                                    ui.table_cell(|ui| ui.label(kind));
+                                    ui.table_cell(|ui| ui.label(size));
+                                });
+                            }
+                        },
+                    );
                 });
             }
             other => ui.label(other),
