@@ -198,7 +198,7 @@ impl Scene for Demo {
                     state.last_menu = String::from("File / File Manager");
                 }
                 ui.separator();
-                if ui.menu_item_icon("close", "Delete project…").clicked() {
+                if ui.menu_item_icon("delete", "Delete project…").clicked() {
                     state.confirm_open = true;
                     state.last_menu = String::from("File / Delete project");
                 }
@@ -266,6 +266,7 @@ impl Scene for Demo {
                             ui.icon("file", 18.0);
                             ui.icon("plus", 18.0);
                             ui.icon("close", 18.0);
+                            ui.icon("delete", 18.0);
                             ui.icon("chevron_left", 18.0);
                             ui.icon("chevron_right", 18.0);
                             ui.icon("chevron_up", 18.0);
@@ -303,6 +304,45 @@ impl Scene for Demo {
                                 ui.notify(&format!("Clicks: {}", state.clicks));
                             }
                         });
+                        ui.horizontal(|ui| {
+                            if ui
+                                .button_with("add_btn", |ui| {
+                                    ui.icon("plus", 14.0);
+                                    ui.label("Add");
+                                })
+                                .clicked()
+                            {
+                                state.clicks += 1;
+                                ui.notify("Add clicked");
+                            }
+                            if ui
+                                .button_with("folder_btn", |ui| {
+                                    ui.icon("folder", 14.0);
+                                    ui.label("Open");
+                                })
+                                .clicked()
+                            {
+                                ui.notify("Open clicked");
+                            }
+                            if ui
+                                .button_with("del_btn", |ui| {
+                                    ui.icon("delete", 14.0);
+                                    ui.label("Delete");
+                                })
+                                .clicked()
+                            {
+                                ui.notify_warn("Delete clicked");
+                            }
+                            if ui
+                                .button_with("close_btn", |ui| {
+                                    ui.icon("close", 14.0);
+                                    ui.label("Close");
+                                })
+                                .clicked()
+                            {
+                                ui.notify("Close clicked");
+                            }
+                        });
                         if ui.button("Confirm…").clicked() {
                             state.confirm_open = true;
                         }
@@ -330,7 +370,7 @@ impl Scene for Demo {
                                 ui.notify("Context: Duplicate");
                             }
                             ui.separator();
-                            if ui.menu_item_icon("close", "Delete").clicked() {
+                            if ui.menu_item_icon("delete", "Delete").clicked() {
                                 ui.notify_error("Context: Delete");
                             }
                         });

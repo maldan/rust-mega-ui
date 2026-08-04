@@ -213,8 +213,12 @@ fn draw_leaf(
 
     let tab_h = ui.s(theme::DOCK_TAB_H);
     let pad = ui.s(6.0);
-    let radius = ui.s(theme::BTN_RADIUS);
+    let tab_pad_x = ui.s(10.0);
+    let tab_gap = ui.s(1.0);
+    let radius = ui.s(theme::DOCK_TAB_RADIUS);
+    let more_s = ui.s(16.0);
 
+    // Pane chrome
     ui.round_rect(rect, 0.0, theme::WIN_BORDER);
     ui.round_rect(rect.inset(1.0), 0.0, theme::WIN_BODY);
 
@@ -224,17 +228,30 @@ fn draw_leaf(
     };
     ui.round_rect(bar, 0.0, theme::DOCK_TAB_BAR);
 
-    let n = tabs.len() as f32;
-    let tab_w = (bar.width() / n).max(ui.s(40.0));
+    // Content-sized tabs, left-aligned (not stretched).
+    let more_w = more_s + ui.s(8.0);
+    let tabs_right = (bar.max.x - more_w).max(bar.min.x);
+    let mut x = bar.min.x + ui.s(2.0);
     for (i, title) in tabs.iter().enumerate() {
-        let x = bar.min.x + i as f32 * tab_w;
-        if x >= bar.max.x {
+        let tw = ui.text_width(title);
+        let tab_w = (tw + tab_pad_x * 2.0).max(ui.s(36.0));
+        if x + tab_w > tabs_right {
             break;
         }
+        let is_active = i == *active;
+        // Active tab flush with content; inactive slightly inset.
         let tr = Rect {
-            min: Vec2::new(x, bar.min.y),
-            max: Vec2::new((x + tab_w).min(bar.max.x), bar.max.y),
+            min: Vec2::new(
+                x,
+                if is_active {
+                    bar.min.y
+                } else {
+                    bar.min.y + ui.s(2.0)
+                },
+            ),
+            max: Vec2::new(x + tab_w, bar.max.y),
         };
+
         let hovered = ui.hovered_rect(tr);
         if hovered {
             ui.want_capture = true;
@@ -243,26 +260,82 @@ fn draw_leaf(
         }
         if hovered && ui.input.mouse_pressed {
             *active = i;
+            ui.dock_focus = Some(path);
         }
-        let color = if i == *active {
-            theme::TAB_ACTIVE
+
+        let color = if is_active {
+            theme::DOCK_TAB_ACTIVE
         } else if hovered {
-            theme::BTN_HOVER
+            theme::DOCK_TAB_HOVER
         } else {
-            theme::TAB
+            theme::DOCK_TAB
         };
-        ui.round_rect(tr.inset(1.0), (radius - 1.0).max(0.0), color);
-        let tw = ui.text_width(title);
+        ui.round_rect(tr, radius, color);
+
         let th = ui.text_height();
-        let tx = tr.min.x + (tr.width() - tw).max(0.0) * 0.5;
-        let ty = tr.min.y + (tab_h - th) * 0.5;
-        ui.text(Vec2::new(tx, ty), title, theme::TEXT);
+        let text_col = if is_active {
+            theme::DOCK_TAB_TEXT_ACTIVE
+        } else {
+            theme::DOCK_TAB_TEXT
+        };
+        ui.text(
+            Vec2::new(
+                tr.min.x + tab_pad_x,
+                tr.min.y + (tr.height() - th) * 0.5,
+            ),
+            title,
+            text_col,
+        );
+
+        x = tr.max.x + tab_gap;
     }
 
+    // ⋮ menu on the right
+    let more_rect = Rect::from_min_size(
+        Vec2::new(bar.max.x - more_w, bar.min.y + (tab_h - more_s) * 0.5),
+        Vec2::splat(more_s + ui.s(4.0)),
+    );
+    let more_hov = ui.hovered_rect(more_rect);
+    if more_hov {
+        ui.want_capture = true;
+        ui.set_cursor(CursorIcon::Pointer);
+        ui.round_rect(more_rect, ui.s(3.0), theme::DOCK_TAB_HOVER);
+    }
+    let icon_r = Rect::from_min_size(
+        more_rect.min + Vec2::splat(ui.s(2.0)),
+        Vec2::splat(more_s),
+    );
+    ui.draw_icon_at(
+        "more_vert",
+        icon_r,
+        if more_hov {
+            theme::DOCK_TAB_TEXT_ACTIVE
+        } else {
+            theme::DOCK_TAB_TEXT
+        },
+        false,
+    );
+    ui.context_menu(&format!("#dock_more{path}"), more_hov, |ui| {
+        if tabs.len() > 1 {
+            if ui.menu_item("Close Tab").clicked() {
+                // Caller owns tab list; just signal via notify for now.
+                ui.notify("Close tab");
+            }
+        }
+        if ui.menu_item("Close Others").clicked() {
+            ui.notify("Close others");
+        }
+    });
+
+    // Clicking content focuses the pane.
     let content = Rect {
         min: Vec2::new(rect.min.x + 1.0 + pad, bar.max.y + pad),
         max: rect.max - Vec2::splat(1.0 + pad),
     };
+    if ui.hovered_rect(content) && ui.input.mouse_pressed {
+        ui.dock_focus = Some(path);
+    }
+
     if content.width() < 1.0 || content.height() < 1.0 {
         return;
     }

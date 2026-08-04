@@ -35,13 +35,15 @@ impl Ui {
     pub fn label_styled(&mut self, text: &str, style: TextStyle) {
         let px = self.s(style.size);
         let th = self.text_height_at(px);
-        let size = Vec2::new(self.text_width_at(text, px), th + self.s(4.0));
+        // Extra vertical pad only in vertical stacks — horizontal rows (buttons,
+        // toolbars) need tight line-height so icons/text share a baseline band.
+        let (h, y_off) = if matches!(self.layer().dir, crate::LayoutDir::Vertical) {
+            (th + self.s(4.0), self.s(2.0))
+        } else {
+            (th, 0.0)
+        };
+        let size = Vec2::new(self.text_width_at(text, px), h);
         let rect = self.allocate(size);
-        self.text_sized(
-            rect.min + Vec2::new(0.0, self.s(2.0)),
-            text,
-            style.color,
-            px,
-        );
+        self.text_sized(rect.min + Vec2::new(0.0, y_off), text, style.color, px);
     }
 }

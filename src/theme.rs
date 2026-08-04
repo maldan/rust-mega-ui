@@ -85,11 +85,22 @@ pub const PLOT_LINE: [f32; 4] = ACCENT;
 pub const PLOT_GRID: [f32; 4] = [0.14, 0.14, 0.14, 1.0];
 
 pub const DOCK_BG: [f32; 4] = [0.07, 0.07, 0.07, 1.0];
-pub const DOCK_TAB_BAR: [f32; 4] = [0.05, 0.05, 0.05, 1.0];
-pub const DOCK_SPLIT: f32 = 4.0;
-pub const DOCK_SPLIT_COL: [f32; 4] = [0.02, 0.02, 0.02, 1.0];
+/// Dark strip behind / beside tabs.
+pub const DOCK_TAB_BAR: [f32; 4] = [0.045, 0.045, 0.045, 1.0];
+/// Inactive tab — same dark as the bar.
+pub const DOCK_TAB: [f32; 4] = [0.045, 0.045, 0.045, 1.0];
+/// Active tab = window body so it merges with content.
+pub const DOCK_TAB_ACTIVE: [f32; 4] = WIN_BODY;
+pub const DOCK_TAB_HOVER: [f32; 4] = [0.07, 0.07, 0.07, 1.0];
+pub const DOCK_TAB_TEXT: [f32; 4] = [0.50, 0.50, 0.50, 1.0];
+pub const DOCK_TAB_TEXT_ACTIVE: [f32; 4] = [0.90, 0.90, 0.90, 1.0];
+/// Focus accent on the active tab only.
+pub const DOCK_FOCUS: [f32; 4] = [0.23, 0.47, 1.0, 1.0];
+pub const DOCK_SPLIT: f32 = 2.0;
+pub const DOCK_SPLIT_COL: [f32; 4] = [0.05, 0.05, 0.05, 1.0];
 pub const DOCK_SPLIT_HOT: [f32; 4] = ACCENT_DIM;
-pub const DOCK_TAB_H: f32 = 24.0;
+pub const DOCK_TAB_H: f32 = 22.0;
+pub const DOCK_TAB_RADIUS: f32 = 3.0;
 
 pub const MENU_BAR_BG: [f32; 4] = [0.07, 0.07, 0.07, 1.0];
 pub const MENU_BAR_H: f32 = 26.0;

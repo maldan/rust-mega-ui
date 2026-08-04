@@ -35,12 +35,20 @@ pub(crate) struct Layer {
     pub fill_w: f32,
     /// Max content height from origin (0 = unbounded).
     pub fill_h: f32,
+    /// Cross-axis alignment for horizontal rows (ignored in vertical).
+    pub cross_align: CrossAlign,
 }
 
 #[derive(Clone, Copy)]
 pub(crate) enum LayoutDir {
     Vertical,
     Horizontal,
+}
+
+#[derive(Clone, Copy, PartialEq, Eq)]
+pub(crate) enum CrossAlign {
+    Start,
+    Center,
 }
 
 pub(crate) fn new_layer(
@@ -59,6 +67,7 @@ pub(crate) fn new_layer(
         row_height: 0.0,
         fill_w,
         fill_h,
+        cross_align: CrossAlign::Start,
     }
 }
 
@@ -100,6 +109,8 @@ pub struct Ui {
     pub(crate) color_edits: HashMap<Id, widgets::color_picker::ColorEditState>,
     pub(crate) context_menu: Option<(Id, Vec2)>,
     pub(crate) toasts: Vec<widgets::toast::Toast>,
+    /// Dock leaf path that last received a click (Unity-style focus strip).
+    pub(crate) dock_focus: Option<u32>,
     pub(crate) scrolls: HashMap<Id, ScrollState>,
     pub(crate) edits: HashMap<Id, widgets::edit::EditState>,
     pub(crate) num_bufs: HashMap<Id, String>,
@@ -129,6 +140,7 @@ pub struct Ui {
     pub(crate) menu_bar_open: HashMap<Id, Option<Id>>,
     pub(crate) menu_sub_open: HashMap<Id, Option<Id>>,
     pub(crate) menu_popup_size: HashMap<Id, Vec2>,
+    pub(crate) button_sizes: HashMap<Id, Vec2>,
     /// Last frame's popup absorb — blocks window focus on press before menus rebuild.
     pub(crate) overlay_block: Option<Rect>,
     /// When true, `text` / `round_rect` paint into the overlay list.
@@ -166,6 +178,7 @@ impl Ui {
             color_edits: HashMap::new(),
             context_menu: None,
             toasts: Vec::new(),
+            dock_focus: None,
             scrolls: HashMap::new(),
             edits: HashMap::new(),
             num_bufs: HashMap::new(),
@@ -195,6 +208,7 @@ impl Ui {
             menu_bar_open: HashMap::new(),
             menu_sub_open: HashMap::new(),
             menu_popup_size: HashMap::new(),
+            button_sizes: HashMap::new(),
             overlay_block: None,
             draw_to_overlay: false,
         }
@@ -448,6 +462,13 @@ impl Ui {
         self.id_stack.pop();
     }
 
+    /// Scope widget ids so identical labels (e.g. "X") stay unique across siblings.
+    pub fn id_scope(&mut self, id: &str, add: impl FnOnce(&mut Self)) {
+        self.push_id(id);
+        add(self);
+        self.pop_id();
+    }
+
     pub(crate) fn layer(&mut self) -> &mut Layer {
         self.layers.last_mut().unwrap()
     }
@@ -466,20 +487,28 @@ impl Ui {
 
     pub(crate) fn allocate(&mut self, size: Vec2) -> Rect {
         let layer = self.layer();
-        let rect = Rect::from_min_size(layer.cursor, size);
-        match layer.dir {
+        let rect = match layer.dir {
             LayoutDir::Vertical => {
+                let rect = Rect::from_min_size(layer.cursor, size);
                 layer.cursor.y += size.y + layer.spacing;
                 layer.used.x = layer.used.x.max(size.x);
                 layer.used.y = layer.cursor.y - layer.origin.y - layer.spacing;
+                rect
             }
             LayoutDir::Horizontal => {
+                let y = if layer.cross_align == CrossAlign::Center && layer.fill_h > 0.0 {
+                    layer.origin.y + (layer.fill_h - size.y) * 0.5
+                } else {
+                    layer.cursor.y
+                };
+                let rect = Rect::from_min_size(Vec2::new(layer.cursor.x, y), size);
                 layer.cursor.x += size.x + layer.spacing;
                 layer.row_height = layer.row_height.max(size.y);
                 layer.used.x = layer.cursor.x - layer.origin.x - layer.spacing;
                 layer.used.y = layer.row_height;
+                rect
             }
-        }
+        };
         rect
     }
 

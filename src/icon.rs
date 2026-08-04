@@ -95,12 +95,13 @@ impl Ui {
         self.icons.load(id, svg);
     }
 
-    /// Built-in set: folder, file, close, plus, chevrons, check.
+    /// Built-in set: folder, file, close, delete, plus, chevrons, check, …
     pub fn load_builtin_icons(&mut self) {
         self.load_icons([
             ("folder", include_bytes!("../icons/folder.svg").as_slice()),
             ("file", include_bytes!("../icons/file.svg").as_slice()),
             ("close", include_bytes!("../icons/close.svg").as_slice()),
+            ("delete", include_bytes!("../icons/delete.svg").as_slice()),
             ("plus", include_bytes!("../icons/plus.svg").as_slice()),
             (
                 "chevron_right",
@@ -122,6 +123,7 @@ impl Ui {
             ("lock", include_bytes!("../icons/lock.svg").as_slice()),
             ("unlock", include_bytes!("../icons/unlock.svg").as_slice()),
             ("reset", include_bytes!("../icons/reset.svg").as_slice()),
+            ("more_vert", include_bytes!("../icons/more_vert.svg").as_slice()),
         ]);
     }
 
