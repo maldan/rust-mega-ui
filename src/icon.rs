@@ -6,7 +6,7 @@ use glam::Vec2;
 
 use crate::font::{push_textured, Font};
 use crate::theme;
-use crate::types::Rect;
+use crate::types::{CursorIcon, Rect};
 use crate::Ui;
 
 #[derive(Clone, Copy)]
@@ -119,7 +119,58 @@ impl Ui {
                 include_bytes!("../icons/chevron_down.svg").as_slice(),
             ),
             ("check", include_bytes!("../icons/check.svg").as_slice()),
+            ("lock", include_bytes!("../icons/lock.svg").as_slice()),
+            ("unlock", include_bytes!("../icons/unlock.svg").as_slice()),
+            ("reset", include_bytes!("../icons/reset.svg").as_slice()),
         ]);
+    }
+
+    /// Clickable icon button. Returns `true` on click.
+    pub(crate) fn icon_button(&mut self, id: &str, icon: &str, active: bool) -> bool {
+        let enabled = self.enabled();
+        let widget_id = self.current_id(id);
+        let size = self.s(22.0);
+        let rect = self.allocate(Vec2::splat(size));
+        let hovered = enabled && self.hovered_rect(rect);
+        if hovered {
+            self.hover_id = Some(widget_id);
+            self.want_capture = true;
+            self.set_cursor(CursorIcon::Pointer);
+        }
+        if hovered && self.input.mouse_pressed {
+            self.active_id = Some(widget_id);
+        }
+        let pressed = self.active_id == Some(widget_id) && self.input.mouse_down;
+        let clicked = enabled
+            && self.active_id == Some(widget_id)
+            && hovered
+            && self.input.mouse_released;
+
+        if hovered || active {
+            self.round_rect(rect, self.s(3.0), theme::BTN_HOVER);
+        }
+        let color = if !enabled {
+            theme::TEXT_DISABLED
+        } else if pressed {
+            theme::TEXT_BRIGHT
+        } else if active {
+            theme::ACCENT
+        } else if hovered {
+            theme::TEXT
+        } else {
+            theme::TEXT_DIM
+        };
+        let pad = self.s(3.0);
+        self.draw_icon_at(
+            icon,
+            Rect {
+                min: rect.min + Vec2::splat(pad),
+                max: rect.max - Vec2::splat(pad),
+            },
+            color,
+            false,
+        );
+        clicked
     }
 
     /// Layout an icon (`size` in UI points). Tinted with theme text color.

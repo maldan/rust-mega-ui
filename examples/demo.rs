@@ -92,6 +92,7 @@ struct Demo {
     progress: f32,
     position: Vec2,
     rotation: Vec3,
+    scale_v: Vec3,
     notes: String,
     plot: Vec<f32>,
     show_help: bool,
@@ -119,6 +120,7 @@ impl Default for Demo {
             progress: 0.35,
             position: Vec2::new(10.0, 20.0),
             rotation: Vec3::new(0.0, 45.0, 0.0),
+            scale_v: Vec3::ONE,
             notes: String::from("Multiline notes.\nEdit me — text_area test.\n"),
             plot: (0..48)
                 .map(|i| ((i as f32) * 0.35).sin() * 0.5 + 0.5)
@@ -358,9 +360,11 @@ impl Scene for Demo {
                 ui.slider("Speed (slider)", &mut state.speed, 0.0..=5.0);
                 ui.separator();
                 ui.label("Position (vec2)");
-                ui.vec2("pos", &mut state.position, 0.5);
+                ui.vec2("pos", &mut state.position, 0.5, Vec2::ZERO);
                 ui.label("Rotation (vec3)");
-                ui.vec3("rot", &mut state.rotation, 1.0);
+                ui.vec3("rot", &mut state.rotation, 1.0, Vec3::ZERO);
+                ui.label("Scale (vec3, default 1)");
+                ui.vec3("scale", &mut state.scale_v, 0.01, Vec3::ONE);
                 ui.separator();
                 ui.label("Notes (text_area)");
                 let notes_h = ui.available_size().y.max(80.0);

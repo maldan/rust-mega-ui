@@ -69,6 +69,11 @@ pub const TABLE_ROW_H: f32 = 22.0;
 pub const TEXT_DIM: [f32; 4] = [0.40, 0.40, 0.40, 1.0];
 pub const TEXT_BRIGHT: [f32; 4] = [0.90, 0.90, 0.90, 1.0];
 
+/// Axis colors for vector drag grips.
+pub const AXIS_X: [f32; 4] = [0.82, 0.28, 0.28, 1.0];
+pub const AXIS_Y: [f32; 4] = [0.32, 0.72, 0.36, 1.0];
+pub const AXIS_Z: [f32; 4] = [0.32, 0.52, 0.88, 1.0];
+
 pub const TOGGLE_OFF: [f32; 4] = [0.14, 0.14, 0.14, 1.0];
 pub const TOGGLE_ON: [f32; 4] = ACCENT_DIM;
 pub const PROGRESS_BG: [f32; 4] = [0.05, 0.05, 0.05, 1.0];

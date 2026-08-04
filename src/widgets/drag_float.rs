@@ -45,6 +45,17 @@ fn filter_float(s: &str) -> String {
 impl Ui {
     /// Numeric field: type floats, Up/Down = step, left grip = drag value.
     pub fn drag_float(&mut self, id: &str, value: &mut f32, step: f32) -> Response {
+        self.drag_float_grip(id, value, step, None)
+    }
+
+    /// Like [`Self::drag_float`], with an optional colored drag grip.
+    pub fn drag_float_grip(
+        &mut self,
+        id: &str,
+        value: &mut f32,
+        step: f32,
+        grip_color: Option<[f32; 4]>,
+    ) -> Response {
         let enabled = self.enabled();
         let widget_id = self.current_id(id);
         let grip_id = widget_id.child("__grip");
@@ -58,7 +69,12 @@ impl Ui {
             self.s(120.0)
         };
         let rect = self.allocate(Vec2::new(width, height));
-        let grip_w = self.s(6.0).min(width * 0.25);
+        let grip_w = if grip_color.is_some() {
+            self.s(8.0)
+        } else {
+            self.s(6.0)
+        }
+        .min(width * 0.25);
         let grip = Rect::from_min_size(rect.min, Vec2::new(grip_w, height));
         let text_rect = Rect {
             min: Vec2::new(rect.min.x + grip_w, rect.min.y),
@@ -143,7 +159,13 @@ impl Ui {
             let s = format_float(*value, step);
             let len = s.len();
             self.num_bufs.insert(widget_id, s);
-            self.edits.insert(widget_id, EditState { caret: len, anchor: len });
+            self.edits.insert(
+                widget_id,
+                EditState {
+                    caret: len,
+                    anchor: len,
+                },
+            );
         }
 
         let display = if focused {
@@ -156,14 +178,10 @@ impl Ui {
         };
         let mut text = display;
 
-        let mut st = self
-            .edits
-            .get(&widget_id)
-            .copied()
-            .unwrap_or(EditState {
-                caret: text.len(),
-                anchor: text.len(),
-            });
+        let mut st = self.edits.get(&widget_id).copied().unwrap_or(EditState {
+            caret: text.len(),
+            anchor: text.len(),
+        });
         clamp_edit(&mut st, text.len());
 
         let pad = self.s(6.0);
@@ -279,12 +297,25 @@ impl Ui {
         self.round_rect(rect.inset(1.0), (r - 1.0).max(0.0), bg);
 
         // grip strip
-        let grip_col = if dragging {
-            theme::SLIDER_THUMB_HOT
-        } else if grip_hov {
-            theme::SLIDER_THUMB
-        } else {
-            theme::SLIDER_FILL
+        let grip_col = match grip_color {
+            Some(base) => {
+                if dragging {
+                    brighten(base, 0.25)
+                } else if grip_hov {
+                    brighten(base, 0.12)
+                } else {
+                    base
+                }
+            }
+            None => {
+                if dragging {
+                    theme::SLIDER_THUMB_HOT
+                } else if grip_hov {
+                    theme::SLIDER_THUMB
+                } else {
+                    theme::SLIDER_FILL
+                }
+            }
         };
         let grip_inner = Rect {
             min: Vec2::new(rect.min.x + 1.0, rect.min.y + 1.0),
@@ -356,4 +387,13 @@ impl Ui {
             changed,
         }
     }
+}
+
+fn brighten(c: [f32; 4], amount: f32) -> [f32; 4] {
+    [
+        (c[0] + amount).min(1.0),
+        (c[1] + amount).min(1.0),
+        (c[2] + amount).min(1.0),
+        c[3],
+    ]
 }

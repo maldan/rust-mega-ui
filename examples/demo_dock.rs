@@ -25,6 +25,7 @@ struct DockDemo {
     render_mode: usize,
     position: Vec3,
     rotation: Vec3,
+    scale_v: Vec3,
     notes: String,
     log: String,
     last_menu: String,
@@ -57,6 +58,7 @@ impl Default for DockDemo {
             render_mode: 0,
             position: Vec3::new(0.0, 1.6, 4.0),
             rotation: Vec3::new(-12.0, 180.0, 0.0),
+            scale_v: Vec3::ONE,
             notes: String::from("Scene notes…\n"),
             log: String::from("dock ready\ndrag splitters to resize panes\n"),
             last_menu: String::from("(none)"),
@@ -202,6 +204,7 @@ impl Scene for DockDemo {
             render_mode,
             position,
             rotation,
+            scale_v,
             notes,
             log,
             scale,
@@ -265,9 +268,11 @@ impl Scene for DockDemo {
                     ui.drag_float("far", far_clip, 1.0);
                     ui.separator();
                     ui.label("Position");
-                    ui.vec3("pos", position, 0.1);
+                    ui.vec3("pos", position, 0.1, Vec3::ZERO);
                     ui.label("Rotation");
-                    ui.vec3("rot", rotation, 1.0);
+                    ui.vec3("rot", rotation, 1.0, Vec3::ZERO);
+                    ui.label("Scale");
+                    ui.vec3("scale", scale_v, 0.01, Vec3::ONE);
                     ui.separator();
                     ui.checkbox("Wireframe", wireframe);
                     ui.checkbox("Shadows", shadows);
