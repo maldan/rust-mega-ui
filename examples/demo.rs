@@ -84,6 +84,8 @@ struct Demo {
     name: String,
     enabled: bool,
     volume: f32,
+    output: f32,
+    drive: f32,
     speed: f32,
     mode: usize,
     theme: usize,
@@ -113,6 +115,8 @@ impl Default for Demo {
             name: String::from("mega-ui"),
             enabled: true,
             volume: 0.65,
+            output: 0.72,
+            drive: 0.35,
             speed: 1.25,
             mode: 0,
             theme: 0,
@@ -122,7 +126,7 @@ impl Default for Demo {
             position: Vec2::new(10.0, 20.0),
             rotation: Vec3::new(0.0, 45.0, 0.0),
             scale_v: Vec3::ONE,
-            tint: [0.78, 0.52, 0.22, 1.0],
+            tint: [0.12, 0.32, 0.72, 1.0],
             notes: String::from("Multiline notes.\nEdit me — text_area test.\n"),
             plot: (0..48)
                 .map(|i| ((i as f32) * 0.35).sin() * 0.5 + 0.5)
@@ -256,6 +260,8 @@ impl Scene for Demo {
                 .resizable(true)
                 .collapsible(true),
             |ui| {
+                let size = ui.available_size();
+                ui.scroll_area("widgets_scroll", size, ScrollAxes::Vertical, |ui| {
                 ui.label(&format!("Last menu: {}", state.last_menu));
                 ui.separator();
 
@@ -278,6 +284,16 @@ impl Scene for Demo {
                         ui.text_input("name", &mut state.name);
                         ui.checkbox("Enabled", &mut state.enabled);
                         ui.slider("Volume", &mut state.volume, 0.0..=1.0);
+                        ui.separator();
+                        ui.horizontal(|ui| {
+                            ui.knob("Output", &mut state.output, 0.0..=1.0);
+                            ui.knob_colored(
+                                "Drive",
+                                &mut state.drive,
+                                0.0..=1.0,
+                                [0.35, 0.72, 0.85, 1.0],
+                            );
+                        });
                         ui.select("Mode", &mut state.mode, &["Edit", "Play", "Inspect"]);
                         ui.toggle("Theme", &mut state.theme, &["Dark", "Light"]);
                         ui.separator();
@@ -418,6 +434,7 @@ impl Scene for Demo {
                         ui.label(&format!("points: {}", state.plot.len()));
                     }
                 });
+                });
             },
         );
 
@@ -428,6 +445,8 @@ impl Scene for Demo {
                 .resizable(true)
                 .open(&mut state.show_inputs),
             |ui| {
+                let size = ui.available_size();
+                ui.scroll_area("inputs_scroll", size, ScrollAxes::Vertical, |ui| {
                 ui.label("drag_float / vec / text_area");
                 ui.separator();
                 ui.label("Speed");
@@ -442,8 +461,8 @@ impl Scene for Demo {
                 ui.vec3("scale", &mut state.scale_v, 0.01, Vec3::ONE);
                 ui.separator();
                 ui.label("Notes (text_area)");
-                let notes_h = ui.available_size().y.max(80.0);
-                ui.text_area("notes", &mut state.notes, Vec2::new(0.0, notes_h));
+                ui.text_area("notes", &mut state.notes, Vec2::new(0.0, 120.0));
+                });
             },
         );
 
@@ -453,12 +472,15 @@ impl Scene for Demo {
                 .size(Vec2::new(320.0, 160.0))
                 .open(&mut state.show_help),
             |ui| {
+                let size = ui.available_size();
+                ui.scroll_area("help_scroll", size, ScrollAxes::Vertical, |ui| {
                 ui.label("Drag window titles to move.");
                 ui.label("Widgets tab: basics / layout / plot.");
                 ui.label("Inputs: drag_float, vec2/3, text_area.");
                 ui.label("File Manager: tree or table.");
                 ui.separator();
                 ui.label(&format!("FPS ~ {:.0}", (1.0 / dt.max(1e-4)).min(999.0)));
+                });
             },
         );
 

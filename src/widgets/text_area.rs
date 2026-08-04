@@ -159,6 +159,7 @@ impl Ui {
                     step = if dy > 0.0 { 1 } else { -1 };
                 }
                 scroll = (scroll as i32 - step).max(0) as usize;
+                self.consume_scroll();
             }
         }
 

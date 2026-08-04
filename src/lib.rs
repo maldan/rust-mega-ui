@@ -133,6 +133,8 @@ pub struct Ui {
     pub(crate) icons: Icons,
     pub(crate) scroll_wheel_target: Option<Id>,
     pub(crate) scroll_hover: Option<Id>,
+    /// Set by widgets that eat the wheel this frame (knob, nested scroll, …).
+    pub(crate) scroll_consumed: bool,
     pub(crate) needs_repaint: bool,
     pub(crate) clipboard_out: Option<String>,
     pub(crate) menu_bar_stack: Vec<widgets::menu::MenuBarCtx>,
@@ -201,6 +203,7 @@ impl Ui {
             icons: Icons::default(),
             scroll_wheel_target: None,
             scroll_hover: None,
+            scroll_consumed: false,
             needs_repaint: false,
             clipboard_out: None,
             menu_bar_stack: Vec::new(),
@@ -281,6 +284,12 @@ impl Ui {
         self.needs_repaint = true;
     }
 
+    /// Mark the mouse wheel as used so parent `scroll_area`s ignore it this frame.
+    pub(crate) fn consume_scroll(&mut self) {
+        self.scroll_consumed = true;
+        self.input.scroll_delta = Vec2::ZERO;
+    }
+
     pub fn color_box(&mut self, size: f32, color: [f32; 4]) {
         let gap = self.s(4.0);
         let size = self.s(size);
@@ -316,6 +325,7 @@ impl Ui {
         self.want_capture = false;
         self.cursor_icon = CursorIcon::Default;
         self.scroll_hover = None;
+        self.scroll_consumed = false;
         self.needs_repaint = false;
         self.clipboard_out = None;
         self.enabled_stack.clear();

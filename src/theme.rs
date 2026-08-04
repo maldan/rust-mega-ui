@@ -1,4 +1,4 @@
-//! Deep dark theme — near-black surfaces, dark borders, warm amber accent.
+//! Deep dark theme — near-black surfaces, dark borders, cool blue accent.
 
 /// App / desktop clear color (match host framebuffer clear).
 pub const DESKTOP: [f32; 4] = [0.04, 0.04, 0.04, 1.0];
@@ -14,10 +14,10 @@ pub const WIN_MIN_W: f32 = 140.0;
 pub const WIN_MIN_H: f32 = 80.0;
 pub const MODAL_DIM: [f32; 4] = [0.0, 0.0, 0.0, 0.62];
 
-/// Warm amber accent (interactive only — surfaces stay neutral).
-pub const ACCENT: [f32; 4] = [0.78, 0.52, 0.22, 1.0];
-pub const ACCENT_DIM: [f32; 4] = [0.55, 0.36, 0.14, 1.0];
-pub const ACCENT_SOFT: [f32; 4] = [0.22, 0.16, 0.08, 1.0];
+/// Cool blue accent (interactive only — surfaces stay neutral).
+pub const ACCENT: [f32; 4] = [0.12, 0.32, 0.72, 1.0];
+pub const ACCENT_DIM: [f32; 4] = [0.10, 0.26, 0.58, 1.0];
+pub const ACCENT_SOFT: [f32; 4] = [0.06, 0.12, 0.24, 1.0];
 
 pub const BTN: [f32; 4] = [0.16, 0.16, 0.16, 1.0];
 pub const BTN_HOVER: [f32; 4] = [0.22, 0.22, 0.22, 1.0];
@@ -30,17 +30,25 @@ pub const TEXT: [f32; 4] = [0.78, 0.78, 0.78, 1.0];
 pub const TEXT_DISABLED: [f32; 4] = [0.35, 0.35, 0.35, 1.0];
 pub const TITLE_TEXT: [f32; 4] = [0.58, 0.58, 0.58, 1.0];
 pub const FONT_SIZE: f32 = 14.0;
-pub const SELECTION: [f32; 4] = [0.55, 0.38, 0.16, 0.40];
+pub const SELECTION: [f32; 4] = [0.12, 0.28, 0.58, 0.42];
 
 pub const CHECK: [f32; 4] = [0.06, 0.06, 0.06, 1.0];
 pub const CHECK_ON: [f32; 4] = ACCENT;
 pub const CHECK_BORDER: [f32; 4] = [0.03, 0.03, 0.03, 1.0];
-pub const CHECK_MARK: [f32; 4] = [0.98, 0.96, 0.92, 1.0];
+pub const CHECK_MARK: [f32; 4] = [0.95, 0.97, 1.0, 1.0];
 
 pub const SLIDER_TRACK: [f32; 4] = [0.05, 0.05, 0.05, 1.0];
 pub const SLIDER_FILL: [f32; 4] = [0.28, 0.28, 0.28, 1.0];
 pub const SLIDER_THUMB: [f32; 4] = [0.55, 0.55, 0.55, 1.0];
 pub const SLIDER_THUMB_HOT: [f32; 4] = [0.72, 0.72, 0.72, 1.0];
+
+/// Rotary knob (arc track + face).
+pub const KNOB_TRACK: [f32; 4] = [0.22, 0.22, 0.22, 1.0];
+pub const KNOB_FILL: [f32; 4] = [0.95, 0.52, 0.14, 1.0];
+pub const KNOB_FACE: [f32; 4] = [0.36, 0.36, 0.36, 1.0];
+pub const KNOB_BORDER: [f32; 4] = [0.08, 0.08, 0.08, 1.0];
+pub const KNOB_INDICATOR: [f32; 4] = [0.96, 0.96, 0.96, 1.0];
+pub const KNOB_SIZE: f32 = 52.0;
 
 pub const HEADER: [f32; 4] = [0.13, 0.13, 0.13, 1.0];
 pub const HEADER_HOVER: [f32; 4] = [0.18, 0.18, 0.18, 1.0];

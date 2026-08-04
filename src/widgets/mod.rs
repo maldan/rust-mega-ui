@@ -4,6 +4,7 @@ mod collapsing_header;
 pub(crate) mod color_picker;
 mod drag_float;
 pub(crate) mod edit;
+mod knob;
 pub mod label;
 pub(crate) mod menu;
 pub mod plot;

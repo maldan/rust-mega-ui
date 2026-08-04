@@ -65,23 +65,7 @@ impl Ui {
             self.scroll_hover = Some(widget_id);
         }
 
-        if self.scroll_wheel_target == Some(widget_id) {
-            let d = self.input.scroll_delta;
-            if axes.vertical() && d.y.abs() > 0.0 && st.content.y > view.height() {
-                st.target.y -= d.y;
-            }
-            if axes.horizontal() && d.x.abs() > 0.0 && st.content.x > view.width() {
-                st.target.x -= d.x;
-            }
-            if axes.horizontal()
-                && !axes.vertical()
-                && d.y.abs() > 0.0
-                && st.content.x > view.width()
-            {
-                st.target.x -= d.y;
-            }
-        }
-
+        // Wheel is applied after content so children (knob, …) can consume it first.
         let max_scroll = Vec2::new(
             (st.content.x - view.width()).max(0.0),
             (st.content.y - view.height()).max(0.0),
@@ -112,6 +96,28 @@ impl Ui {
         self.pop_id();
 
         st.content = used;
+
+        if self.scroll_wheel_target == Some(widget_id) && !self.scroll_consumed {
+            let d = self.input.scroll_delta;
+            let view_h = view.height();
+            let view_w = view.width();
+            if axes.vertical() && d.y.abs() > 0.0 && st.content.y > view_h {
+                st.target.y -= d.y;
+            }
+            if axes.horizontal() && d.x.abs() > 0.0 && st.content.x > view_w {
+                st.target.x -= d.x;
+            }
+            if axes.horizontal()
+                && !axes.vertical()
+                && d.y.abs() > 0.0
+                && st.content.x > view_w
+            {
+                st.target.x -= d.y;
+            }
+            if d != Vec2::ZERO {
+                self.consume_scroll();
+            }
+        }
 
         let need_v = axes.vertical() && st.content.y > view.height() + 0.5;
         let need_h = axes.horizontal() && st.content.x > view.width() + 0.5;
