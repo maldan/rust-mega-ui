@@ -190,19 +190,17 @@ impl Ui {
         let Some(packed) = self.icons.resolve(&mut self.font, id, px) else {
             return;
         };
-        let clip = self.clip();
         if overlay {
-            let mut tmp = Vec::new();
             push_textured(
-                &mut tmp,
+                &mut self.overlay,
                 rect,
                 packed.uv_min,
                 packed.uv_max,
                 color,
-                clip,
+                None,
             );
-            self.overlay.append(&mut tmp);
         } else {
+            let clip = self.clip();
             push_textured(
                 &mut self.draw_list,
                 rect,

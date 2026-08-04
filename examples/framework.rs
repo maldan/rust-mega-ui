@@ -57,6 +57,9 @@ pub struct FrameInput {
     pub mouse_down: bool,
     mouse_pressed: bool,
     mouse_released: bool,
+    mouse_right_down: bool,
+    mouse_right_pressed: bool,
+    mouse_right_released: bool,
     scroll_delta: Vec2,
     text: String,
     key_backspace: bool,
@@ -80,6 +83,8 @@ impl FrameInput {
     fn clear_edges(&mut self) {
         self.mouse_pressed = false;
         self.mouse_released = false;
+        self.mouse_right_pressed = false;
+        self.mouse_right_released = false;
         self.scroll_delta = Vec2::ZERO;
         self.text.clear();
         self.key_backspace = false;
@@ -102,6 +107,9 @@ impl FrameInput {
             mouse_down: self.mouse_down,
             mouse_pressed: self.mouse_pressed,
             mouse_released: self.mouse_released,
+            mouse_right_down: self.mouse_right_down,
+            mouse_right_pressed: self.mouse_right_pressed,
+            mouse_right_released: self.mouse_right_released,
             viewport,
             scroll_delta: self.scroll_delta,
             dt,
@@ -586,18 +594,30 @@ impl<S: Scene> ApplicationHandler for Host<S> {
                 }
             }
             WindowEvent::MouseInput { state, button, .. } => {
-                if button == MouseButton::Left {
-                    let down = state == ElementState::Pressed;
-                    if down && !self.input.mouse_down {
-                        self.input.mouse_pressed = true;
+                let down = state == ElementState::Pressed;
+                match button {
+                    MouseButton::Left => {
+                        if down && !self.input.mouse_down {
+                            self.input.mouse_pressed = true;
+                        }
+                        if !down && self.input.mouse_down {
+                            self.input.mouse_released = true;
+                        }
+                        self.input.mouse_down = down;
                     }
-                    if !down && self.input.mouse_down {
-                        self.input.mouse_released = true;
+                    MouseButton::Right => {
+                        if down && !self.input.mouse_right_down {
+                            self.input.mouse_right_pressed = true;
+                        }
+                        if !down && self.input.mouse_right_down {
+                            self.input.mouse_right_released = true;
+                        }
+                        self.input.mouse_right_down = down;
                     }
-                    self.input.mouse_down = down;
-                    if let Some(window) = &self.window {
-                        window.request_redraw();
-                    }
+                    _ => {}
+                }
+                if let Some(window) = &self.window {
+                    window.request_redraw();
                 }
             }
             WindowEvent::MouseWheel { delta, .. } => {

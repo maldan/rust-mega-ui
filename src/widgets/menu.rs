@@ -517,6 +517,39 @@ impl Ui {
             *open = None;
         }
         self.menu_sub_open.clear();
+        self.context_menu = None;
+    }
+
+    /// Right-click context menu. Opens when `hovered` and RMB pressed; items via
+    /// [`Self::menu_item`] / [`Self::menu_item_icon`] inside `add`.
+    pub fn context_menu(&mut self, id: &str, hovered: bool, add: impl FnOnce(&mut Self)) {
+        let widget_id = self.current_id(id);
+
+        if hovered && self.input.mouse_right_pressed {
+            for o in self.menu_bar_open.values_mut() {
+                *o = None;
+            }
+            self.menu_sub_open.clear();
+            self.context_menu = Some((widget_id, self.input.mouse_pos));
+        }
+
+        let open = self
+            .context_menu
+            .filter(|(i, _)| *i == widget_id)
+            .map(|(_, p)| p);
+
+        if let Some(pos) = open {
+            self.push_id(id);
+            self.open_menu_popup(widget_id, pos, add);
+            let pointer_in = self
+                .mouse_absorb
+                .map(|r| r.contains(self.input.mouse_pos))
+                .unwrap_or(false);
+            if self.input.mouse_pressed && !pointer_in {
+                self.context_menu = None;
+            }
+            self.pop_id();
+        }
     }
 
     pub(crate) fn absorb_rect(&mut self, rect: Rect) {

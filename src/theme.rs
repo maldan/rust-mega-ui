@@ -99,3 +99,13 @@ pub const MENU_MIN_W: f32 = 140.0;
 pub const MENU_HOVER: [f32; 4] = [0.18, 0.18, 0.18, 1.0];
 pub const MENU_ACTIVE: [f32; 4] = [0.22, 0.22, 0.22, 1.0];
 pub const MENU_SEP: [f32; 4] = [0.02, 0.02, 0.02, 1.0];
+
+pub const STATUS_BAR_BG: [f32; 4] = [0.06, 0.06, 0.06, 1.0];
+pub const STATUS_BAR_H: f32 = 24.0;
+
+pub const TOAST_BG: [f32; 4] = [0.12, 0.12, 0.12, 0.96];
+pub const TOAST_INFO: [f32; 4] = [0.40, 0.60, 0.90, 1.0];
+pub const TOAST_SUCCESS: [f32; 4] = [0.40, 0.72, 0.42, 1.0];
+pub const TOAST_WARN: [f32; 4] = [0.85, 0.65, 0.25, 1.0];
+pub const TOAST_ERROR: [f32; 4] = [0.85, 0.35, 0.32, 1.0];
+pub const TOAST_LIFETIME: f32 = 3.2;

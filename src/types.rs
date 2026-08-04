@@ -93,6 +93,10 @@ pub struct UiInput {
     pub mouse_down: bool,
     pub mouse_pressed: bool,
     pub mouse_released: bool,
+    /// Right mouse button (context menus).
+    pub mouse_right_down: bool,
+    pub mouse_right_pressed: bool,
+    pub mouse_right_released: bool,
     pub viewport: Vec2,
     /// Wheel delta in pixels (x = horizontal, y = vertical; +y = scroll up / content down).
     pub scroll_delta: Vec2,

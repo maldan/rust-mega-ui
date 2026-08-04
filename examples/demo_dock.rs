@@ -26,6 +26,7 @@ struct DockDemo {
     position: Vec3,
     rotation: Vec3,
     scale_v: Vec3,
+    tint: [f32; 4],
     notes: String,
     log: String,
     last_menu: String,
@@ -59,6 +60,7 @@ impl Default for DockDemo {
             position: Vec3::new(0.0, 1.6, 4.0),
             rotation: Vec3::new(-12.0, 180.0, 0.0),
             scale_v: Vec3::ONE,
+            tint: [0.35, 0.55, 0.90, 1.0],
             notes: String::from("Scene notes…\n"),
             log: String::from("dock ready\ndrag splitters to resize panes\n"),
             last_menu: String::from("(none)"),
@@ -92,6 +94,7 @@ impl Scene for DockDemo {
                 if ui.menu_item_icon("plus", "New Scene").clicked() {
                     state.last_menu = String::from("File / New Scene");
                     state.log.push_str("new scene\n");
+                    ui.notify_success("New scene");
                 }
                 if ui.menu_item_icon("folder", "Open…").clicked() {
                     state.last_menu = String::from("File / Open");
@@ -205,6 +208,7 @@ impl Scene for DockDemo {
             position,
             rotation,
             scale_v,
+            tint,
             notes,
             log,
             scale,
@@ -212,7 +216,9 @@ impl Scene for DockDemo {
             ..
         } = state;
 
-        let dock_size = Vec2::new(viewport.x, (viewport.y - 26.0 * *scale).max(1.0));
+        let status_h = 24.0 * *scale;
+        let dock_size =
+            Vec2::new(viewport.x, (viewport.y - 26.0 * *scale - status_h).max(1.0));
         ui.dock_space("main", dock_size, dock, |ui, tab| match tab {
             "Viewport" => {
                 ui.label_styled(
@@ -227,7 +233,22 @@ impl Scene for DockDemo {
                     ui.toggle("mode", render_mode, &["Shaded", "Wire", "Lit"]);
                 });
                 ui.separator();
-                ui.texture(0, ui.available_size());
+                let tex_size = ui.available_size();
+                let zone = ui.surface(tex_size, [0.05, 0.05, 0.06, 1.0]);
+                ui.context_menu("viewport_ctx", ui.rect_hovered(zone), |ui| {
+                    if ui.menu_item("Frame selected").clicked() {
+                        log.push_str("frame selected\n");
+                        ui.notify("Frame selected");
+                    }
+                    if ui.menu_item("Toggle wireframe").clicked() {
+                        *wireframe = !*wireframe;
+                        ui.notify(&format!("wireframe = {}", *wireframe));
+                    }
+                    ui.separator();
+                    if ui.menu_item_icon("close", "Clear selection").clicked() {
+                        ui.notify_warn("Selection cleared");
+                    }
+                });
             }
             "Scene" => {
                 ui.label("Scene hierarchy");
@@ -277,6 +298,9 @@ impl Scene for DockDemo {
                     ui.checkbox("Wireframe", wireframe);
                     ui.checkbox("Shadows", shadows);
                     ui.select("Quality", quality, &["Low", "Medium", "High", "Ultra"]);
+                    ui.separator();
+                    ui.label("Tint");
+                    ui.color_edit("tint", tint);
                     ui.separator();
                     ui.label(&format!("scale (ui) = {:.2}", *scale));
                     ui.label(&format!(
@@ -391,6 +415,15 @@ impl Scene for DockDemo {
                 });
             }
             other => ui.label(other),
+        });
+
+        let fps = (1.0 / dt.max(1e-4)).min(999.0);
+        ui.status_bar(|ui| {
+            ui.label(&format!("{}", state.last_menu));
+            ui.label("·");
+            ui.label("RMB in Viewport");
+            ui.label("·");
+            ui.label(&format!("FPS {:.0}", fps));
         });
 
         false

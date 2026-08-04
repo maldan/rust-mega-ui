@@ -12,6 +12,7 @@ pub use types::{CursorIcon, DrawCommand, Id, Rect, Response, UiInput, UiOutput};
 pub use widgets::label::TextStyle;
 pub use widgets::scroll::ScrollAxes;
 pub use widgets::table::TableColumn;
+pub use widgets::ToastKind;
 pub use window::Window;
 
 use std::collections::HashMap;
@@ -96,6 +97,9 @@ pub struct Ui {
     pub(crate) trees: HashMap<Id, bool>,
     pub(crate) selects: HashMap<Id, bool>,
     pub(crate) vec_locks: HashMap<Id, bool>,
+    pub(crate) color_edits: HashMap<Id, widgets::color_picker::ColorEditState>,
+    pub(crate) context_menu: Option<(Id, Vec2)>,
+    pub(crate) toasts: Vec<widgets::toast::Toast>,
     pub(crate) scrolls: HashMap<Id, ScrollState>,
     pub(crate) edits: HashMap<Id, widgets::edit::EditState>,
     pub(crate) num_bufs: HashMap<Id, String>,
@@ -127,6 +131,8 @@ pub struct Ui {
     pub(crate) menu_popup_size: HashMap<Id, Vec2>,
     /// Last frame's popup absorb — blocks window focus on press before menus rebuild.
     pub(crate) overlay_block: Option<Rect>,
+    /// When true, `text` / `round_rect` paint into the overlay list.
+    pub(crate) draw_to_overlay: bool,
 }
 
 impl Default for Ui {
@@ -157,6 +163,9 @@ impl Ui {
             trees: HashMap::new(),
             selects: HashMap::new(),
             vec_locks: HashMap::new(),
+            color_edits: HashMap::new(),
+            context_menu: None,
+            toasts: Vec::new(),
             scrolls: HashMap::new(),
             edits: HashMap::new(),
             num_bufs: HashMap::new(),
@@ -187,6 +196,7 @@ impl Ui {
             menu_sub_open: HashMap::new(),
             menu_popup_size: HashMap::new(),
             overlay_block: None,
+            draw_to_overlay: false,
         }
     }
 
@@ -267,6 +277,13 @@ impl Ui {
             color,
         );
     }
+
+    /// Allocate and fill a rectangle (hit target / placeholder). Returns the rect.
+    pub fn surface(&mut self, size: Vec2, color: [f32; 4]) -> Rect {
+        let rect = self.allocate(size);
+        self.round_rect(rect, self.s(3.0), color);
+        rect
+    }
 }
 
 impl Ui {
@@ -290,6 +307,7 @@ impl Ui {
         self.enabled_stack.clear();
         self.menu_bar_stack.clear();
         self.menu_stack.clear();
+        self.draw_to_overlay = false;
 
         let modal_blocking = self.modal_open;
         self.modal_id = None;
@@ -328,6 +346,8 @@ impl Ui {
 
         self.layers
             .push(new_layer(LayoutDir::Vertical, Vec2::ZERO, self.spacing, 0.0, 0.0));
+
+        self.tick_toasts();
 
         let vp = self.input.viewport;
         let title_h = self.s(theme::WIN_TITLE_H);
@@ -372,6 +392,8 @@ impl Ui {
                 composed.extend_from_slice(cmds);
             }
         }
+        // Toasts draw into overlay.
+        self.draw_toasts();
         composed.append(&mut self.overlay);
         self.draw_list = composed;
 
@@ -506,6 +528,11 @@ impl Ui {
     }
 
     /// Hit-test with current clip. Popup absorb blocks widgets under overlays.
+    pub fn rect_hovered(&self, rect: Rect) -> bool {
+        self.hovered_rect(rect)
+    }
+
+    /// Hit-test with current clip. Popup absorb blocks widgets under overlays.
     pub(crate) fn hovered_rect(&self, rect: Rect) -> bool {
         if self.block_input {
             return false;
@@ -531,18 +558,16 @@ impl Ui {
             .unwrap_or(false)
     }
 
-    /// Hit-test for overlay popups (ignores mouse_absorb).
+    /// Hit-test for overlay popups (ignores window clip + mouse_absorb).
     pub(crate) fn hovered_overlay(&self, rect: Rect) -> bool {
-        if !rect.contains(self.input.mouse_pos) {
-            return false;
-        }
-        match self.clip() {
-            Some(c) => c.contains(self.input.mouse_pos),
-            None => true,
-        }
+        rect.contains(self.input.mouse_pos)
     }
 
     pub(crate) fn round_rect(&mut self, rect: Rect, radius: f32, color: [f32; 4]) {
+        if self.draw_to_overlay {
+            self.round_rect_overlay(rect, radius, color);
+            return;
+        }
         let clip = self.clip();
         let uv = self.font.white_uv();
         push_round_rect(
@@ -558,26 +583,34 @@ impl Ui {
     }
 
     pub(crate) fn round_rect_overlay(&mut self, rect: Rect, radius: f32, color: [f32; 4]) {
-        let clip = self.clip();
+        // Overlays (popups, menus, toasts) must ignore window/scroll clips.
         let uv = self.font.white_uv();
-        push_round_rect(&mut self.overlay, rect, radius, color, true, true, uv, clip);
+        push_round_rect(&mut self.overlay, rect, radius, color, true, true, uv, None);
     }
 
     pub(crate) fn text(&mut self, pos: Vec2, text: &str, color: [f32; 4]) {
+        if self.draw_to_overlay {
+            self.text_overlay(pos, text, color);
+            return;
+        }
         self.text_sized(pos, text, color, self.font_size());
     }
 
     pub(crate) fn text_sized(&mut self, pos: Vec2, text: &str, color: [f32; 4], size: f32) {
+        if self.draw_to_overlay {
+            self.font
+                .draw_text(&mut self.overlay, pos, text, color, size, None);
+            return;
+        }
         let clip = self.clip();
         self.font
             .draw_text(&mut self.draw_list, pos, text, color, size, clip);
     }
 
     pub(crate) fn text_overlay(&mut self, pos: Vec2, text: &str, color: [f32; 4]) {
-        let clip = self.clip();
         let size = self.font_size();
         self.font
-            .draw_text(&mut self.overlay, pos, text, color, size, clip);
+            .draw_text(&mut self.overlay, pos, text, color, size, None);
     }
 
     pub(crate) fn interact_rect(&mut self, id: Id, rect: Rect) -> Response {

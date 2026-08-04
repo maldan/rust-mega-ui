@@ -93,6 +93,7 @@ struct Demo {
     position: Vec2,
     rotation: Vec3,
     scale_v: Vec3,
+    tint: [f32; 4],
     notes: String,
     plot: Vec<f32>,
     show_help: bool,
@@ -121,6 +122,7 @@ impl Default for Demo {
             position: Vec2::new(10.0, 20.0),
             rotation: Vec3::new(0.0, 45.0, 0.0),
             scale_v: Vec3::ONE,
+            tint: [0.78, 0.52, 0.22, 1.0],
             notes: String::from("Multiline notes.\nEdit me — text_area test.\n"),
             plot: (0..48)
                 .map(|i| ((i as f32) * 0.35).sin() * 0.5 + 0.5)
@@ -172,9 +174,11 @@ impl Scene for Demo {
             ui.menu("File", |ui| {
                 if ui.menu_item_icon("plus", "New").clicked() {
                     state.last_menu = String::from("File / New");
+                    ui.notify_success("Created new project");
                 }
                 if ui.menu_item_icon("folder", "Open…").clicked() {
                     state.last_menu = String::from("File / Open");
+                    ui.notify("Open dialog…");
                 }
                 ui.menu("Open Recent", |ui| {
                     if ui.menu_item_icon("file", "project.mega").clicked() {
@@ -276,6 +280,9 @@ impl Scene for Demo {
                         ui.select("Mode", &mut state.mode, &["Edit", "Play", "Inspect"]);
                         ui.toggle("Theme", &mut state.theme, &["Dark", "Light"]);
                         ui.separator();
+                        ui.label("Tint (color_edit)");
+                        ui.color_edit("tint", &mut state.tint);
+                        ui.separator();
                         ui.label("Progress");
                         ui.progress_bar(state.progress);
                         ui.horizontal(|ui| {
@@ -293,12 +300,40 @@ impl Scene for Demo {
                         ui.add_enabled(state.enabled, |ui| {
                             if ui.button("Click me").clicked() {
                                 state.clicks += 1;
+                                ui.notify(&format!("Clicks: {}", state.clicks));
                             }
                         });
                         if ui.button("Confirm…").clicked() {
                             state.confirm_open = true;
                         }
+                        ui.horizontal(|ui| {
+                            if ui.button("Toast OK").clicked() {
+                                ui.notify_success("All good");
+                            }
+                            if ui.button("Warn").clicked() {
+                                ui.notify_warn("Careful…");
+                            }
+                            if ui.button("Error").clicked() {
+                                ui.notify_error("Something failed");
+                            }
+                        });
                         ui.label(&format!("Clicks: {}", state.clicks));
+                        ui.label("Right-click the zone:");
+                        let zone_w = ui.available_size().x.max(80.0);
+                        let zone = ui.surface(Vec2::new(zone_w, 48.0), [0.08, 0.08, 0.08, 1.0]);
+                        ui.context_menu("widgets_ctx", ui.rect_hovered(zone), |ui| {
+                            if ui.menu_item_icon("plus", "Add item").clicked() {
+                                state.clicks += 1;
+                                ui.notify("Context: Add item");
+                            }
+                            if ui.menu_item_icon("file", "Duplicate").clicked() {
+                                ui.notify("Context: Duplicate");
+                            }
+                            ui.separator();
+                            if ui.menu_item_icon("close", "Delete").clicked() {
+                                ui.notify_error("Context: Delete");
+                            }
+                        });
                     }
                     1 => {
                         ui.collapsing_header("Collapsing A", |ui| {
@@ -523,6 +558,7 @@ impl Scene for Demo {
                         ui.close_modal();
                         state.clicks = 0;
                         state.last_menu = String::from("Confirm / Delete");
+                        ui.notify_warn("Project deleted");
                     }
                 });
             },
@@ -532,6 +568,16 @@ impl Scene for Demo {
         for (i, v) in state.plot.iter_mut().enumerate() {
             *v = ((i as f32) * 0.35 + t).sin() * 0.45 + 0.5;
         }
+
+        let fps = (1.0 / dt.max(1e-4)).min(999.0);
+        ui.status_bar(|ui| {
+            ui.label(&format!("menu: {}", state.last_menu));
+            ui.label("·");
+            ui.label("RMB = context menu");
+            ui.label("·");
+            ui.label(&format!("FPS {:.0}", fps));
+        });
+
         true
     }
 }
