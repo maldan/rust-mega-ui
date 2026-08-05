@@ -143,6 +143,7 @@ pub struct Ui {
     pub(crate) menu_sub_open: HashMap<Id, Option<Id>>,
     pub(crate) menu_popup_size: HashMap<Id, Vec2>,
     pub(crate) button_sizes: HashMap<Id, Vec2>,
+    pub(crate) group_sizes: HashMap<Id, Vec2>,
     /// Last frame's popup absorb — blocks window focus on press before menus rebuild.
     pub(crate) overlay_block: Option<Rect>,
     /// When true, `text` / `round_rect` paint into the overlay list.
@@ -212,6 +213,7 @@ impl Ui {
             menu_sub_open: HashMap::new(),
             menu_popup_size: HashMap::new(),
             button_sizes: HashMap::new(),
+            group_sizes: HashMap::new(),
             overlay_block: None,
             draw_to_overlay: false,
         }

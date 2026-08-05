@@ -44,20 +44,21 @@ impl Ui {
             });
 
         let bar = self.s(theme::SCROLL_BAR);
+        let gap = self.s(theme::SCROLL_GAP);
         let need_v = axes.vertical() && st.content.y > size.y + 0.5;
         let need_h = axes.horizontal() && st.content.x > size.x + 0.5;
         let view = Rect {
             min: outer.min,
             max: Vec2::new(
-                outer.max.x - if need_v { bar } else { 0.0 },
-                outer.max.y - if need_h { bar } else { 0.0 },
+                outer.max.x - if need_v { bar + gap } else { 0.0 },
+                outer.max.y - if need_h { bar + gap } else { 0.0 },
             ),
         };
         if view.width() < 1.0 || view.height() < 1.0 {
             return;
         }
 
-        let dragging = interact_bars(self, &mut st, view, axes, need_v, need_h, v_id, h_id, bar);
+        let dragging = interact_bars(self, &mut st, view, axes, need_v, need_h, v_id, h_id, bar, gap);
 
         let hovered = self.hovered_rect(view) || self.hovered_rect(outer);
         if hovered {
@@ -124,8 +125,8 @@ impl Ui {
         let view = Rect {
             min: outer.min,
             max: Vec2::new(
-                outer.max.x - if need_v { bar } else { 0.0 },
-                outer.max.y - if need_h { bar } else { 0.0 },
+                outer.max.x - if need_v { bar + gap } else { 0.0 },
+                outer.max.y - if need_h { bar + gap } else { 0.0 },
             ),
         };
 
@@ -136,7 +137,7 @@ impl Ui {
         st.target = st.target.clamp(Vec2::ZERO, max_scroll);
         st.offset = st.offset.clamp(Vec2::ZERO, max_scroll);
 
-        draw_bars(self, view, outer, &st, axes, need_v, need_h, v_id, h_id, bar);
+        draw_bars(self, view, outer, &st, axes, need_v, need_h, v_id, h_id, bar, gap);
 
         self.scrolls.insert(widget_id, st);
     }
@@ -160,12 +161,13 @@ fn interact_bars(
     v_id: Id,
     h_id: Id,
     bar: f32,
+    gap: f32,
 ) -> bool {
     let mut dragging = false;
     if need_v && axes.vertical() {
         let track = Rect {
-            min: Vec2::new(view.max.x, view.min.y),
-            max: Vec2::new(view.max.x + bar, view.max.y),
+            min: Vec2::new(view.max.x + gap, view.min.y),
+            max: Vec2::new(view.max.x + gap + bar, view.max.y),
         };
         let th = thumb_len(view.height(), st.content.y, ui.s(theme::SCROLL_THUMB_MIN));
         let travel = (view.height() - th).max(0.0);
@@ -207,8 +209,8 @@ fn interact_bars(
 
     if need_h && axes.horizontal() {
         let track = Rect {
-            min: Vec2::new(view.min.x, view.max.y),
-            max: Vec2::new(view.max.x, view.max.y + bar),
+            min: Vec2::new(view.min.x, view.max.y + gap),
+            max: Vec2::new(view.max.x, view.max.y + gap + bar),
         };
         let tw = thumb_len(view.width(), st.content.x, ui.s(theme::SCROLL_THUMB_MIN));
         let travel = (view.width() - tw).max(0.0);
@@ -261,11 +263,12 @@ fn draw_bars(
     v_id: Id,
     h_id: Id,
     bar: f32,
+    gap: f32,
 ) {
     if need_v && axes.vertical() {
         let track = Rect {
-            min: Vec2::new(view.max.x, view.min.y),
-            max: Vec2::new(view.max.x + bar, view.max.y),
+            min: Vec2::new(view.max.x + gap, view.min.y),
+            max: Vec2::new(view.max.x + gap + bar, view.max.y),
         };
         ui.round_rect(track, 0.0, theme::SCROLL_BG);
         let th = thumb_len(view.height(), st.content.y, ui.s(theme::SCROLL_THUMB_MIN));
@@ -291,8 +294,8 @@ fn draw_bars(
 
     if need_h && axes.horizontal() {
         let track = Rect {
-            min: Vec2::new(view.min.x, view.max.y),
-            max: Vec2::new(view.max.x, view.max.y + bar),
+            min: Vec2::new(view.min.x, view.max.y + gap),
+            max: Vec2::new(view.max.x, view.max.y + gap + bar),
         };
         ui.round_rect(track, 0.0, theme::SCROLL_BG);
         let tw = thumb_len(view.width(), st.content.x, ui.s(theme::SCROLL_THUMB_MIN));
@@ -318,7 +321,7 @@ fn draw_bars(
 
     if need_v && need_h {
         let corner = Rect {
-            min: Vec2::new(view.max.x, view.max.y),
+            min: Vec2::new(view.max.x + gap, view.max.y + gap),
             max: outer.max,
         };
         ui.round_rect(corner, 0.0, theme::SCROLL_BG);

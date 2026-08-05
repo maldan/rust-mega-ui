@@ -50,6 +50,11 @@ pub const KNOB_BORDER: [f32; 4] = [0.08, 0.08, 0.08, 1.0];
 pub const KNOB_INDICATOR: [f32; 4] = [0.96, 0.96, 0.96, 1.0];
 pub const KNOB_SIZE: f32 = 52.0;
 
+/// Group box (fieldset): darker than window, lighter than input.
+pub const GROUP_BG: [f32; 4] = [0.07, 0.07, 0.07, 1.0];
+pub const GROUP_BORDER: [f32; 4] = INPUT_BORDER;
+pub const GROUP_RADIUS: f32 = 4.0;
+
 pub const HEADER: [f32; 4] = [0.13, 0.13, 0.13, 1.0];
 pub const HEADER_HOVER: [f32; 4] = [0.18, 0.18, 0.18, 1.0];
 pub const HEADER_PRESS: [f32; 4] = [0.10, 0.10, 0.10, 1.0];
@@ -65,6 +70,8 @@ pub const SCROLL_BG: [f32; 4] = [0.05, 0.05, 0.05, 1.0];
 pub const SCROLL_THUMB: [f32; 4] = [0.28, 0.28, 0.28, 1.0];
 pub const SCROLL_THUMB_HOT: [f32; 4] = [0.40, 0.40, 0.40, 1.0];
 pub const SCROLL_BAR: f32 = 10.0;
+/// Gap between content and scrollbar track.
+pub const SCROLL_GAP: f32 = 6.0;
 pub const SCROLL_THUMB_MIN: f32 = 18.0;
 /// Higher = snappier smooth scroll.
 pub const SCROLL_SMOOTH: f32 = 16.0;

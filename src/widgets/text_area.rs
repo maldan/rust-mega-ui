@@ -109,7 +109,8 @@ impl Ui {
         let mut lines = wrap_lines(self, text, inner.width().max(1.0));
         let mut need_bar = lines.len() > max_lines;
         if need_bar {
-            inner.max.x = (rect.max.x - pad - bar_w).max(inner.min.x + 1.0);
+            let gap = self.s(theme::SCROLL_GAP);
+            inner.max.x = (rect.max.x - pad - bar_w - gap).max(inner.min.x + 1.0);
             lines = wrap_lines(self, text, inner.width().max(1.0));
             max_lines = ((inner.height() / line_h).floor() as usize).max(1);
             need_bar = lines.len() > max_lines;

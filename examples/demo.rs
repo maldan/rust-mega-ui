@@ -285,17 +285,21 @@ impl Scene for Demo {
                         ui.checkbox("Enabled", &mut state.enabled);
                         ui.slider("Volume", &mut state.volume, 0.0..=1.0);
                         ui.separator();
-                        ui.horizontal(|ui| {
-                            ui.knob("Output", &mut state.output, 0.0..=1.0);
-                            ui.knob_colored(
-                                "Drive",
-                                &mut state.drive,
-                                0.0..=1.0,
-                                [0.35, 0.72, 0.85, 1.0],
-                            );
+                        ui.group("Mix", |ui| {
+                            ui.horizontal(|ui| {
+                                ui.knob("Output", &mut state.output, 0.0..=1.0);
+                                ui.knob_colored(
+                                    "Drive",
+                                    &mut state.drive,
+                                    0.0..=1.0,
+                                    [0.35, 0.72, 0.85, 1.0],
+                                );
+                            });
                         });
-                        ui.select("Mode", &mut state.mode, &["Edit", "Play", "Inspect"]);
-                        ui.toggle("Theme", &mut state.theme, &["Dark", "Light"]);
+                        ui.group("Mode", |ui| {
+                            ui.select("Mode", &mut state.mode, &["Edit", "Play", "Inspect"]);
+                            ui.toggle("Theme", &mut state.theme, &["Dark", "Light"]);
+                        });
                         ui.separator();
                         ui.label("Tint (color_edit)");
                         ui.color_edit("tint", &mut state.tint);
