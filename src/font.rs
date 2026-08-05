@@ -40,10 +40,34 @@ fn px_key(px: f32) -> u32 {
 
 impl Font {
     pub fn load_default(px: f32) -> Self {
-        let path = r"C:\Windows\Fonts\segoeui.ttf";
-        Self::from_path(path, px).unwrap_or_else(|e| {
-            panic!("failed to load default font `{path}`: {e}");
-        })
+        let candidates: &[&str] = if cfg!(target_os = "windows") {
+            &[
+                r"C:\Windows\Fonts\segoeui.ttf",
+                r"C:\Windows\Fonts\arial.ttf",
+                r"C:\Windows\Fonts\calibri.ttf",
+            ]
+        } else if cfg!(target_os = "macos") {
+            &[
+                "/System/Library/Fonts/Supplemental/Arial.ttf",
+                "/System/Library/Fonts/Supplemental/Helvetica.ttf",
+                "/Library/Fonts/Arial.ttf",
+            ]
+        } else {
+            &[
+                "/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf",
+                "/usr/share/fonts/truetype/liberation/LiberationSans-Regular.ttf",
+                "/usr/share/fonts/TTF/DejaVuSans.ttf",
+            ]
+        };
+
+        let mut last_err = String::new();
+        for path in candidates {
+            match Self::from_path(path, px) {
+                Ok(font) => return font,
+                Err(e) => last_err = format!("{path}: {e}"),
+            }
+        }
+        panic!("failed to load a default system font (last: {last_err})");
     }
 
     pub fn from_path(path: impl AsRef<Path>, px: f32) -> Result<Self, String> {

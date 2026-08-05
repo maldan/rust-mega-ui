@@ -107,6 +107,7 @@ struct Demo {
     fm_view: usize,
     fm_path: PathBuf,
     show_fm: bool,
+    ui_scale: f32,
 }
 
 impl Default for Demo {
@@ -139,6 +140,7 @@ impl Default for Demo {
             fm_view: 0,
             fm_path: default_root(),
             show_fm: true,
+            ui_scale: 1.0,
         }
     }
 }
@@ -174,6 +176,8 @@ impl Scene for Demo {
     }
 
     fn build(ui: &mut Ui, state: &mut Self, _viewport: Vec2, dt: f32) -> bool {
+        ui.set_scale(state.ui_scale);
+
         ui.menu_bar(|ui| {
             ui.menu("File", |ui| {
                 if ui.menu_item_icon("plus", "New").clicked() {
@@ -240,6 +244,28 @@ impl Scene for Demo {
                 if ui.menu_item("Toggle File Manager").clicked() {
                     state.show_fm = !state.show_fm;
                 }
+                ui.menu("UI Scale", |ui| {
+                    if ui.menu_item("75%").clicked() {
+                        state.ui_scale = 0.75;
+                        state.last_menu = String::from("View / UI Scale / 75%");
+                    }
+                    if ui.menu_item("100%").clicked() {
+                        state.ui_scale = 1.0;
+                        state.last_menu = String::from("View / UI Scale / 100%");
+                    }
+                    if ui.menu_item("125%").clicked() {
+                        state.ui_scale = 1.25;
+                        state.last_menu = String::from("View / UI Scale / 125%");
+                    }
+                    if ui.menu_item("150%").clicked() {
+                        state.ui_scale = 1.5;
+                        state.last_menu = String::from("View / UI Scale / 150%");
+                    }
+                    if ui.menu_item("200%").clicked() {
+                        state.ui_scale = 2.0;
+                        state.last_menu = String::from("View / UI Scale / 200%");
+                    }
+                });
                 ui.menu("Theme", |ui| {
                     if ui.menu_item("Dark").clicked() {
                         state.theme = 0;
@@ -473,7 +499,7 @@ impl Scene for Demo {
         ui.window(
             Window::new("Help")
                 .pos(Vec2::new(380.0, 480.0))
-                .size(Vec2::new(320.0, 160.0))
+                .size(Vec2::new(320.0, 200.0))
                 .open(&mut state.show_help),
             |ui| {
                 let size = ui.available_size();
@@ -482,6 +508,23 @@ impl Scene for Demo {
                 ui.label("Widgets tab: basics / layout / plot.");
                 ui.label("Inputs: drag_float, vec2/3, text_area.");
                 ui.label("File Manager: tree or table.");
+                ui.separator();
+                ui.label(&format!("UI scale = {:.0}%", state.ui_scale * 100.0));
+                ui.slider("UI Scale", &mut state.ui_scale, 0.75..=2.0);
+                ui.horizontal(|ui| {
+                    if ui.button("75%").clicked() {
+                        state.ui_scale = 0.75;
+                    }
+                    if ui.button("100%").clicked() {
+                        state.ui_scale = 1.0;
+                    }
+                    if ui.button("150%").clicked() {
+                        state.ui_scale = 1.5;
+                    }
+                    if ui.button("200%").clicked() {
+                        state.ui_scale = 2.0;
+                    }
+                });
                 ui.separator();
                 ui.label(&format!("FPS ~ {:.0}", (1.0 / dt.max(1e-4)).min(999.0)));
                 });
