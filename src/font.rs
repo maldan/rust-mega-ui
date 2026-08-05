@@ -31,11 +31,14 @@ pub struct Font {
     row_h: u32,
     glyphs: HashMap<(char, u32), Glyph>,
     dirty: bool,
+    /// Atlas ran out of space last pack attempt — caller should reset next frame.
+    overflow: bool,
     white_uv: [f32; 2],
 }
 
 fn px_key(px: f32) -> u32 {
-    (px * 4.0).round().max(1.0) as u32
+    // 1px buckets — avoids packing dozens of near-identical sizes while dragging scale.
+    px.round().clamp(1.0, 256.0) as u32
 }
 
 impl Font {
@@ -102,12 +105,38 @@ impl Font {
             row_h: 1,
             glyphs: HashMap::new(),
             dirty: true,
+            overflow: false,
             white_uv,
         };
         for c in ' '..='~' {
             f.glyph(c, px);
         }
         f
+    }
+
+    /// Wipe packed glyphs/icons slot and restart the packer (keeps the font face).
+    pub fn reset_atlas(&mut self) {
+        self.atlas.fill(0);
+        self.atlas[0] = 255;
+        self.pack_x = 1;
+        self.pack_y = 0;
+        self.row_h = 1;
+        self.glyphs.clear();
+        self.dirty = true;
+        self.overflow = false;
+    }
+
+    /// Rasterize basic ASCII at `px` so the first frame after a reset has text ready.
+    pub fn prewarm(&mut self, px: f32) {
+        for c in ' '..='~' {
+            let _ = self.glyph(c, px);
+        }
+    }
+
+    pub fn take_overflow(&mut self) -> bool {
+        let o = self.overflow;
+        self.overflow = false;
+        o
     }
 
     pub fn px(&self) -> f32 {
@@ -165,6 +194,7 @@ impl Font {
             self.row_h = 0;
         }
         if self.pack_y + gh + pad > self.atlas_h {
+            self.overflow = true;
             return None;
         }
         let x = self.pack_x;
@@ -213,6 +243,8 @@ impl Font {
                 self.row_h = 0;
             }
             if self.pack_y + gh + pad > self.atlas_h {
+                // Don't cache empties — next frame will reset the atlas.
+                self.overflow = true;
                 return Glyph {
                     x: 0.0,
                     y: 0.0,

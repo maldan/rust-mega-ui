@@ -13,7 +13,7 @@ use std::time::Instant;
 
 use framework::{Host, Scene};
 use glam::{Vec2, Vec3};
-use mega_ui::{ScrollAxes, TableColumn, TextStyle, Ui, Window};
+use mega_ui::{BrowserItem, ScrollAxes, TableColumn, TextStyle, Ui, Window};
 
 struct FsEntry {
     name: String,
@@ -80,6 +80,48 @@ fn default_root() -> PathBuf {
     PathBuf::from("C:\\")
 }
 
+/// Virtual asset tree for the Asset Manager demo.
+fn asset_entries(path: &str) -> Vec<(&'static str, &'static str, &'static str, bool)> {
+    match path {
+        "" => vec![
+            ("Scenes", "Scenes", "folder", true),
+            ("Textures", "Textures", "folder", true),
+            ("Materials", "Materials", "folder", true),
+            ("Meshes", "Meshes", "folder", true),
+            ("Audio", "Audio", "folder", true),
+        ],
+        "Scenes" => vec![
+            ("..", "..", "folder", true),
+            ("main.scene", "main.scene", "file", false),
+            ("menu.scene", "menu.scene", "file", false),
+            ("loading.scene", "loading.scene", "file", false),
+        ],
+        "Textures" => vec![
+            ("..", "..", "folder", true),
+            ("sky.hdr", "sky.hdr", "file", false),
+            ("ui_atlas.png", "ui_atlas.png", "file", false),
+            ("noise.png", "noise.png", "file", false),
+        ],
+        "Materials" => vec![
+            ("..", "..", "folder", true),
+            ("main.mat", "main.mat", "file", false),
+            ("glass.mat", "glass.mat", "file", false),
+        ],
+        "Meshes" => vec![
+            ("..", "..", "folder", true),
+            ("cube.mesh", "cube.mesh", "file", false),
+            ("grid.mesh", "grid.mesh", "file", false),
+            ("char.fbx", "char.fbx", "file", false),
+        ],
+        "Audio" => vec![
+            ("..", "..", "folder", true),
+            ("footstep.wav", "footstep.wav", "file", false),
+            ("music.ogg", "music.ogg", "file", false),
+        ],
+        _ => vec![("..", "..", "folder", true)],
+    }
+}
+
 struct Demo {
     name: String,
     enabled: bool,
@@ -107,6 +149,16 @@ struct Demo {
     fm_view: usize,
     fm_path: PathBuf,
     show_fm: bool,
+    /// New meta-widget file explorer (keep old FM too).
+    show_explorer: bool,
+    explorer_path: PathBuf,
+    explorer_selected: Option<String>,
+    explorer_opened: String,
+    /// Abstract asset browser.
+    show_assets: bool,
+    asset_path: String,
+    asset_selected: Option<String>,
+    asset_opened: String,
     ui_scale: f32,
 }
 
@@ -140,6 +192,14 @@ impl Default for Demo {
             fm_view: 0,
             fm_path: default_root(),
             show_fm: true,
+            show_explorer: true,
+            explorer_path: default_root(),
+            explorer_selected: None,
+            explorer_opened: String::from("(none)"),
+            show_assets: true,
+            asset_path: String::new(),
+            asset_selected: None,
+            asset_opened: String::from("(none)"),
             ui_scale: 1.0,
         }
     }
@@ -204,6 +264,14 @@ impl Scene for Demo {
                 if ui.menu_item_icon("folder", "File Manager").clicked() {
                     state.show_fm = true;
                     state.last_menu = String::from("File / File Manager");
+                }
+                if ui.menu_item_icon("folder", "Explorer").clicked() {
+                    state.show_explorer = true;
+                    state.last_menu = String::from("File / Explorer");
+                }
+                if ui.menu_item_icon("file", "Asset Manager").clicked() {
+                    state.show_assets = true;
+                    state.last_menu = String::from("File / Asset Manager");
                 }
                 ui.separator();
                 if ui.menu_item_icon("delete", "Delete project…").clicked() {
@@ -293,18 +361,55 @@ impl Scene for Demo {
 
                 ui.tabs("widgets_tabs", &["Basics", "Layout", "Plot"], |ui, tab| match tab {
                     0 => {
+                        ui.label("icons");
+                        let icon_rows: &[&[&str]] = &[
+                            &[
+                                "folder",
+                                "folder_open",
+                                "file",
+                                "save",
+                                "search",
+                                "settings",
+                                "edit",
+                                "copy",
+                            ],
+                            &[
+                                "undo",
+                                "redo",
+                                "refresh",
+                                "reset",
+                                "grid",
+                                "plus",
+                                "close",
+                                "check",
+                                "delete",
+                                "lock",
+                                "unlock",
+                                "more_vert",
+                            ],
+                            &[
+                                "chevron_left",
+                                "chevron_right",
+                                "chevron_up",
+                                "chevron_down",
+                                "warning",
+                                "info",
+                            ],
+                        ];
+                        for row in icon_rows {
+                            ui.horizontal(|ui| {
+                                for id in *row {
+                                    ui.icon(id, 18.0);
+                                }
+                            });
+                        }
                         ui.horizontal(|ui| {
-                            ui.icon("folder", 18.0);
-                            ui.icon("file", 18.0);
-                            ui.icon("plus", 18.0);
-                            ui.icon("close", 18.0);
-                            ui.icon("delete", 18.0);
-                            ui.icon("chevron_left", 18.0);
-                            ui.icon("chevron_right", 18.0);
-                            ui.icon("chevron_up", 18.0);
-                            ui.icon("chevron_down", 18.0);
-                            ui.icon("check", 18.0);
-                            ui.label("icons");
+                            ui.icon_colored("warning", 18.0, [0.95, 0.72, 0.18, 1.0]);
+                            ui.icon_colored("info", 18.0, [0.35, 0.65, 0.95, 1.0]);
+                            ui.icon_colored("delete", 18.0, [0.85, 0.28, 0.28, 1.0]);
+                            ui.icon_colored("check", 18.0, [0.35, 0.78, 0.42, 1.0]);
+                            ui.icon_colored("folder", 18.0, [0.95, 0.78, 0.28, 1.0]);
+                            ui.label("icon_colored");
                         });
                         ui.separator();
                         ui.text_input("name", &mut state.name);
@@ -508,6 +613,7 @@ impl Scene for Demo {
                 ui.label("Widgets tab: basics / layout / plot.");
                 ui.label("Inputs: drag_float, vec2/3, text_area.");
                 ui.label("File Manager: tree or table.");
+                ui.label("Explorer / Assets: browser meta-widget.");
                 ui.separator();
                 ui.label(&format!("UI scale = {:.0}%", state.ui_scale * 100.0));
                 ui.slider("UI Scale", &mut state.ui_scale, 0.75..=2.0);
@@ -646,6 +752,144 @@ impl Scene for Demo {
                     if let Some(p) = nav {
                         state.fm_path = p;
                     }
+                }
+            },
+        );
+
+        // Meta-widget: Explorer (file browser) — old File Manager kept above.
+        ui.window(
+            Window::new("Explorer")
+                .pos(Vec2::new(40.0, 580.0))
+                .size(Vec2::new(360.0, 320.0))
+                .resizable(true)
+                .open(&mut state.show_explorer),
+            |ui| {
+                let path_str = state.explorer_path.to_string_lossy().into_owned();
+                ui.label(&path_str);
+                ui.label(&format!("opened: {}", state.explorer_opened));
+                ui.separator();
+
+                let mut items: Vec<(String, String, bool)> = Vec::new();
+                if state.explorer_path.parent().is_some() {
+                    items.push(("..".into(), "..".into(), true));
+                }
+                for e in list_dir(&state.explorer_path) {
+                    items.push((
+                        e.path.to_string_lossy().into_owned(),
+                        e.name,
+                        e.is_dir,
+                    ));
+                }
+                let browser_items: Vec<BrowserItem<'_>> = items
+                    .iter()
+                    .map(|(id, name, is_dir)| BrowserItem {
+                        id: id.as_str(),
+                        label: name.as_str(),
+                        icon: if *is_dir { "folder" } else { "file" },
+                        is_folder: *is_dir,
+                    })
+                    .collect();
+
+                let avail = ui.available_size();
+                let mut open_nav: Option<PathBuf> = None;
+                let mut open_file: Option<String> = None;
+                ui.scroll_area(
+                    "explorer_list",
+                    Vec2::new(avail.x.max(80.0), (avail.y - 4.0).max(60.0)),
+                    ScrollAxes::Vertical,
+                    |ui| {
+                        let resp = ui.browser(
+                            "explorer",
+                            &browser_items,
+                            &mut state.explorer_selected,
+                        );
+                        if let Some(id) = resp.opened() {
+                            if id == ".." {
+                                open_nav = state.explorer_path.parent().map(|p| p.to_path_buf());
+                            } else {
+                                let p = PathBuf::from(id);
+                                if p.is_dir() {
+                                    open_nav = Some(p);
+                                } else {
+                                    open_file = Some(id.to_string());
+                                }
+                            }
+                        }
+                    },
+                );
+                if let Some(p) = open_nav {
+                    state.explorer_path = p;
+                    state.explorer_selected = None;
+                }
+                if let Some(f) = open_file {
+                    state.explorer_opened = f.clone();
+                    ui.notify(&format!("Open file: {f}"));
+                }
+            },
+        );
+
+        // Meta-widget: Asset Manager (abstract resources).
+        ui.window(
+            Window::new("Asset Manager")
+                .pos(Vec2::new(420.0, 580.0))
+                .size(Vec2::new(340.0, 320.0))
+                .resizable(true)
+                .open(&mut state.show_assets),
+            |ui| {
+                let crumb = if state.asset_path.is_empty() {
+                    "Assets"
+                } else {
+                    state.asset_path.as_str()
+                };
+                ui.label(crumb);
+                ui.label(&format!("opened: {}", state.asset_opened));
+                ui.separator();
+
+                let entries = asset_entries(&state.asset_path);
+                let browser_items: Vec<BrowserItem<'_>> = entries
+                    .iter()
+                    .map(|(id, label, icon, is_folder)| BrowserItem {
+                        id,
+                        label,
+                        icon,
+                        is_folder: *is_folder,
+                    })
+                    .collect();
+
+                let avail = ui.available_size();
+                let mut nav: Option<String> = None;
+                let mut opened: Option<String> = None;
+                ui.scroll_area(
+                    "asset_list",
+                    Vec2::new(avail.x.max(80.0), (avail.y - 4.0).max(60.0)),
+                    ScrollAxes::Vertical,
+                    |ui| {
+                        let resp =
+                            ui.browser("assets", &browser_items, &mut state.asset_selected);
+                        if let Some(id) = resp.opened() {
+                            if let Some((_, _, _, is_folder)) =
+                                entries.iter().find(|(eid, _, _, _)| *eid == id)
+                            {
+                                if *is_folder {
+                                    nav = Some(id.to_string());
+                                } else {
+                                    opened = Some(id.to_string());
+                                }
+                            }
+                        }
+                    },
+                );
+                if let Some(folder) = nav {
+                    if folder == ".." {
+                        state.asset_path.clear();
+                    } else {
+                        state.asset_path = folder;
+                    }
+                    state.asset_selected = None;
+                }
+                if let Some(res) = opened {
+                    state.asset_opened = res.clone();
+                    ui.notify(&format!("Open asset: {res}"));
                 }
             },
         );

@@ -70,6 +70,10 @@ impl Icons {
         }
     }
 
+    pub fn clear_packed(&mut self) {
+        self.packed.clear();
+    }
+
     pub fn resolve(&mut self, font: &mut Font, id: &str, size_px: f32) -> Option<PackedIcon> {
         let px = px_key(size_px);
         let key = (id.to_string(), px);
@@ -99,6 +103,10 @@ impl Ui {
     pub fn load_builtin_icons(&mut self) {
         self.load_icons([
             ("folder", include_bytes!("../icons/folder.svg").as_slice()),
+            (
+                "folder_open",
+                include_bytes!("../icons/folder_open.svg").as_slice(),
+            ),
             ("file", include_bytes!("../icons/file.svg").as_slice()),
             ("close", include_bytes!("../icons/close.svg").as_slice()),
             ("delete", include_bytes!("../icons/delete.svg").as_slice()),
@@ -123,7 +131,18 @@ impl Ui {
             ("lock", include_bytes!("../icons/lock.svg").as_slice()),
             ("unlock", include_bytes!("../icons/unlock.svg").as_slice()),
             ("reset", include_bytes!("../icons/reset.svg").as_slice()),
+            ("refresh", include_bytes!("../icons/refresh.svg").as_slice()),
             ("more_vert", include_bytes!("../icons/more_vert.svg").as_slice()),
+            ("save", include_bytes!("../icons/save.svg").as_slice()),
+            ("search", include_bytes!("../icons/search.svg").as_slice()),
+            ("settings", include_bytes!("../icons/settings.svg").as_slice()),
+            ("undo", include_bytes!("../icons/undo.svg").as_slice()),
+            ("redo", include_bytes!("../icons/redo.svg").as_slice()),
+            ("edit", include_bytes!("../icons/edit.svg").as_slice()),
+            ("copy", include_bytes!("../icons/copy.svg").as_slice()),
+            ("warning", include_bytes!("../icons/warning.svg").as_slice()),
+            ("info", include_bytes!("../icons/info.svg").as_slice()),
+            ("grid", include_bytes!("../icons/grid.svg").as_slice()),
         ]);
     }
 

@@ -270,7 +270,7 @@ fn draw_leaf(
         } else {
             theme::DOCK_TAB
         };
-        ui.round_rect(tr, radius, color);
+        ui.round_rect_corners(tr, radius, color, true, false);
 
         let th = ui.text_height();
         let text_col = if is_active {

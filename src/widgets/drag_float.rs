@@ -12,7 +12,19 @@ pub(crate) fn format_float(v: f32, step: f32) -> String {
     let v = snap_to_step(v, step);
     let d = step_decimals(step);
     let s = format!("{v:.prec$}", prec = d);
-    let s = s.trim_end_matches('0').trim_end_matches('.').to_string();
+    // Trim only fractional trailing zeros ("20.00" → "20"), never the integer part
+    // ("20".trim_end_matches('0') would wrongly become "2").
+    let s = if let Some(dot) = s.find('.') {
+        let (int_part, frac) = s.split_at(dot);
+        let frac = frac.trim_end_matches('0');
+        if frac == "." {
+            int_part.to_string()
+        } else {
+            format!("{int_part}{frac}")
+        }
+    } else {
+        s
+    };
     if s.is_empty() || s == "-" || s == "-0" {
         "0".into()
     } else {

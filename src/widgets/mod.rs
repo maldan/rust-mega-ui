@@ -1,4 +1,5 @@
 mod button;
+pub(crate) mod browser;
 mod checkbox;
 mod collapsing_header;
 pub(crate) mod color_picker;
@@ -23,4 +24,5 @@ mod toggle;
 mod tree;
 mod vector;
 
+pub use browser::{BrowserItem, BrowserResponse};
 pub use toast::ToastKind;

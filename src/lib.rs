@@ -12,7 +12,7 @@ pub use types::{CursorIcon, DrawCommand, Id, Rect, Response, UiInput, UiOutput};
 pub use widgets::label::TextStyle;
 pub use widgets::scroll::ScrollAxes;
 pub use widgets::table::TableColumn;
-pub use widgets::ToastKind;
+pub use widgets::{BrowserItem, BrowserResponse, ToastKind};
 pub use window::Window;
 
 use std::collections::HashMap;
@@ -24,6 +24,10 @@ use draw::push_round_rect;
 use font::Font;
 use icon::Icons;
 use widgets::table::TableCtx;
+
+fn font_px_key(px: f32) -> u32 {
+    px.round().clamp(1.0, 256.0) as u32
+}
 
 pub(crate) struct Layer {
     pub dir: LayoutDir,
@@ -115,6 +119,8 @@ pub struct Ui {
     pub(crate) edits: HashMap<Id, widgets::edit::EditState>,
     pub(crate) num_bufs: HashMap<Id, String>,
     pub(crate) tabs: HashMap<Id, usize>,
+    pub(crate) tab_content_sizes: HashMap<Id, Vec2>,
+    pub(crate) browser_clicks: HashMap<Id, widgets::browser::BrowserClickState>,
     pub(crate) table_stack: Vec<TableCtx>,
     pub(crate) clip_stack: Vec<Rect>,
     pub(crate) overlay: Vec<DrawCommand>,
@@ -186,6 +192,8 @@ impl Ui {
             edits: HashMap::new(),
             num_bufs: HashMap::new(),
             tabs: HashMap::new(),
+            tab_content_sizes: HashMap::new(),
+            browser_clicks: HashMap::new(),
             table_stack: Vec::new(),
             clip_stack: Vec::new(),
             overlay: Vec::new(),
@@ -221,8 +229,23 @@ impl Ui {
 
     /// UI scale (1.0 = 100%). Affects sizes, spacing, and font.
     pub fn set_scale(&mut self, scale: f32) {
-        self.scale = scale.clamp(0.5, 3.0);
+        let scale = scale.clamp(0.5, 3.0);
+        let old_key = font_px_key(theme::FONT_SIZE * self.scale);
+        let new_key = font_px_key(theme::FONT_SIZE * scale);
+        self.scale = scale;
         self.spacing = self.base_spacing * self.scale;
+        // New font pixel size → drop old glyphs/icons so the atlas doesn't fill up
+        // with every intermediate slider value (which made text vanish).
+        if old_key != new_key {
+            self.reset_font_atlas();
+        }
+    }
+
+    fn reset_font_atlas(&mut self) {
+        self.font.reset_atlas();
+        self.icons.clear_packed();
+        self.font.prewarm(self.font_size());
+        self.needs_repaint = true;
     }
 
     pub fn scale(&self) -> f32 {
@@ -313,6 +336,14 @@ impl Ui {
 
 impl Ui {
     pub fn begin_frame(&mut self, input: UiInput) {
+        // Recover from a previous atlas overflow (glyphs were skipped that frame).
+        let atlas_reset = self.font.take_overflow();
+        if atlas_reset {
+            self.font.reset_atlas();
+            self.icons.clear_packed();
+            self.font.prewarm(self.font_size());
+        }
+
         self.input = input;
         self.draw_list.clear();
         self.overlay.clear();
@@ -328,7 +359,7 @@ impl Ui {
         self.cursor_icon = CursorIcon::Default;
         self.scroll_hover = None;
         self.scroll_consumed = false;
-        self.needs_repaint = false;
+        self.needs_repaint = atlas_reset;
         self.clipboard_out = None;
         self.enabled_stack.clear();
         self.menu_bar_stack.clear();
@@ -605,8 +636,30 @@ impl Ui {
     }
 
     pub(crate) fn round_rect(&mut self, rect: Rect, radius: f32, color: [f32; 4]) {
+        self.round_rect_corners(rect, radius, color, true, true);
+    }
+
+    /// Rounded rect with independent top / bottom corner rounding.
+    pub(crate) fn round_rect_corners(
+        &mut self,
+        rect: Rect,
+        radius: f32,
+        color: [f32; 4],
+        round_top: bool,
+        round_bot: bool,
+    ) {
         if self.draw_to_overlay {
-            self.round_rect_overlay(rect, radius, color);
+            let uv = self.font.white_uv();
+            push_round_rect(
+                &mut self.overlay,
+                rect,
+                radius,
+                color,
+                round_top,
+                round_bot,
+                uv,
+                None,
+            );
             return;
         }
         let clip = self.clip();
@@ -616,8 +669,8 @@ impl Ui {
             rect,
             radius,
             color,
-            true,
-            true,
+            round_top,
+            round_bot,
             uv,
             clip,
         );

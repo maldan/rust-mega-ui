@@ -93,8 +93,6 @@ pub const TOGGLE_OFF: [f32; 4] = [0.14, 0.14, 0.14, 1.0];
 pub const TOGGLE_ON: [f32; 4] = ACCENT_DIM;
 pub const PROGRESS_BG: [f32; 4] = [0.05, 0.05, 0.05, 1.0];
 pub const PROGRESS_FILL: [f32; 4] = [0.36, 0.58, 0.34, 1.0];
-pub const TAB: [f32; 4] = [0.11, 0.11, 0.11, 1.0];
-pub const TAB_ACTIVE: [f32; 4] = [0.18, 0.18, 0.18, 1.0];
 pub const PLOT_BG: [f32; 4] = [0.05, 0.05, 0.05, 1.0];
 pub const PLOT_LINE: [f32; 4] = ACCENT;
 pub const PLOT_GRID: [f32; 4] = [0.14, 0.14, 0.14, 1.0];
@@ -109,6 +107,11 @@ pub const DOCK_TAB_ACTIVE: [f32; 4] = WIN_BODY;
 pub const DOCK_TAB_HOVER: [f32; 4] = [0.07, 0.07, 0.07, 1.0];
 pub const DOCK_TAB_TEXT: [f32; 4] = [0.50, 0.50, 0.50, 1.0];
 pub const DOCK_TAB_TEXT_ACTIVE: [f32; 4] = [0.90, 0.90, 0.90, 1.0];
+/// In-window tabs share dock colors (active light / inactive dark).
+pub const TAB: [f32; 4] = DOCK_TAB;
+pub const TAB_ACTIVE: [f32; 4] = DOCK_TAB_ACTIVE;
+/// Selected row in file / asset browser lists.
+pub const BROWSER_SELECTED: [f32; 4] = [0.14, 0.24, 0.42, 1.0];
 /// Focus accent on the active tab only.
 pub const DOCK_FOCUS: [f32; 4] = [0.23, 0.47, 1.0, 1.0];
 pub const DOCK_SPLIT: f32 = 2.0;
