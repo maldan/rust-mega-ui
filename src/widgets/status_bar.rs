@@ -4,7 +4,7 @@ use glam::Vec2;
 
 use crate::theme;
 use crate::types::Rect;
-use crate::{new_layer, LayoutDir, Ui};
+use crate::{CrossAlign, new_layer, LayoutDir, Ui};
 
 impl Ui {
     /// Full-width status bar pinned to the bottom of the viewport.
@@ -34,6 +34,7 @@ impl Ui {
             spacing,
             (w - pad * 2.0).max(0.0),
             h,
+            CrossAlign::Start,
         ));
         self.layer().cursor.y = bar.min.y + (h - self.text_height()) * 0.5;
         add(self);

@@ -5,6 +5,8 @@ use super::types::{DrawCommand, Rect};
 
 /// `DrawCommand.kind` for GPU SDF rounded fills (one quad).
 pub const KIND_SDF_ROUND: f32 = 2.0;
+/// `DrawCommand.kind` for GPU SDF line segment (one quad).
+pub const KIND_SDF_LINE: f32 = 3.0;
 
 /// Corner mask packed into `params.w`: all / top only / bottom only.
 const CORNER_ALL: f32 = 0.0;
@@ -127,6 +129,61 @@ pub fn push_arc_cw(
             white_uv,
             clip,
         );
+    }
+}
+
+/// GPU SDF line segment. `params` = endpoint screen coords; thickness in `uv_min.x`.
+pub fn push_line_segment(
+    out: &mut Vec<DrawCommand>,
+    a: Vec2,
+    b: Vec2,
+    thickness: f32,
+    color: [f32; 4],
+    clip: Option<Rect>,
+) {
+    let half = thickness * 0.5;
+    if half <= 0.0 {
+        return;
+    }
+    let delta = b - a;
+    if delta.length_squared() < 1e-6 {
+        return;
+    }
+    let pad = half + 1.0;
+    let outer = Rect {
+        min: Vec2::new(a.x.min(b.x), a.y.min(b.y)) - Vec2::splat(pad),
+        max: Vec2::new(a.x.max(b.x), a.y.max(b.y)) + Vec2::splat(pad),
+    };
+    let draw = match clip {
+        Some(c) => outer.intersect(c),
+        None => Some(outer),
+    };
+    if draw.is_none() {
+        return;
+    }
+    out.push(DrawCommand {
+        rect: draw.unwrap(),
+        uv_min: [thickness, 0.0],
+        uv_max: [thickness, 0.0],
+        colors: [color; 4],
+        kind: KIND_SDF_LINE,
+        tex: 0,
+        params: [a.x, a.y, b.x, b.y],
+    });
+}
+
+pub fn push_polyline(
+    out: &mut Vec<DrawCommand>,
+    points: &[Vec2],
+    thickness: f32,
+    color: [f32; 4],
+    clip: Option<Rect>,
+) {
+    if points.len() < 2 {
+        return;
+    }
+    for i in 0..points.len() - 1 {
+        push_line_segment(out, points[i], points[i + 1], thickness, color, clip);
     }
 }
 

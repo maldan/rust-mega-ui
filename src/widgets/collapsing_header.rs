@@ -2,7 +2,7 @@ use glam::Vec2;
 
 use crate::theme;
 use crate::types::{CursorIcon, Rect};
-use crate::{LayoutDir, Ui};
+use crate::{CrossAlign, LayoutDir, Ui};
 
 impl Ui {
     pub fn collapsing_header(&mut self, label: &str, add: impl FnOnce(&mut Self)) {
@@ -77,6 +77,7 @@ impl Ui {
                 spacing,
                 fill_w,
                 fill_h,
+                CrossAlign::Start,
             ));
             add(self);
             let used = self.layers.pop().unwrap().used;

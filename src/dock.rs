@@ -2,7 +2,7 @@ use glam::Vec2;
 
 use crate::theme;
 use crate::types::{CursorIcon, Rect};
-use crate::{new_layer, LayoutDir, Ui};
+use crate::{CrossAlign, new_layer, LayoutDir, Ui};
 
 const MIN_PANE: f32 = 64.0;
 
@@ -349,6 +349,7 @@ fn draw_leaf(
         ui.spacing,
         content.width(),
         content.height(),
+        CrossAlign::Start,
     ));
     add(ui, panel);
     ui.layers.pop();

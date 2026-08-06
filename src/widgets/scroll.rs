@@ -2,7 +2,7 @@ use glam::Vec2;
 
 use crate::theme;
 use crate::types::{CursorIcon, Id, Rect};
-use crate::{new_layer, LayoutDir, ScrollState, Ui};
+use crate::{CrossAlign, new_layer, LayoutDir, ScrollState, Ui};
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum ScrollAxes {
@@ -90,7 +90,7 @@ impl Ui {
         self.push_clip(view);
         let origin = view.min - st.offset;
         self.layers
-            .push(new_layer(LayoutDir::Vertical, origin, self.spacing, view.width(), 0.0));
+            .push(new_layer(LayoutDir::Vertical, origin, self.spacing, view.width(), 0.0, CrossAlign::Start));
         add(self);
         let used = self.layers.pop().unwrap().used;
         self.pop_clip();

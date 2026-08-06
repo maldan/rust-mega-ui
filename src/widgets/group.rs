@@ -2,7 +2,7 @@ use glam::Vec2;
 
 use crate::theme;
 use crate::types::Rect;
-use crate::{new_layer, LayoutDir, Ui};
+use crate::{CrossAlign, new_layer, LayoutDir, Ui};
 
 impl Ui {
     /// Group box: border around content with an optional title on the top edge.
@@ -86,6 +86,7 @@ impl Ui {
             self.spacing,
             content_w,
             0.0,
+            CrossAlign::Start,
         ));
         add(self);
         let used = self.layers.pop().unwrap().used;

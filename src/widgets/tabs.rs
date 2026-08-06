@@ -2,7 +2,7 @@ use glam::Vec2;
 
 use crate::theme;
 use crate::types::{CursorIcon, Rect};
-use crate::{LayoutDir, Ui};
+use crate::{CrossAlign, LayoutDir, Ui};
 
 impl Ui {
     pub fn tabs(&mut self, id: &str, titles: &[&str], add: impl FnOnce(&mut Self, usize)) {
@@ -127,6 +127,7 @@ impl Ui {
             self.spacing,
             inner_w,
             inner_h,
+            CrossAlign::Start,
         ));
         add(self, selected);
         let used = self.layers.pop().unwrap().used;

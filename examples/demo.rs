@@ -14,6 +14,7 @@ use std::time::Instant;
 use framework::{DrawStats, Host, Scene};
 use glam::{Vec2, Vec3};
 use mega_ui::{BrowserItem, ScrollAxes, TableColumn, TextStyle, Ui, Window};
+use mega_ui::{AnimationCurve, ease_in_out, sample_curve};
 
 struct FsEntry {
     name: String,
@@ -122,6 +123,24 @@ fn asset_entries(path: &str) -> Vec<(&'static str, &'static str, &'static str, b
     }
 }
 
+struct CalcState {
+    display: String,
+    acc: f64,
+    pending: Option<char>,
+    fresh: bool,
+}
+
+impl Default for CalcState {
+    fn default() -> Self {
+        Self {
+            display: String::from("0"),
+            acc: 0.0,
+            pending: None,
+            fresh: true,
+        }
+    }
+}
+
 struct Demo {
     name: String,
     enabled: bool,
@@ -160,6 +179,11 @@ struct Demo {
     asset_selected: Option<String>,
     asset_opened: String,
     ui_scale: f32,
+    anim_curve: AnimationCurve,
+    curve_scrub: f32,
+    curve_drive: f32,
+    show_calc: bool,
+    calc: CalcState,
 }
 
 impl Default for Demo {
@@ -201,8 +225,136 @@ impl Default for Demo {
             asset_selected: None,
             asset_opened: String::from("(none)"),
             ui_scale: 1.0,
+            anim_curve: ease_in_out(),
+            curve_scrub: 0.35,
+            curve_drive: 0.0,
+            show_calc: true,
+            calc: CalcState::default(),
         }
     }
+}
+
+fn parse_calc_display(s: &str) -> f64 {
+    s.parse().unwrap_or(0.0)
+}
+
+fn format_calc_display(v: f64) -> String {
+    if !v.is_finite() {
+        return String::from("Error");
+    }
+    let rounded = (v * 1e10).round() / 1e10;
+    if (rounded - rounded.round()).abs() < 1e-9 {
+        format!("{}", rounded.round() as i64)
+    } else {
+        let s = format!("{:.8}", rounded);
+        s.trim_end_matches('0').trim_end_matches('.').to_string()
+    }
+}
+
+fn calc_apply(acc: f64, rhs: f64, op: char) -> f64 {
+    match op {
+        '+' => acc + rhs,
+        '-' => acc - rhs,
+        '*' => acc * rhs,
+        '/' => if rhs.abs() < 1e-12 { f64::NAN } else { acc / rhs },
+        _ => rhs,
+    }
+}
+
+fn calc_digit(calc: &mut CalcState, d: char) {
+    if calc.display == "Error" {
+        calc.display = String::from("0");
+        calc.acc = 0.0;
+        calc.pending = None;
+    }
+    if calc.fresh {
+        calc.display.clear();
+        calc.fresh = false;
+    }
+    if d == '.' {
+        if calc.display.contains('.') {
+            return;
+        }
+        if calc.display.is_empty() {
+            calc.display.push('0');
+        }
+        calc.display.push('.');
+        return;
+    }
+    if calc.display == "0" {
+        calc.display = d.to_string();
+    } else {
+        calc.display.push(d);
+    }
+}
+
+fn calc_op(calc: &mut CalcState, op: char) {
+    if calc.display == "Error" {
+        calc.display = String::from("0");
+        calc.acc = 0.0;
+        calc.pending = None;
+    }
+    let current = parse_calc_display(&calc.display);
+    if let Some(prev) = calc.pending {
+        calc.acc = calc_apply(calc.acc, current, prev);
+    } else {
+        calc.acc = current;
+    }
+    calc.display = format_calc_display(calc.acc);
+    calc.pending = Some(op);
+    calc.fresh = true;
+}
+
+fn calc_equals(calc: &mut CalcState) {
+    if calc.display == "Error" {
+        return;
+    }
+    let current = parse_calc_display(&calc.display);
+    if let Some(op) = calc.pending {
+        calc.acc = calc_apply(calc.acc, current, op);
+        calc.display = format_calc_display(calc.acc);
+        calc.pending = None;
+        calc.fresh = true;
+    }
+}
+
+fn calc_clear(calc: &mut CalcState) {
+    calc.display = String::from("0");
+    calc.acc = 0.0;
+    calc.pending = None;
+    calc.fresh = true;
+}
+
+fn draw_calc_screen(ui: &mut Ui, text: &str) {
+    ui.group("", |ui| {
+        ui.row(|ui| {
+            ui.spacer();
+            ui.label_styled(
+                text,
+                TextStyle {
+                    color: [0.92, 0.92, 0.92, 1.0],
+                    size: 22.0,
+                },
+            );
+        });
+    });
+}
+
+fn calc_key(ui: &mut Ui, label: &str, calc: &mut CalcState, action: char) {
+    ui.id_scope(label, |ui| {
+        if ui.button(label).clicked() {
+            match action {
+                '0' | '1' | '2' | '3' | '4' | '5' | '6' | '7' | '8' | '9' => {
+                    calc_digit(calc, action);
+                }
+                '.' => calc_digit(calc, '.'),
+                'C' => calc_clear(calc),
+                '=' => calc_equals(calc),
+                '+' | '-' | '*' | '/' => calc_op(calc, action),
+                _ => {}
+            }
+        }
+    });
 }
 
 fn draw_fs_tree(ui: &mut Ui, path: &Path, depth: u32) {
@@ -311,6 +463,10 @@ impl Scene for Demo {
                 }
                 if ui.menu_item("Toggle File Manager").clicked() {
                     state.show_fm = !state.show_fm;
+                }
+                if ui.menu_item("Calculator").clicked() {
+                    state.show_calc = !state.show_calc;
+                    state.last_menu = String::from("View / Calculator");
                 }
                 ui.menu("UI Scale", |ui| {
                     if ui.menu_item("75%").clicked() {
@@ -527,6 +683,38 @@ impl Scene for Demo {
                         });
                     }
                     1 => {
+                        ui.label("Layout: row / flex / property / grid");
+                        ui.separator();
+                        ui.row(|ui| {
+                            ui.label("Left");
+                            ui.spacer();
+                            ui.label("Right");
+                        });
+                        ui.property("Volume", 0.35, |ui| {
+                            ui.slider("pv", &mut state.volume, 0.0..=1.0);
+                        });
+                        ui.property("Name", 0.35, |ui| {
+                            ui.text_input("pv_name", &mut state.name);
+                        });
+                        ui.separator();
+                        ui.label("Knob grid (3 cols)");
+                        ui.grid(3, |ui| {
+                            ui.grid_cell(|ui| {
+                                ui.knob("g_out", &mut state.output, 0.0..=1.0);
+                            });
+                            ui.grid_cell(|ui| {
+                                ui.knob_colored(
+                                    "g_drv",
+                                    &mut state.drive,
+                                    0.0..=1.0,
+                                    [0.35, 0.72, 0.85, 1.0],
+                                );
+                            });
+                            ui.grid_cell(|ui| {
+                                ui.knob("g_spd", &mut state.speed, 0.0..=5.0);
+                            });
+                        });
+                        ui.separator();
                         ui.collapsing_header("Collapsing A", |ui| {
                             ui.label("Nested content inside header.");
                             ui.checkbox("Nested flag", &mut state.enabled);
@@ -563,10 +751,32 @@ impl Scene for Demo {
                         });
                     }
                     _ => {
-                        ui.label("Animated plot");
-                        ui.plot(Vec2::new(0.0, 120.0), &state.plot);
+                        ui.label("Interactive plot (wheel zoom, Ctrl+drag pan)");
+                        ui.plot_interactive("live_plot", Vec2::new(0.0, 100.0), &state.plot);
                         ui.separator();
-                        ui.label(&format!("points: {}", state.plot.len()));
+                        ui.label("Curve editor (click add point, Shift+click delete, Ctrl+drag pan)");
+                        let curve_resp = ui.curve_editor(
+                            "anim_curve",
+                            &mut state.anim_curve,
+                            Vec2::new(0.0, 160.0),
+                        );
+                        ui.slider("scrub", &mut state.curve_scrub, 0.0..=1.0);
+                        ui.curve_preview_time("anim_curve", state.curve_scrub);
+                        state.curve_drive = sample_curve(&state.anim_curve, state.curve_scrub);
+                        ui.property("Sampled", 0.35, |ui| {
+                            ui.label(&format!("{:.3}", state.curve_drive));
+                        });
+                        ui.knob_colored(
+                            "curve_knob",
+                            &mut state.curve_drive,
+                            0.0..=1.0,
+                            [0.95, 0.52, 0.14, 1.0],
+                        );
+                        if curve_resp.changed {
+                            ui.notify("Curve changed");
+                        }
+                        ui.separator();
+                        ui.label(&format!("plot points: {}", state.plot.len()));
                     }
                 });
                 });
@@ -582,11 +792,12 @@ impl Scene for Demo {
             |ui| {
                 let size = ui.available_size();
                 ui.scroll_area("inputs_scroll", size, ScrollAxes::Vertical, |ui| {
-                ui.label("drag_float / vec / text_area");
-                ui.separator();
-                ui.label("Speed");
-                ui.drag_float("speed", &mut state.speed, 0.05);
-                ui.slider("Speed (slider)", &mut state.speed, 0.0..=5.0);
+                ui.property("Speed", 0.35, |ui| {
+                    ui.drag_float("speed", &mut state.speed, 0.05);
+                });
+                ui.property("Speed slider", 0.35, |ui| {
+                    ui.slider("speed_s", &mut state.speed, 0.0..=5.0);
+                });
                 ui.separator();
                 ui.label("Position (vec2)");
                 ui.vec2("pos", &mut state.position, 0.5, Vec2::ZERO);
@@ -890,6 +1101,47 @@ impl Scene for Demo {
                 if let Some(res) = opened {
                     state.asset_opened = res.clone();
                     ui.notify(&format!("Open asset: {res}"));
+                }
+            },
+        );
+
+        ui.window(
+            Window::new("Calculator")
+                .pos(Vec2::new(720.0, 480.0))
+                .size(Vec2::new(248.0, 320.0))
+                .resizable(true)
+                .open(&mut state.show_calc),
+            |ui| {
+                ui.label("grid layout demo");
+                draw_calc_screen(ui, &state.calc.display);
+                ui.space(6.0);
+                ui.grid_with(4, Some(6.0), |ui| {
+                    for (label, action) in [
+                        ("7", '7'),
+                        ("8", '8'),
+                        ("9", '9'),
+                        ("/", '/'),
+                        ("4", '4'),
+                        ("5", '5'),
+                        ("6", '6'),
+                        ("*", '*'),
+                        ("1", '1'),
+                        ("2", '2'),
+                        ("3", '3'),
+                        ("-", '-'),
+                        ("C", 'C'),
+                        ("0", '0'),
+                        (".", '.'),
+                        ("+", '+'),
+                    ] {
+                        ui.grid_cell(|ui| {
+                            calc_key(ui, label, &mut state.calc, action);
+                        });
+                    }
+                });
+                ui.space(4.0);
+                if ui.button("=").clicked() {
+                    calc_equals(&mut state.calc);
                 }
             },
         );

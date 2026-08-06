@@ -99,9 +99,9 @@ if let Some(text) = out.clipboard { clipboard.set_text(text); }
 | `rect` | экранные пиксели (origin = top-left) |
 | `uv_min` / `uv_max` | UV в атласе; для solid `uv_min == uv_max` (белый тексель) |
 | `colors` | RGBA 0..1 на углах: TL, TR, BR, BL (solid = один цвет во всех) |
-| `kind` | `0` = font atlas, `1` = host texture, `2` = SDF rounded rect |
+| `kind` | `0` = font atlas, `1` = host texture, `2` = SDF round rect, `3` = SDF line |
 | `tex` | слот хост-текстуры при `kind == 1`. Хост батчит по слоту и ребиндит один `tex0`. |
-| `params` | для `kind == 2`: `[w, h, radius, corners]` (0=all, 1=top, 2=bot) |
+| `params` | `kind 2`: `[w, h, radius, corners]`; `kind 3`: `[ax, ay, bx, by]` px, thickness в `uv_min.x` |
 
 Виджеты:
 
@@ -251,6 +251,17 @@ ui.window(Window::new("Settings").pos(p).size(s).resizable(true), |ui| {
     ui.select("mode", &mut mode, &["A", "B"]);
     ui.separator();
     ui.scroll_area("list", size, ScrollAxes::Vertical, |ui| { /* … */ });
+ui.row(|ui| {
+    ui.label("Name");
+    ui.flex(1.0, |ui| { ui.text_input("n", &mut name); });
+    ui.button("OK");
+});
+ui.property("Volume", 0.35, |ui| { ui.slider("v", &mut vol, 0.0..=1.0); });
+ui.grid(3, |ui| {
+    ui.grid_cell(|ui| { ui.knob("k", &mut v, 0.0..=1.0); });
+});
+ui.curve_editor("ease", &mut curve, Vec2::new(0.0, 140.0));
+ui.plot_interactive("wave", Vec2::new(0.0, 100.0), &values);
     ui.add_enabled(false, |ui| { ui.button("Locked"); });
 });
 

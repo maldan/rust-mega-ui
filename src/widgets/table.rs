@@ -2,7 +2,7 @@ use glam::Vec2;
 
 use crate::theme;
 use crate::types::{CursorIcon, Rect, Response};
-use crate::{new_layer, LayoutDir, Ui};
+use crate::{CrossAlign, new_layer, LayoutDir, Ui};
 
 #[derive(Clone, Copy)]
 pub struct TableColumn<'a> {
@@ -133,6 +133,7 @@ impl Ui {
             self.s(4.0),
             fill_w,
             (cell.height() - pad.y * 2.0).max(0.0),
+            CrossAlign::Start,
         ));
         add(self);
         self.layers.pop();

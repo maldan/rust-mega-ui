@@ -2,7 +2,7 @@ use glam::Vec2;
 
 use crate::theme;
 use crate::types::{CursorIcon, Rect};
-use crate::{LayoutDir, Ui};
+use crate::{CrossAlign, LayoutDir, Ui};
 
 impl Ui {
     pub fn tree_node(&mut self, id: &str, label: &str, add: impl FnOnce(&mut Self)) -> bool {
@@ -108,6 +108,7 @@ impl Ui {
                 spacing,
                 fill,
                 fill_h,
+                CrossAlign::Start,
             ));
             add(self);
             let used = self.layers.pop().unwrap().used;

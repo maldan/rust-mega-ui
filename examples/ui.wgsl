@@ -18,6 +18,7 @@ struct VsOut {
     @location(1) color: vec4<f32>,
     @location(2) kind: f32,
     @location(3) params: vec4<f32>,
+    @location(4) scr_pos: vec2<f32>,
 }
 
 @group(0) @binding(0) var<uniform> uniforms: Uniforms;
@@ -37,6 +38,7 @@ fn vs_main(v: VsIn) -> VsOut {
     out.color = v.color;
     out.kind = v.kind;
     out.params = v.params;
+    out.scr_pos = v.pos;
     return out;
 }
 
@@ -74,16 +76,40 @@ fn sdf_round_fill(uv: vec2<f32>, params: vec4<f32>, color: vec4<f32>) -> vec4<f3
     return vec4(color.rgb, color.a * a);
 }
 
+fn sdf_segment(p: vec2<f32>, a: vec2<f32>, b: vec2<f32>, half_thick: f32) -> f32 {
+    let pa = p - a;
+    let ba = b - a;
+    let denom = dot(ba, ba);
+    let h = select(0.0, clamp(dot(pa, ba) / denom, 0.0, 1.0), denom > 1e-6);
+    return length(pa - ba * h) - half_thick;
+}
+
+fn sdf_line_fill(scr_pos: vec2<f32>, params: vec4<f32>, thickness: f32, color: vec4<f32>) -> vec4<f32> {
+    let a = params.xy;
+    let b = params.zw;
+    let half = max(thickness * 0.5, 0.5);
+    let d = sdf_segment(scr_pos, a, b, half);
+    let aa = fwidth(d) * 0.5;
+    let alpha = 1.0 - smoothstep(-aa, aa, d);
+    return vec4(color.rgb, color.a * alpha);
+}
+
 @fragment
 fn fs_main(v: VsOut) -> @location(0) vec4<f32> {
     if v.kind < 0.5 {
         let a = textureSampleLevel(font_atlas, font_sampler, v.uv, 0.0).r;
         return vec4(v.color.rgb, v.color.a * a);
     }
-    if v.kind > 1.5 {
+    if v.kind < 1.5 {
+        // Host rebinds `tex0` between batches according to DrawCommand.tex.
+        let sample = textureSampleLevel(tex0, font_sampler, v.uv, 0.0);
+        return sample * v.color;
+    }
+    if v.kind < 2.5 {
         return sdf_round_fill(v.uv, v.params, v.color);
     }
-    // Host rebinds `tex0` between batches according to DrawCommand.tex.
-    let sample = textureSampleLevel(tex0, font_sampler, v.uv, 0.0);
-    return sample * v.color;
+    if v.kind < 3.5 {
+        return sdf_line_fill(v.scr_pos, v.params, v.uv.x, v.color);
+    }
+    return vec4(v.color.rgb, v.color.a);
 }

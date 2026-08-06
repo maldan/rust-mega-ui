@@ -85,7 +85,8 @@ pub struct DrawCommand {
     /// Solid fills use the same color in all four corners.
     pub colors: [[f32; 4]; 4],
     /// 0 = font atlas (alpha in .r), 1 = host RGBA texture (`tex` = slot),
-    /// 2 = SDF rounded rect (`params` = width, height, radius, corner mode).
+    /// 2 = SDF rounded rect (`params` = width, height, radius, corner mode),
+    /// 3 = SDF line segment (`params` = ax, ay, bx, by; thickness in `uv_min.x`).
     pub kind: f32,
     /// Host texture slot when `kind == 1` (bound by the app).
     pub tex: u32,

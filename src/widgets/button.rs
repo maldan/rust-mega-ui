@@ -97,14 +97,14 @@ impl Ui {
         );
 
         self.push_id(id);
-        let mut layer = new_layer(
+        let layer = new_layer(
             LayoutDir::Horizontal,
             origin,
             self.s(6.0),
             inner.width().max(prev.x),
             inner.height(),
+            CrossAlign::Center,
         );
-        layer.cross_align = CrossAlign::Center;
         self.layers.push(layer);
         add(self);
         let used = self.layers.pop().unwrap().used;

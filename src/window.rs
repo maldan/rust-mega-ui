@@ -3,7 +3,7 @@ use glam::Vec2;
 use super::draw::push_round_rect;
 use super::theme;
 use super::types::{CursorIcon, Id, Rect};
-use super::{new_layer, LayoutDir, Ui, WinState};
+use super::{CrossAlign, new_layer, LayoutDir, Ui, WinState};
 
 pub(crate) fn clamp_win(
     pos: &mut Vec2,
@@ -387,6 +387,7 @@ impl Ui {
                 self.spacing,
                 content_w,
                 content_h,
+                CrossAlign::Start,
             ));
             add(self);
             self.layers.pop();

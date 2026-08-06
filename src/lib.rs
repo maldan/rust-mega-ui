@@ -2,18 +2,25 @@ mod dock;
 mod draw;
 mod font;
 mod icon;
+mod layout;
+mod plot_view;
 pub(crate) mod theme;
 mod types;
 mod widgets;
 mod window;
 
 pub use dock::{DockNode, DockState};
+pub use layout::{CrossAlign, LayoutOpts, MainAlign};
+pub use plot_view::PlotView;
 pub use types::{CursorIcon, DrawCommand, Id, Rect, Response, UiInput, UiOutput};
+pub use widgets::{
+    AnimationCurve, BrowserItem, BrowserResponse, CurveEditorResponse, CurvePoint, CurvePreset,
+    ToastKind, apply_preset, ease_in_out, sample_curve,
+};
 pub use widgets::color_picker::TEX_SLOT_COLOR_SV;
 pub use widgets::label::TextStyle;
 pub use widgets::scroll::ScrollAxes;
 pub use widgets::table::TableColumn;
-pub use widgets::{BrowserItem, BrowserResponse, ToastKind};
 pub use window::Window;
 
 use std::collections::HashMap;
@@ -21,9 +28,13 @@ use std::path::Path;
 
 use glam::Vec2;
 
-use draw::push_round_rect;
+use draw::{push_line_segment, push_polyline, push_round_rect};
 use font::Font;
 use icon::Icons;
+use layout::{GridCtx, cross_y};
+pub(crate) use layout::new_layer;
+use plot_view::PlotView as PlotViewState;
+use widgets::curve::CurveEditState;
 use widgets::table::TableCtx;
 
 fn font_px_key(px: f32) -> u32 {
@@ -42,38 +53,15 @@ pub(crate) struct Layer {
     pub fill_h: f32,
     /// Cross-axis alignment for horizontal rows (ignored in vertical).
     pub cross_align: CrossAlign,
-}
-
-#[derive(Clone, Copy)]
-pub(crate) enum LayoutDir {
-    Vertical,
-    Horizontal,
+    /// Horizontal row: spacer defers trailing items to the right edge.
+    pub spacer_at: Option<f32>,
+    pub trailing_w: f32,
 }
 
 #[derive(Clone, Copy, PartialEq, Eq)]
-pub(crate) enum CrossAlign {
-    Start,
-    Center,
-}
-
-pub(crate) fn new_layer(
-    dir: LayoutDir,
-    origin: Vec2,
-    spacing: f32,
-    fill_w: f32,
-    fill_h: f32,
-) -> Layer {
-    Layer {
-        dir,
-        cursor: origin,
-        origin,
-        spacing,
-        used: Vec2::ZERO,
-        row_height: 0.0,
-        fill_w,
-        fill_h,
-        cross_align: CrossAlign::Start,
-    }
+pub(crate) enum LayoutDir {
+    Vertical,
+    Horizontal,
 }
 
 #[derive(Clone, Copy)]
@@ -152,6 +140,9 @@ pub struct Ui {
     pub(crate) menu_popup_size: HashMap<Id, Vec2>,
     pub(crate) button_sizes: HashMap<Id, Vec2>,
     pub(crate) group_sizes: HashMap<Id, Vec2>,
+    pub(crate) grid_stack: Vec<GridCtx>,
+    pub(crate) plot_views: HashMap<Id, PlotViewState>,
+    pub(crate) curve_edits: HashMap<Id, CurveEditState>,
     /// Last frame's popup absorb — blocks window focus on press before menus rebuild.
     pub(crate) overlay_block: Option<Rect>,
     /// When true, `text` / `round_rect` paint into the overlay list.
@@ -225,6 +216,9 @@ impl Ui {
             menu_popup_size: HashMap::new(),
             button_sizes: HashMap::new(),
             group_sizes: HashMap::new(),
+            grid_stack: Vec::new(),
+            plot_views: HashMap::new(),
+            curve_edits: HashMap::new(),
             overlay_block: None,
             draw_to_overlay: false,
         }
@@ -368,6 +362,7 @@ impl Ui {
         self.layers.clear();
         self.clip_stack.clear();
         self.table_stack.clear();
+        self.grid_stack.clear();
         self.mouse_absorb = None;
         self.hover_id = None;
         self.want_capture = false;
@@ -417,7 +412,7 @@ impl Ui {
         }
 
         self.layers
-            .push(new_layer(LayoutDir::Vertical, Vec2::ZERO, self.spacing, 0.0, 0.0));
+            .push(new_layer(LayoutDir::Vertical, Vec2::ZERO, self.spacing, 0.0, 0.0, CrossAlign::Start));
 
         self.tick_toasts();
 
@@ -554,11 +549,18 @@ impl Ui {
                 rect
             }
             LayoutDir::Horizontal => {
-                let y = if layer.cross_align == CrossAlign::Center && layer.fill_h > 0.0 {
-                    layer.origin.y + (layer.fill_h - size.y) * 0.5
-                } else {
-                    layer.cursor.y
-                };
+                if layer.spacer_at.is_some() && layer.fill_w > 0.0 {
+                    layer.trailing_w += size.x;
+                    let item_x = layer.origin.x + layer.fill_w - layer.trailing_w;
+                    let y = cross_y(layer, size.y);
+                    let rect = Rect::from_min_size(Vec2::new(item_x, y), size);
+                    layer.trailing_w += layer.spacing;
+                    layer.row_height = layer.row_height.max(size.y);
+                    layer.used.x = layer.fill_w;
+                    layer.used.y = layer.row_height;
+                    return rect;
+                }
+                let y = cross_y(layer, size.y);
                 let rect = Rect::from_min_size(Vec2::new(layer.cursor.x, y), size);
                 layer.cursor.x += size.x + layer.spacing;
                 layer.row_height = layer.row_height.max(size.y);
@@ -570,29 +572,54 @@ impl Ui {
         rect
     }
 
-    fn layout(&mut self, dir: LayoutDir, add: impl FnOnce(&mut Self)) {
-        let origin = self.layer().cursor;
-        let spacing = self.spacing;
-        let avail = self.available_size();
-        let (fill_w, fill_h) = match dir {
-            LayoutDir::Vertical => (avail.x, avail.y),
-            LayoutDir::Horizontal => (0.0, avail.y),
-        };
-        self.layers
-            .push(new_layer(dir, origin, spacing, fill_w, fill_h));
-        add(self);
-        let used = self.layers.pop().unwrap().used;
-        if used.x > 0.0 || used.y > 0.0 {
-            self.allocate(used);
-        }
-    }
-
     pub fn vertical(&mut self, add: impl FnOnce(&mut Self)) {
-        self.layout(LayoutDir::Vertical, add);
+        self.layout_with(LayoutDir::Vertical, LayoutOpts::default(), add);
     }
 
     pub fn horizontal(&mut self, add: impl FnOnce(&mut Self)) {
-        self.layout(LayoutDir::Horizontal, add);
+        self.layout_with(LayoutDir::Horizontal, LayoutOpts::default(), add);
+    }
+
+    /// Screen-space line segment (GPU SDF).
+    pub fn line(&mut self, a: Vec2, b: Vec2, thickness: f32, color: [f32; 4]) {
+        self.draw_line_segment(a, b, thickness, color);
+    }
+
+    pub(crate) fn draw_line_segment(&mut self, a: Vec2, b: Vec2, thickness: f32, color: [f32; 4]) {
+        let clip = if self.draw_to_overlay {
+            None
+        } else {
+            self.clip()
+        };
+        let out = if self.draw_to_overlay {
+            &mut self.overlay
+        } else {
+            &mut self.draw_list
+        };
+        push_line_segment(out, a, b, thickness, color, clip);
+    }
+
+    pub(crate) fn draw_polyline(&mut self, points: &[Vec2], thickness: f32, color: [f32; 4]) {
+        let clip = if self.draw_to_overlay {
+            None
+        } else {
+            self.clip()
+        };
+        let out = if self.draw_to_overlay {
+            &mut self.overlay
+        } else {
+            &mut self.draw_list
+        };
+        push_polyline(out, points, thickness, color, clip);
+    }
+
+    pub(crate) fn layout_with(
+        &mut self,
+        dir: LayoutDir,
+        opts: LayoutOpts,
+        add: impl FnOnce(&mut Self),
+    ) {
+        self.layout_impl(dir, opts, add);
     }
 
     pub(crate) fn push_clip(&mut self, rect: Rect) {
