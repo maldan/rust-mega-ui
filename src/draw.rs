@@ -3,6 +3,14 @@ use glam::Vec2;
 use super::font::push_solid;
 use super::types::{DrawCommand, Rect};
 
+/// `DrawCommand.kind` for GPU SDF rounded fills (one quad).
+pub const KIND_SDF_ROUND: f32 = 2.0;
+
+/// Corner mask packed into `params.w`: all / top only / bottom only.
+const CORNER_ALL: f32 = 0.0;
+const CORNER_TOP: f32 = 1.0;
+const CORNER_BOT: f32 = 2.0;
+
 pub fn push_round_rect(
     out: &mut Vec<DrawCommand>,
     rect: Rect,
@@ -19,146 +27,63 @@ pub fn push_round_rect(
         return;
     }
     let r = radius.min(w * 0.5).min(h * 0.5).max(0.0);
-    if r < 0.5 {
-        // Sharp rects: one quad (per-row cost only for rounded).
+    if r < 0.5 || (!round_top && !round_bot) {
         push_solid(out, rect, color, white_uv, clip);
         return;
     }
 
-    // Scanline coverage AA: integer pixel quads, alpha = horizontal × vertical coverage.
-    let mut y = rect.min.y.floor();
-    let y_end = rect.max.y.ceil();
-    while y < y_end {
-        let y0 = y.max(rect.min.y);
-        let y1 = (y + 1.0).min(rect.max.y);
-        let row_a = y1 - y0;
-        if row_a > 0.0 {
-            let yl = y + 0.5 - rect.min.y;
-            let inset = round_row_inset(yl, h, r, round_top, round_bot);
-            push_span_aa(
-                out,
-                y,
-                rect.min.x + inset,
-                rect.max.x - inset,
-                color,
-                row_a,
-                white_uv,
-                clip,
-            );
-        }
-        y += 1.0;
-    }
-}
-
-fn round_row_inset(y_local: f32, h: f32, r: f32, round_top: bool, round_bot: bool) -> f32 {
-    if round_top && y_local < r {
-        let dy = r - y_local;
-        r - (r * r - dy * dy).max(0.0).sqrt()
-    } else if round_bot && y_local > h - r {
-        let dy = r - (h - y_local);
-        r - (r * r - dy * dy).max(0.0).sqrt()
+    let corner = if round_top && round_bot {
+        CORNER_ALL
+    } else if round_top {
+        CORNER_TOP
     } else {
-        0.0
-    }
-}
+        CORNER_BOT
+    };
 
-/// One pixel row `y .. y+1`: solid middle + fractional edge pixels via alpha.
-fn push_span_aa(
-    out: &mut Vec<DrawCommand>,
-    y: f32,
-    x0: f32,
-    x1: f32,
-    color: [f32; 4],
-    row_a: f32,
-    white_uv: [f32; 2],
-    clip: Option<Rect>,
-) {
-    if x1 <= x0 || row_a <= 0.0 {
-        return;
-    }
-
-    let y0 = y;
-    let y1 = y + 1.0;
-    let left = x0.ceil();
-    let right = x1.floor();
-
-    if left <= right {
-        if x0 < left {
-            let a = (left - x0).clamp(0.0, 1.0) * row_a;
-            push_solid_alpha(
-                out,
-                Rect {
-                    min: Vec2::new(left - 1.0, y0),
-                    max: Vec2::new(left, y1),
-                },
-                color,
-                a,
-                white_uv,
-                clip,
-            );
+    // Pad so SDF AA fringe is not clipped by the quad edges.
+    let pad = 1.0;
+    let outer = Rect {
+        min: rect.min - Vec2::splat(pad),
+        max: rect.max + Vec2::splat(pad),
+    };
+    let (draw, uv_min, uv_max) = match clip {
+        Some(c) => {
+            let Some(clipped) = outer.intersect(c) else {
+                return;
+            };
+            let ow = outer.width().max(1e-3);
+            let oh = outer.height().max(1e-3);
+            let u0 = (clipped.min.x - outer.min.x) / ow;
+            let u1 = (clipped.max.x - outer.min.x) / ow;
+            let v0 = (clipped.min.y - outer.min.y) / oh;
+            let v1 = (clipped.max.y - outer.min.y) / oh;
+            // Map outer UV → content UV in [ -pad/w .. 1+pad/w ].
+            let content_u0 = -pad / w + u0 * (w + pad * 2.0) / w;
+            let content_u1 = -pad / w + u1 * (w + pad * 2.0) / w;
+            let content_v0 = -pad / h + v0 * (h + pad * 2.0) / h;
+            let content_v1 = -pad / h + v1 * (h + pad * 2.0) / h;
+            (
+                clipped,
+                [content_u0, content_v0],
+                [content_u1, content_v1],
+            )
         }
-        if right > left {
-            let mut c = color;
-            c[3] *= row_a.clamp(0.0, 1.0);
-            if c[3] > 0.001 {
-                push_solid(
-                    out,
-                    Rect {
-                        min: Vec2::new(left, y0),
-                        max: Vec2::new(right, y1),
-                    },
-                    c,
-                    white_uv,
-                    clip,
-                );
-            }
-        }
-        if x1 > right {
-            let a = (x1 - right).clamp(0.0, 1.0) * row_a;
-            push_solid_alpha(
-                out,
-                Rect {
-                    min: Vec2::new(right, y0),
-                    max: Vec2::new(right + 1.0, y1),
-                },
-                color,
-                a,
-                white_uv,
-                clip,
-            );
-        }
-    } else {
-        // Entire span inside one pixel column.
-        let a = (x1 - x0).clamp(0.0, 1.0) * row_a;
-        let px = x0.floor();
-        push_solid_alpha(
-            out,
-            Rect {
-                min: Vec2::new(px, y0),
-                max: Vec2::new(px + 1.0, y1),
-            },
-            color,
-            a,
-            white_uv,
-            clip,
-        );
-    }
-}
+        None => (
+            outer,
+            [-pad / w, -pad / h],
+            [1.0 + pad / w, 1.0 + pad / h],
+        ),
+    };
 
-fn push_solid_alpha(
-    out: &mut Vec<DrawCommand>,
-    rect: Rect,
-    color: [f32; 4],
-    alpha: f32,
-    white_uv: [f32; 2],
-    clip: Option<Rect>,
-) {
-    if alpha <= 0.001 {
-        return;
-    }
-    let mut c = color;
-    c[3] *= alpha.clamp(0.0, 1.0);
-    push_solid(out, rect, c, white_uv, clip);
+    out.push(DrawCommand {
+        rect: draw,
+        uv_min,
+        uv_max,
+        colors: [color; 4],
+        kind: KIND_SDF_ROUND,
+        tex: 0,
+        params: [w, h, r, corner],
+    });
 }
 
 /// Ring sector: clockwise sweep from `start_rad` (math angle, 0=+x, CCW, y-up).

@@ -99,8 +99,9 @@ if let Some(text) = out.clipboard { clipboard.set_text(text); }
 | `rect` | экранные пиксели (origin = top-left) |
 | `uv_min` / `uv_max` | UV в атласе; для solid `uv_min == uv_max` (белый тексель) |
 | `colors` | RGBA 0..1 на углах: TL, TR, BR, BL (solid = один цвет во всех) |
-| `kind` | `0` = font atlas (альфа в `.r`), `1` = твоя RGBA-текстура |
-| `tex` | слот хост-текстуры при `kind == 1` (`0` = image, `2` = color SV, …). Хост батчит по слоту и ребиндит один `tex0`. |
+| `kind` | `0` = font atlas, `1` = host texture, `2` = SDF rounded rect |
+| `tex` | слот хост-текстуры при `kind == 1`. Хост батчит по слоту и ребиндит один `tex0`. |
+| `params` | для `kind == 2`: `[w, h, radius, corners]` (0=all, 1=top, 2=bot) |
 
 Виджеты:
 

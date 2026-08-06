@@ -77,16 +77,21 @@ impl Rect {
 #[derive(Clone, Copy, Debug)]
 pub struct DrawCommand {
     pub rect: Rect,
-    /// Atlas UVs. Solid rects use the white texel (uv_min == uv_max).
+    /// Atlas UVs (`kind` 0/1). For SDF round (`kind` 2): local UV in content space
+    /// where (0,0)=top-left of the unpadded rect and (1,1)=bottom-right.
     pub uv_min: [f32; 2],
     pub uv_max: [f32; 2],
     /// Per-corner RGBA (0..1): top-left, top-right, bottom-right, bottom-left.
     /// Solid fills use the same color in all four corners.
     pub colors: [[f32; 4]; 4],
-    /// 0 = font atlas (alpha in .r), 1 = host RGBA texture (`tex` = slot).
+    /// 0 = font atlas (alpha in .r), 1 = host RGBA texture (`tex` = slot),
+    /// 2 = SDF rounded rect (`params` = width, height, radius, corner mode).
     pub kind: f32,
     /// Host texture slot when `kind == 1` (bound by the app).
     pub tex: u32,
+    /// Extra per-quad data. SDF round: `[w, h, radius, corners]` where corners
+    /// is 0=all, 1=top only, 2=bottom only.
+    pub params: [f32; 4],
 }
 
 impl DrawCommand {
@@ -106,6 +111,7 @@ impl DrawCommand {
             colors: [color; 4],
             kind,
             tex,
+            params: [0.0; 4],
         }
     }
 
@@ -125,6 +131,7 @@ impl DrawCommand {
             colors,
             kind,
             tex,
+            params: [0.0; 4],
         }
     }
 }

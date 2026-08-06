@@ -30,6 +30,7 @@ struct UiVertex {
     color: [f32; 4],
     kind: f32,
     tex: f32,
+    params: [f32; 4],
 }
 
 #[repr(C)]
@@ -325,6 +326,7 @@ impl<S: Scene> Host<S> {
                         2 => Float32x4,
                         3 => Float32,
                         4 => Float32,
+                        5 => Float32x4,
                     ],
                 }],
                 compilation_options: Default::default(),
@@ -774,6 +776,7 @@ fn build_vertices(cmds: &[DrawCommand]) -> Vec<UiVertex> {
         let c_bl = cmd.colors[3];
         let kind = cmd.kind;
         let tex = cmd.tex as f32;
+        let params = cmd.params;
         out.extend_from_slice(&[
             UiVertex {
                 pos: [x0, y0],
@@ -781,6 +784,7 @@ fn build_vertices(cmds: &[DrawCommand]) -> Vec<UiVertex> {
                 color: c_tl,
                 kind,
                 tex,
+                params,
             },
             UiVertex {
                 pos: [x1, y0],
@@ -788,6 +792,7 @@ fn build_vertices(cmds: &[DrawCommand]) -> Vec<UiVertex> {
                 color: c_tr,
                 kind,
                 tex,
+                params,
             },
             UiVertex {
                 pos: [x1, y1],
@@ -795,6 +800,7 @@ fn build_vertices(cmds: &[DrawCommand]) -> Vec<UiVertex> {
                 color: c_br,
                 kind,
                 tex,
+                params,
             },
             UiVertex {
                 pos: [x0, y0],
@@ -802,6 +808,7 @@ fn build_vertices(cmds: &[DrawCommand]) -> Vec<UiVertex> {
                 color: c_tl,
                 kind,
                 tex,
+                params,
             },
             UiVertex {
                 pos: [x1, y1],
@@ -809,6 +816,7 @@ fn build_vertices(cmds: &[DrawCommand]) -> Vec<UiVertex> {
                 color: c_br,
                 kind,
                 tex,
+                params,
             },
             UiVertex {
                 pos: [x0, y1],
@@ -816,6 +824,7 @@ fn build_vertices(cmds: &[DrawCommand]) -> Vec<UiVertex> {
                 color: c_bl,
                 kind,
                 tex,
+                params,
             },
         ]);
     }
@@ -1055,7 +1064,8 @@ fn draw_batched(pass: &mut wgpu::RenderPass<'_>, gpu: &Gpu, cmds: &[DrawCommand]
     };
 
     for (i, cmd) in cmds.iter().enumerate() {
-        if cmd.kind >= 0.5 {
+        // Only host textures (`kind ≈ 1`) need a tex0 rebind.
+        if cmd.kind >= 0.5 && cmd.kind < 1.5 {
             let slot = Some(cmd.tex);
             if slot != bound_slot {
                 flush(pass, batch_start, i, bound_slot);
@@ -1074,7 +1084,7 @@ fn count_draw_stats(cmds: &[DrawCommand]) -> DrawStats {
     let mut batch_start = 0usize;
     let mut bound_slot: Option<u32> = None;
     for (i, cmd) in slice.iter().enumerate() {
-        if cmd.kind >= 0.5 {
+        if cmd.kind >= 0.5 && cmd.kind < 1.5 {
             let slot = Some(cmd.tex);
             if slot != bound_slot {
                 if i > batch_start {
