@@ -58,80 +58,11 @@ impl Ui {
         let radius = self.s(theme::BTN_RADIUS);
         let rect = self.allocate(Vec2::new(w, h));
         self.round_rect(rect, radius, theme::PLOT_BG);
+        self.push_clip(rect);
         draw_plot_grid(self, rect, view);
         draw_plot_series(self, rect, view, values, theme::PLOT_LINE);
+        self.pop_clip();
         self.interact_rect(self.current_id(id), rect)
-    }
-
-    /// Interactive plot: wheel zoom, alt+drag pan.
-    pub fn plot_interactive(
-        &mut self,
-        id: &str,
-        size: Vec2,
-        values: &[f32],
-    ) -> Response {
-        let widget_id = self.current_id(id);
-        let fill_w = self.layer().fill_w;
-        let w = if size.x <= 0.0 && fill_w > 0.0 && matches!(self.layer().dir, LayoutDir::Vertical)
-        {
-            fill_w
-        } else {
-            self.s(size.x.max(40.0))
-        };
-        let h = self.s(size.y.max(40.0));
-        let radius = self.s(theme::BTN_RADIUS);
-        let rect = self.allocate(Vec2::new(w, h));
-
-        let mut view = self
-            .plot_views
-            .get(&widget_id)
-            .copied()
-            .unwrap_or_else(|| PlotView::fit_values(values));
-
-        if values.len() >= 2 {
-            view.t_min = 0.0;
-            view.t_max = 1.0;
-        }
-
-        self.round_rect(rect, radius, theme::PLOT_BG);
-        draw_plot_grid(self, rect, &view);
-        draw_plot_series(self, rect, &view, values, theme::PLOT_LINE);
-
-        let hovered = self.hovered_rect(rect);
-        if hovered {
-            self.want_capture = true;
-            if self.input.scroll_delta.y.abs() > 0.0 {
-                let mp = self.input.mouse_pos;
-                let plot = view.screen_to_plot(rect, mp);
-                let factor = if self.input.scroll_delta.y > 0.0 { 0.9 } else { 1.1 };
-                view.zoom_uniform(plot.x, plot.y, factor);
-                self.consume_scroll();
-                self.request_repaint();
-            }
-        }
-
-        let active_id = widget_id.child("pan");
-        if hovered && self.input.mouse_pressed && self.input.key_ctrl {
-            self.active_id = Some(active_id);
-        }
-        let panning = self.active_id == Some(active_id) && self.input.mouse_down;
-        if panning {
-            if let Some(grab) = self.drag_grab {
-                let delta = self.input.mouse_pos - grab;
-                let tw = (view.t_max - view.t_min).max(1e-5);
-                let vh = (view.v_max - view.v_min).max(1e-5);
-                view.pan(-delta.x / rect.width() * tw, delta.y / rect.height() * vh);
-                self.drag_grab = Some(self.input.mouse_pos);
-                self.request_repaint();
-            }
-        }
-        if self.input.mouse_pressed && self.active_id == Some(active_id) {
-            self.drag_grab = Some(self.input.mouse_pos);
-        }
-
-        let resp = self.interact_rect(widget_id, rect);
-        self.plot_views.insert(widget_id, view);
-        resp
     }
 }
 

@@ -33,7 +33,6 @@ use font::Font;
 use icon::Icons;
 use layout::{GridCtx, cross_y};
 pub(crate) use layout::new_layer;
-use plot_view::PlotView as PlotViewState;
 use widgets::curve::CurveEditState;
 use widgets::table::TableCtx;
 
@@ -141,7 +140,6 @@ pub struct Ui {
     pub(crate) button_sizes: HashMap<Id, Vec2>,
     pub(crate) group_sizes: HashMap<Id, Vec2>,
     pub(crate) grid_stack: Vec<GridCtx>,
-    pub(crate) plot_views: HashMap<Id, PlotViewState>,
     pub(crate) curve_edits: HashMap<Id, CurveEditState>,
     /// Last frame's popup absorb — blocks window focus on press before menus rebuild.
     pub(crate) overlay_block: Option<Rect>,
@@ -217,7 +215,6 @@ impl Ui {
             button_sizes: HashMap::new(),
             group_sizes: HashMap::new(),
             grid_stack: Vec::new(),
-            plot_views: HashMap::new(),
             curve_edits: HashMap::new(),
             overlay_block: None,
             draw_to_overlay: false,

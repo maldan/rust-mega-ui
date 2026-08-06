@@ -751,10 +751,10 @@ impl Scene for Demo {
                         });
                     }
                     _ => {
-                        ui.label("Interactive plot (wheel zoom, Ctrl+drag pan)");
-                        ui.plot_interactive("live_plot", Vec2::new(0.0, 100.0), &state.plot);
+                        ui.label("Live plot");
+                        ui.plot(Vec2::new(0.0, 100.0), &state.plot);
                         ui.separator();
-                        ui.label("Curve editor (click add point, Shift+click delete, Ctrl+drag pan)");
+                        ui.label("Curve editor (click add point, Shift+click delete)");
                         let curve_resp = ui.curve_editor(
                             "anim_curve",
                             &mut state.anim_curve,

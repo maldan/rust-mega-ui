@@ -218,25 +218,20 @@ pub(crate) enum CurveDrag {
     None,
     Point(usize),
     Tangent(usize),
-    Pan,
 }
 
 #[derive(Clone, Copy, Debug)]
 pub(crate) struct CurveEditState {
-    pub view: PlotView,
     pub selected: Option<usize>,
     pub drag: CurveDrag,
-    pub drag_start: Vec2,
     pub preview_t: f32,
 }
 
 impl Default for CurveEditState {
     fn default() -> Self {
         Self {
-            view: PlotView::default(),
             selected: None,
             drag: CurveDrag::None,
-            drag_start: Vec2::ZERO,
             preview_t: 0.0,
         }
     }
@@ -294,17 +289,19 @@ impl Ui {
         let radius = self.s(theme::BTN_RADIUS);
         let inner = outer.inset(self.s(4.0));
         let plot_rect = inner;
+        let view = PlotView::default();
         self.round_rect(plot_rect, radius, theme::PLOT_BG);
 
-        draw_grid(self, plot_rect, &st.view);
+        self.push_clip(plot_rect);
+        draw_grid(self, plot_rect, &view);
 
         let samples = 64;
         let mut line_pts = Vec::with_capacity(samples + 1);
         for i in 0..=samples {
             let u = i as f32 / samples as f32;
-            let t = st.view.t_min + u * (st.view.t_max - st.view.t_min);
+            let t = view.t_min + u * (view.t_max - view.t_min);
             let v = sample_curve(curve, t);
-            line_pts.push(st.view.plot_to_screen(plot_rect, t, v));
+            line_pts.push(view.plot_to_screen(plot_rect, t, v));
         }
         self.draw_polyline(&line_pts, self.s(2.0), theme::PLOT_LINE);
 
@@ -313,7 +310,7 @@ impl Ui {
         let smooth = auto_smooth_tangents(curve);
         for i in 0..n {
             let pt = &curve.points[i];
-            let center = st.view.plot_to_screen(plot_rect, pt.t, pt.v);
+            let center = view.plot_to_screen(plot_rect, pt.t, pt.v);
             let tangent = if curve.preset == CurvePreset::Custom {
                 pt.tangent_out
             } else {
@@ -346,10 +343,11 @@ impl Ui {
 
         // Preview playhead
         let preview_v = sample_curve(curve, st.preview_t);
-        let px = st.view.plot_to_screen(plot_rect, st.preview_t, preview_v);
+        let px = view.plot_to_screen(plot_rect, st.preview_t, preview_v);
         let vline_a = Vec2::new(px.x, plot_rect.min.y);
         let vline_b = Vec2::new(px.x, plot_rect.max.y);
         self.draw_line_segment(vline_a, vline_b, self.s(1.0), theme::ACCENT_DIM);
+        self.pop_clip();
 
         out.sampled = Some(sample_curve(curve, st.preview_t));
         out.selected = st.selected;
@@ -370,7 +368,7 @@ impl Ui {
             let mut hit = None;
             for i in 0..n {
                 let pt = &curve.points[i];
-                let center = st.view.plot_to_screen(plot_rect, pt.t, pt.v);
+                let center = view.plot_to_screen(plot_rect, pt.t, pt.v);
                 let tangent = if curve.preset == CurvePreset::Custom {
                     pt.tangent_out
                 } else {
@@ -385,7 +383,7 @@ impl Ui {
             if hit.is_none() {
                 for i in 0..n {
                     let pt = &curve.points[i];
-                    let center = st.view.plot_to_screen(plot_rect, pt.t, pt.v);
+                    let center = view.plot_to_screen(plot_rect, pt.t, pt.v);
                     if mp.distance(center) < HIT_R * self.scale {
                         hit = Some(CurveDrag::Point(i));
                         st.selected = Some(i);
@@ -393,11 +391,9 @@ impl Ui {
                     }
                 }
             }
-            if hit.is_none() && self.input.key_ctrl {
-                hit = Some(CurveDrag::Pan);
-            } else if hit.is_none() && !self.input.key_ctrl {
+            if hit.is_none() {
                 // Add point on curve
-                let plot = st.view.screen_to_plot(plot_rect, mp);
+                let plot = view.screen_to_plot(plot_rect, mp);
                 let t = plot.x.clamp(0.0, 1.0);
                 let v = sample_curve(curve, t);
                 curve.points.push(CurvePoint {
@@ -415,7 +411,6 @@ impl Ui {
             }
             if let Some(d) = hit {
                 st.drag = d;
-                st.drag_start = mp;
                 self.active_id = Some(widget_id);
             }
         }
@@ -426,9 +421,9 @@ impl Ui {
             match st.drag {
                 CurveDrag::Point(i) => {
                     if i < curve.points.len() {
-                        let plot = st.view.screen_to_plot(plot_rect, mp);
+                        let plot = view.screen_to_plot(plot_rect, mp);
                         let mut t = plot.x;
-                        let v = plot.y;
+                        let v = plot.y.clamp(0.0, 1.0);
                         if i == 0 {
                             t = 0.0;
                         } else if i == curve.points.len() - 1 {
@@ -447,7 +442,7 @@ impl Ui {
                 CurveDrag::Tangent(i) => {
                     if i < curve.points.len() {
                         curve.preset = CurvePreset::Custom;
-                        let center = st.view.plot_to_screen(
+                        let center = view.plot_to_screen(
                             plot_rect,
                             curve.points[i].t,
                             curve.points[i].v,
@@ -456,16 +451,6 @@ impl Ui {
                         curve.points[i].tangent_out = dy;
                         out.changed = true;
                     }
-                }
-                CurveDrag::Pan => {
-                    let delta = mp - st.drag_start;
-                    let tw = (st.view.t_max - st.view.t_min).max(1e-5);
-                    let vh = (st.view.v_max - st.view.v_min).max(1e-5);
-                    let dt = -delta.x / plot_rect.width() * tw;
-                    let dv = delta.y / plot_rect.height() * vh;
-                    st.view.pan(dt, dv);
-                    st.drag_start = mp;
-                    self.request_repaint();
                 }
                 CurveDrag::None => {}
             }
@@ -479,7 +464,7 @@ impl Ui {
             }
         }
 
-        // Ctrl+click deletes middle point (when not starting pan)
+        // Shift+click deletes middle point
         if hovered && self.input.mouse_pressed && self.input.key_shift {
             if let Some(i) = st.selected {
                 if i > 0 && i < curve.points.len() - 1 {
@@ -490,16 +475,6 @@ impl Ui {
                     out.changed = true;
                 }
             }
-        }
-
-        // Wheel zoom
-        if hovered && self.input.scroll_delta.y.abs() > 0.0 {
-            let mp = self.input.mouse_pos;
-            let plot = st.view.screen_to_plot(plot_rect, mp);
-            let factor = if self.input.scroll_delta.y > 0.0 { 0.9 } else { 1.1 };
-            st.view.zoom_uniform(plot.x, plot.y, factor);
-            self.consume_scroll();
-            self.request_repaint();
         }
 
         self.set_cursor(CursorIcon::Pointer);
