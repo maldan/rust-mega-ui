@@ -342,14 +342,7 @@ pub fn push_textured(
         }
         None => (rect, uv_min, uv_max),
     };
-    out.push(DrawCommand {
-        rect,
-        uv_min,
-        uv_max,
-        color,
-        kind: 0.0,
-        tex: 0,
-    });
+    out.push(DrawCommand::solid(rect, uv_min, uv_max, color, 0.0, 0));
 }
 
 pub fn push_solid(
@@ -360,4 +353,20 @@ pub fn push_solid(
     clip: Option<Rect>,
 ) {
     push_textured(out, rect, white_uv, white_uv, color, clip);
+}
+
+/// Solid white-texel quad with per-corner colors (TL, TR, BR, BL).
+/// Clipping is not supported for gradients (caller must keep rect unclipped).
+pub fn push_gradient(
+    out: &mut Vec<DrawCommand>,
+    rect: Rect,
+    colors: [[f32; 4]; 4],
+    white_uv: [f32; 2],
+) {
+    if rect.width() <= 0.0 || rect.height() <= 0.0 {
+        return;
+    }
+    out.push(DrawCommand::gradient(
+        rect, white_uv, white_uv, colors, 0.0, 0,
+    ));
 }

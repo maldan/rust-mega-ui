@@ -7,7 +7,7 @@
 #[path = "framework.rs"]
 mod framework;
 
-use framework::{Host, Scene};
+use framework::{DrawStats, Host, Scene};
 use glam::{Vec2, Vec3};
 use mega_ui::{BrowserItem, DockNode, DockState, ScrollAxes, TableColumn, TextStyle, Ui, Window};
 
@@ -115,7 +115,7 @@ impl Scene for DockDemo {
         ui.load_builtin_icons();
     }
 
-    fn build(ui: &mut Ui, state: &mut Self, viewport: Vec2, dt: f32) -> bool {
+    fn build(ui: &mut Ui, state: &mut Self, viewport: Vec2, dt: f32, stats: DrawStats) -> bool {
         state.t += dt;
         state.progress = (0.5 + (state.t * 0.4).sin() * 0.45).clamp(0.0, 1.0);
         for (i, v) in state.plot.iter_mut().enumerate() {
@@ -844,6 +844,11 @@ impl Scene for DockDemo {
             ui.label("RMB in Viewport");
             ui.label("·");
             ui.label(&format!("opened: {asset_opened}"));
+            ui.label("·");
+            ui.label(&format!(
+                "cmds {} · batches {} · quads {}",
+                stats.commands, stats.batches, stats.quads
+            ));
             ui.label("·");
             ui.label(&format!("FPS {:.0}", fps));
         });

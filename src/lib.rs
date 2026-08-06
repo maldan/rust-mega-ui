@@ -9,6 +9,7 @@ mod window;
 
 pub use dock::{DockNode, DockState};
 pub use types::{CursorIcon, DrawCommand, Id, Rect, Response, UiInput, UiOutput};
+pub use widgets::color_picker::TEX_SLOT_COLOR_SV;
 pub use widgets::label::TextStyle;
 pub use widgets::scroll::ScrollAxes;
 pub use widgets::table::TableColumn;
@@ -111,6 +112,7 @@ pub struct Ui {
     pub(crate) selects: HashMap<Id, bool>,
     pub(crate) vec_locks: HashMap<Id, bool>,
     pub(crate) color_edits: HashMap<Id, widgets::color_picker::ColorEditState>,
+    pub(crate) color_sv: widgets::color_picker::ColorSvAtlas,
     pub(crate) context_menu: Option<(Id, Vec2)>,
     pub(crate) toasts: Vec<widgets::toast::Toast>,
     /// Dock leaf path that last received a click (Unity-style focus strip).
@@ -185,6 +187,7 @@ impl Ui {
             selects: HashMap::new(),
             vec_locks: HashMap::new(),
             color_edits: HashMap::new(),
+            color_sv: widgets::color_picker::ColorSvAtlas::default(),
             context_menu: None,
             toasts: Vec::new(),
             dock_focus: None,
@@ -287,6 +290,18 @@ impl Ui {
 
     pub fn font_atlas_take_dirty(&mut self) -> bool {
         self.font.take_dirty()
+    }
+
+    /// RGBA8 atlas for the color-picker SV field (`TEX_SLOT_COLOR_SV`).
+    pub fn color_sv_atlas(&self) -> (&[u8], u32, u32) {
+        let n = self.color_sv.size.max(1);
+        (self.color_sv.pixels.as_slice(), n, n)
+    }
+
+    pub fn color_sv_atlas_take_dirty(&mut self) -> bool {
+        let d = self.color_sv.dirty;
+        self.color_sv.dirty = false;
+        d
     }
 
     pub(crate) fn text_width(&self, text: &str) -> f32 {
@@ -680,6 +695,12 @@ impl Ui {
         // Overlays (popups, menus, toasts) must ignore window/scroll clips.
         let uv = self.font.white_uv();
         push_round_rect(&mut self.overlay, rect, radius, color, true, true, uv, None);
+    }
+
+    /// Overlay quad with per-corner colors (TL, TR, BR, BL). Sharp corners only.
+    pub(crate) fn gradient_overlay(&mut self, rect: Rect, colors: [[f32; 4]; 4]) {
+        let uv = self.font.white_uv();
+        crate::font::push_gradient(&mut self.overlay, rect, colors, uv);
     }
 
     pub(crate) fn text(&mut self, pos: Vec2, text: &str, color: [f32; 4]) {

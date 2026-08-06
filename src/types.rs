@@ -80,11 +80,53 @@ pub struct DrawCommand {
     /// Atlas UVs. Solid rects use the white texel (uv_min == uv_max).
     pub uv_min: [f32; 2],
     pub uv_max: [f32; 2],
-    pub color: [f32; 4],
+    /// Per-corner RGBA (0..1): top-left, top-right, bottom-right, bottom-left.
+    /// Solid fills use the same color in all four corners.
+    pub colors: [[f32; 4]; 4],
     /// 0 = font atlas (alpha in .r), 1 = host RGBA texture (`tex` = slot).
     pub kind: f32,
     /// Host texture slot when `kind == 1` (bound by the app).
     pub tex: u32,
+}
+
+impl DrawCommand {
+    /// Uniform-color quad (all corners the same).
+    pub fn solid(
+        rect: Rect,
+        uv_min: [f32; 2],
+        uv_max: [f32; 2],
+        color: [f32; 4],
+        kind: f32,
+        tex: u32,
+    ) -> Self {
+        Self {
+            rect,
+            uv_min,
+            uv_max,
+            colors: [color; 4],
+            kind,
+            tex,
+        }
+    }
+
+    /// Gradient quad with independent corner colors (TL, TR, BR, BL).
+    pub fn gradient(
+        rect: Rect,
+        uv_min: [f32; 2],
+        uv_max: [f32; 2],
+        colors: [[f32; 4]; 4],
+        kind: f32,
+        tex: u32,
+    ) -> Self {
+        Self {
+            rect,
+            uv_min,
+            uv_max,
+            colors,
+            kind,
+            tex,
+        }
+    }
 }
 
 #[derive(Clone, Debug, Default)]

@@ -117,12 +117,12 @@ fn push_tex_cmd(ui: &mut Ui, rect: crate::types::Rect, slot: u32) {
         }
         None => (rect, [0.0, 0.0], [1.0, 1.0]),
     };
-    ui.draw_list.push(DrawCommand {
+    ui.draw_list.push(DrawCommand::solid(
         rect,
         uv_min,
         uv_max,
-        color: [1.0, 1.0, 1.0, 1.0],
-        kind: 1.0,
-        tex: slot,
-    });
+        [1.0, 1.0, 1.0, 1.0],
+        1.0,
+        slot,
+    ));
 }

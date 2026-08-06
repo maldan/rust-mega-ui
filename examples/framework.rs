@@ -1,11 +1,16 @@
 //! Shared winit + wgpu host for mega-ui examples.
+//!
+//! Host textures (`kind = 1`) use a single `tex0` binding. Consecutive commands
+//! with different `DrawCommand.tex` slots become separate draw batches with a
+//! rebind in between (file-manager thumbnails, color-picker SV, …).
 
+use std::collections::HashMap;
 use std::sync::Arc;
 use std::time::Instant;
 
 use bytemuck::{Pod, Zeroable};
 use glam::Vec2;
-use mega_ui::{CursorIcon, DrawCommand, Ui, UiInput};
+use mega_ui::{CursorIcon, DrawCommand, Ui, UiInput, TEX_SLOT_COLOR_SV};
 use wgpu::util::DeviceExt;
 use winit::application::ApplicationHandler;
 use winit::dpi::LogicalSize;
@@ -34,13 +39,19 @@ struct Uniforms {
     _pad: [f32; 2],
 }
 
+struct TexSlot {
+    texture: wgpu::Texture,
+    view: wgpu::TextureView,
+    size: (u32, u32),
+    bind_group: wgpu::BindGroup,
+}
+
 struct Gpu {
     device: wgpu::Device,
     queue: wgpu::Queue,
     surface: wgpu::Surface<'static>,
     config: wgpu::SurfaceConfiguration,
     pipeline: wgpu::RenderPipeline,
-    bind_group: wgpu::BindGroup,
     bind_layout: wgpu::BindGroupLayout,
     uniform_buf: wgpu::Buffer,
     vertex_buf: wgpu::Buffer,
@@ -48,7 +59,13 @@ struct Gpu {
     font_view: wgpu::TextureView,
     font_size: (u32, u32),
     sampler: wgpu::Sampler,
-    tex0_view: wgpu::TextureView,
+    /// Fallback when a batch has no host texture (font/solid only).
+    default_bind_group: wgpu::BindGroup,
+    /// Kept alive for `placeholder_view`.
+    _placeholder_tex: wgpu::Texture,
+    placeholder_view: wgpu::TextureView,
+    /// `DrawCommand.tex` → RGBA texture + bind group (font atlas rebound into each).
+    tex_slots: HashMap<u32, TexSlot>,
 }
 
 #[derive(Default)]
@@ -142,7 +159,18 @@ pub trait Scene {
     /// Called once after `Ui::new`.
     fn init(_ui: &mut Ui) {}
     /// Build widgets for this frame. Return `true` to keep redrawing.
-    fn build(ui: &mut Ui, state: &mut Self, viewport: Vec2, dt: f32) -> bool;
+    /// `stats` is from the previous frame's draw list (commands / GPU batches / quads).
+    fn build(ui: &mut Ui, state: &mut Self, viewport: Vec2, dt: f32, stats: DrawStats) -> bool;
+}
+
+#[derive(Clone, Copy, Debug, Default)]
+pub struct DrawStats {
+    /// Draw commands submitted by UI (may exceed GPU cap).
+    pub commands: usize,
+    /// GPU draw calls after batching by texture slot.
+    pub batches: usize,
+    /// Quads actually uploaded (`min(commands, MAX_QUADS)`).
+    pub quads: usize,
 }
 
 pub struct Host<S: Scene> {
@@ -153,6 +181,7 @@ pub struct Host<S: Scene> {
     input: FrameInput,
     last_frame: Instant,
     cursor: CursorIcon,
+    draw_stats: DrawStats,
 }
 
 impl<S: Scene> Host<S> {
@@ -167,6 +196,7 @@ impl<S: Scene> Host<S> {
             input: FrameInput::default(),
             last_frame: Instant::now(),
             cursor: CursorIcon::Default,
+            draw_stats: DrawStats::default(),
         }
     }
 
@@ -347,15 +377,32 @@ impl<S: Scene> Host<S> {
 
         let (pixels, atlas_w, atlas_h) = self.ui.font_atlas();
         let (font_tex, font_view) = create_font_texture(&device, &queue, pixels, atlas_w, atlas_h);
-        let (_, tex0_view) = create_placeholder_rgba(&device, &queue);
+        let (placeholder_tex, placeholder_view) = create_placeholder_rgba(&device, &queue);
 
-        let bind_group = make_bind_group(
+        let default_bind_group = make_bind_group(
             &device,
             &bind_layout,
             &uniform_buf,
             &font_view,
             &sampler,
-            &tex0_view,
+            &placeholder_view,
+        );
+
+        let mut tex_slots = HashMap::new();
+        let (sv_pixels, sv_w, sv_h) = self.ui.color_sv_atlas();
+        upsert_tex_slot(
+            &mut tex_slots,
+            &device,
+            &queue,
+            &bind_layout,
+            &uniform_buf,
+            &font_view,
+            &sampler,
+            TEX_SLOT_COLOR_SV,
+            sv_pixels,
+            sv_w,
+            sv_h,
+            "color sv",
         );
 
         self.gpu = Some(Gpu {
@@ -364,7 +411,6 @@ impl<S: Scene> Host<S> {
             surface,
             config,
             pipeline,
-            bind_group,
             bind_layout,
             uniform_buf,
             vertex_buf,
@@ -372,7 +418,10 @@ impl<S: Scene> Host<S> {
             font_view,
             font_size: (atlas_w, atlas_h),
             sampler,
-            tex0_view,
+            default_bind_group,
+            _placeholder_tex: placeholder_tex,
+            placeholder_view,
+            tex_slots,
         });
         self.window = Some(window);
     }
@@ -410,14 +459,7 @@ impl<S: Scene> Host<S> {
             gpu.font_tex = tex;
             gpu.font_view = view;
             gpu.font_size = (w, h);
-            gpu.bind_group = make_bind_group(
-                &gpu.device,
-                &gpu.bind_layout,
-                &gpu.uniform_buf,
-                &gpu.font_view,
-                &gpu.sampler,
-                &gpu.tex0_view,
-            );
+            rebuild_all_bind_groups(gpu);
         } else {
             gpu.queue.write_texture(
                 wgpu::TexelCopyTextureInfo {
@@ -441,6 +483,30 @@ impl<S: Scene> Host<S> {
         }
     }
 
+    fn sync_color_sv_atlas(&mut self) {
+        if !self.ui.color_sv_atlas_take_dirty() {
+            return;
+        }
+        let Some(gpu) = self.gpu.as_mut() else {
+            return;
+        };
+        let (pixels, w, h) = self.ui.color_sv_atlas();
+        upsert_tex_slot(
+            &mut gpu.tex_slots,
+            &gpu.device,
+            &gpu.queue,
+            &gpu.bind_layout,
+            &gpu.uniform_buf,
+            &gpu.font_view,
+            &gpu.sampler,
+            TEX_SLOT_COLOR_SV,
+            pixels,
+            w,
+            h,
+            "color sv",
+        );
+    }
+
     fn redraw(&mut self) {
         let Some(window) = self.window.clone() else {
             return;
@@ -457,15 +523,24 @@ impl<S: Scene> Host<S> {
         let viewport = Vec2::new(size.width as f32, size.height as f32);
         let input = self.input.to_ui(viewport, dt);
         self.ui.begin_frame(input);
-        let keep = S::build(&mut self.ui, &mut self.state, viewport, dt);
+        let keep = S::build(
+            &mut self.ui,
+            &mut self.state,
+            viewport,
+            dt,
+            self.draw_stats,
+        );
         let out = self.ui.end_frame();
         let needs_repaint = out.needs_repaint || keep;
 
         self.apply_cursor(&window, out.cursor);
         self.sync_font_atlas();
+        self.sync_color_sv_atlas();
 
-        let vertices = build_vertices(&out.draw_list);
-        let vertex_count = vertices.len() as u32;
+        let cmds = &out.draw_list;
+        self.draw_stats = count_draw_stats(cmds);
+        let vertices = build_vertices(cmds);
+        let cmd_count = cmds.len().min(MAX_QUADS);
 
         let Some(gpu) = self.gpu.as_mut() else {
             return;
@@ -524,11 +599,8 @@ impl<S: Scene> Host<S> {
                 occlusion_query_set: None,
             });
             pass.set_pipeline(&gpu.pipeline);
-            pass.set_bind_group(0, &gpu.bind_group, &[]);
             pass.set_vertex_buffer(0, gpu.vertex_buf.slice(..));
-            if vertex_count > 0 {
-                pass.draw(0..vertex_count, 0..1);
-            }
+            draw_batched(&mut pass, gpu, &cmds[..cmd_count]);
         }
 
         gpu.queue.submit(Some(encoder.finish()));
@@ -695,49 +767,53 @@ fn build_vertices(cmds: &[DrawCommand]) -> Vec<UiVertex> {
         let v0 = cmd.uv_min[1];
         let u1 = cmd.uv_max[0];
         let v1 = cmd.uv_max[1];
-        let color = cmd.color;
+        // Corner colors: TL, TR, BR, BL
+        let c_tl = cmd.colors[0];
+        let c_tr = cmd.colors[1];
+        let c_br = cmd.colors[2];
+        let c_bl = cmd.colors[3];
         let kind = cmd.kind;
         let tex = cmd.tex as f32;
         out.extend_from_slice(&[
             UiVertex {
                 pos: [x0, y0],
                 uv: [u0, v0],
-                color,
+                color: c_tl,
                 kind,
                 tex,
             },
             UiVertex {
                 pos: [x1, y0],
                 uv: [u1, v0],
-                color,
+                color: c_tr,
                 kind,
                 tex,
             },
             UiVertex {
                 pos: [x1, y1],
                 uv: [u1, v1],
-                color,
+                color: c_br,
                 kind,
                 tex,
             },
             UiVertex {
                 pos: [x0, y0],
                 uv: [u0, v0],
-                color,
+                color: c_tl,
                 kind,
                 tex,
             },
             UiVertex {
                 pos: [x1, y1],
                 uv: [u1, v1],
-                color,
+                color: c_br,
                 kind,
                 tex,
             },
             UiVertex {
                 pos: [x0, y1],
                 uv: [u0, v1],
-                color,
+                color: c_bl,
                 kind,
                 tex,
             },
@@ -790,45 +866,60 @@ fn create_font_texture(
     (texture, view)
 }
 
-fn create_placeholder_rgba(
+fn create_rgba_texture(
     device: &wgpu::Device,
     queue: &wgpu::Queue,
+    pixels: &[u8],
+    w: u32,
+    h: u32,
+    label: &str,
 ) -> (wgpu::Texture, wgpu::TextureView) {
+    let w = w.max(1);
+    let h = h.max(1);
     let texture = device.create_texture(&wgpu::TextureDescriptor {
-        label: Some("tex0 placeholder"),
+        label: Some(label),
         size: wgpu::Extent3d {
-            width: 1,
-            height: 1,
+            width: w,
+            height: h,
             depth_or_array_layers: 1,
         },
         mip_level_count: 1,
         sample_count: 1,
         dimension: wgpu::TextureDimension::D2,
-        format: wgpu::TextureFormat::Rgba8UnormSrgb,
+        format: wgpu::TextureFormat::Rgba8Unorm,
         usage: wgpu::TextureUsages::TEXTURE_BINDING | wgpu::TextureUsages::COPY_DST,
         view_formats: &[],
     });
-    queue.write_texture(
-        wgpu::TexelCopyTextureInfo {
-            texture: &texture,
-            mip_level: 0,
-            origin: wgpu::Origin3d::ZERO,
-            aspect: wgpu::TextureAspect::All,
-        },
-        &[180, 200, 255, 255],
-        wgpu::TexelCopyBufferLayout {
-            offset: 0,
-            bytes_per_row: Some(4),
-            rows_per_image: Some(1),
-        },
-        wgpu::Extent3d {
-            width: 1,
-            height: 1,
-            depth_or_array_layers: 1,
-        },
-    );
+    if !pixels.is_empty() {
+        queue.write_texture(
+            wgpu::TexelCopyTextureInfo {
+                texture: &texture,
+                mip_level: 0,
+                origin: wgpu::Origin3d::ZERO,
+                aspect: wgpu::TextureAspect::All,
+            },
+            pixels,
+            wgpu::TexelCopyBufferLayout {
+                offset: 0,
+                bytes_per_row: Some(w * 4),
+                rows_per_image: Some(h),
+            },
+            wgpu::Extent3d {
+                width: w,
+                height: h,
+                depth_or_array_layers: 1,
+            },
+        );
+    }
     let view = texture.create_view(&wgpu::TextureViewDescriptor::default());
     (texture, view)
+}
+
+fn create_placeholder_rgba(
+    device: &wgpu::Device,
+    queue: &wgpu::Queue,
+) -> (wgpu::Texture, wgpu::TextureView) {
+    create_rgba_texture(device, queue, &[180, 200, 255, 255], 1, 1, "tex0 placeholder")
 }
 
 fn make_bind_group(
@@ -861,6 +952,147 @@ fn make_bind_group(
             },
         ],
     })
+}
+
+fn rebuild_all_bind_groups(gpu: &mut Gpu) {
+    gpu.default_bind_group = make_bind_group(
+        &gpu.device,
+        &gpu.bind_layout,
+        &gpu.uniform_buf,
+        &gpu.font_view,
+        &gpu.sampler,
+        &gpu.placeholder_view,
+    );
+    for slot in gpu.tex_slots.values_mut() {
+        slot.bind_group = make_bind_group(
+            &gpu.device,
+            &gpu.bind_layout,
+            &gpu.uniform_buf,
+            &gpu.font_view,
+            &gpu.sampler,
+            &slot.view,
+        );
+    }
+}
+
+fn upsert_tex_slot(
+    slots: &mut HashMap<u32, TexSlot>,
+    device: &wgpu::Device,
+    queue: &wgpu::Queue,
+    layout: &wgpu::BindGroupLayout,
+    uniform_buf: &wgpu::Buffer,
+    font_view: &wgpu::TextureView,
+    sampler: &wgpu::Sampler,
+    slot: u32,
+    pixels: &[u8],
+    w: u32,
+    h: u32,
+    label: &str,
+) {
+    let w = w.max(1);
+    let h = h.max(1);
+    if let Some(existing) = slots.get_mut(&slot) {
+        if existing.size == (w, h) {
+            queue.write_texture(
+                wgpu::TexelCopyTextureInfo {
+                    texture: &existing.texture,
+                    mip_level: 0,
+                    origin: wgpu::Origin3d::ZERO,
+                    aspect: wgpu::TextureAspect::All,
+                },
+                pixels,
+                wgpu::TexelCopyBufferLayout {
+                    offset: 0,
+                    bytes_per_row: Some(w * 4),
+                    rows_per_image: Some(h),
+                },
+                wgpu::Extent3d {
+                    width: w,
+                    height: h,
+                    depth_or_array_layers: 1,
+                },
+            );
+            return;
+        }
+    }
+    let (texture, view) = create_rgba_texture(device, queue, pixels, w, h, label);
+    let bind_group = make_bind_group(device, layout, uniform_buf, font_view, sampler, &view);
+    slots.insert(
+        slot,
+        TexSlot {
+            texture,
+            view,
+            size: (w, h),
+            bind_group,
+        },
+    );
+}
+
+/// Split the draw list on `kind=1` texture slot changes; rebind `tex0` between batches.
+fn draw_batched(pass: &mut wgpu::RenderPass<'_>, gpu: &Gpu, cmds: &[DrawCommand]) {
+    if cmds.is_empty() {
+        return;
+    }
+
+    let bind_for = |slot: Option<u32>| -> &wgpu::BindGroup {
+        match slot.and_then(|s| gpu.tex_slots.get(&s)) {
+            Some(tex) => &tex.bind_group,
+            None => &gpu.default_bind_group,
+        }
+    };
+
+    let mut batch_start = 0usize;
+    let mut bound_slot: Option<u32> = None;
+
+    let flush = |pass: &mut wgpu::RenderPass<'_>, start: usize, end: usize, slot: Option<u32>| {
+        if end <= start {
+            return;
+        }
+        pass.set_bind_group(0, bind_for(slot), &[]);
+        let v0 = (start * 6) as u32;
+        let v1 = (end * 6) as u32;
+        pass.draw(v0..v1, 0..1);
+    };
+
+    for (i, cmd) in cmds.iter().enumerate() {
+        if cmd.kind >= 0.5 {
+            let slot = Some(cmd.tex);
+            if slot != bound_slot {
+                flush(pass, batch_start, i, bound_slot);
+                batch_start = i;
+                bound_slot = slot;
+            }
+        }
+    }
+    flush(pass, batch_start, cmds.len(), bound_slot);
+}
+
+fn count_draw_stats(cmds: &[DrawCommand]) -> DrawStats {
+    let quads = cmds.len().min(MAX_QUADS);
+    let slice = &cmds[..quads];
+    let mut batches = 0usize;
+    let mut batch_start = 0usize;
+    let mut bound_slot: Option<u32> = None;
+    for (i, cmd) in slice.iter().enumerate() {
+        if cmd.kind >= 0.5 {
+            let slot = Some(cmd.tex);
+            if slot != bound_slot {
+                if i > batch_start {
+                    batches += 1;
+                }
+                batch_start = i;
+                bound_slot = slot;
+            }
+        }
+    }
+    if quads > batch_start {
+        batches += 1;
+    }
+    DrawStats {
+        commands: cmds.len(),
+        batches,
+        quads,
+    }
 }
 
 fn map_cursor(icon: CursorIcon) -> winit::window::CursorIcon {

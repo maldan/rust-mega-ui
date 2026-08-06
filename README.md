@@ -98,9 +98,9 @@ if let Some(text) = out.clipboard { clipboard.set_text(text); }
 |------|--------|
 | `rect` | экранные пиксели (origin = top-left) |
 | `uv_min` / `uv_max` | UV в атласе; для solid `uv_min == uv_max` (белый тексель) |
-| `color` | RGBA 0..1, умножается на сэмпл |
+| `colors` | RGBA 0..1 на углах: TL, TR, BR, BL (solid = один цвет во всех) |
 | `kind` | `0` = font atlas (альфа в `.r`), `1` = твоя RGBA-текстура |
-| `tex` | слот хост-текстуры при `kind == 1` (`0` = image, `1` = …) |
+| `tex` | слот хост-текстуры при `kind == 1` (`0` = image, `2` = color SV, …). Хост батчит по слоту и ребиндит один `tex0`. |
 
 Виджеты:
 
@@ -108,8 +108,9 @@ if let Some(text) = out.clipboard { clipboard.set_text(text); }
 - текст → `kind = 0`, UV глифа в атласе
 - `ui.image(size)` → `kind = 1`, `tex = 0`
 - `ui.texture(slot, size)` → `kind = 1`, `tex = slot` (сцена, превью, что угодно)
+- color picker SV → `kind = 1`, `tex = TEX_SLOT_COLOR_SV` (атлас из `ui.color_sv_atlas()`)
 
-UI **не знает**, что лежит в слоте. Ты биндишь свои `TextureView` сам.
+UI **не знает**, что лежит в слоте. Ты биндишь свои `TextureView` сам — в примере один шейдерный `tex0`, смена слота = новый draw batch.
 
 ---
 

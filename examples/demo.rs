@@ -11,7 +11,7 @@ use std::fs;
 use std::path::{Path, PathBuf};
 use std::time::Instant;
 
-use framework::{Host, Scene};
+use framework::{DrawStats, Host, Scene};
 use glam::{Vec2, Vec3};
 use mega_ui::{BrowserItem, ScrollAxes, TableColumn, TextStyle, Ui, Window};
 
@@ -235,7 +235,7 @@ impl Scene for Demo {
         ui.load_builtin_icons();
     }
 
-    fn build(ui: &mut Ui, state: &mut Self, _viewport: Vec2, dt: f32) -> bool {
+    fn build(ui: &mut Ui, state: &mut Self, _viewport: Vec2, dt: f32, stats: DrawStats) -> bool {
         ui.set_scale(state.ui_scale);
 
         ui.menu_bar(|ui| {
@@ -927,6 +927,11 @@ impl Scene for Demo {
             ui.label(&format!("menu: {}", state.last_menu));
             ui.label("·");
             ui.label("RMB = context menu");
+            ui.label("·");
+            ui.label(&format!(
+                "cmds {} · batches {} · quads {}",
+                stats.commands, stats.batches, stats.quads
+            ));
             ui.label("·");
             ui.label(&format!("FPS {:.0}", fps));
         });
