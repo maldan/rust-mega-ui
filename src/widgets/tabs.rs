@@ -17,22 +17,27 @@ impl Ui {
         let tab_gap = self.s(1.0);
         let radius = self.s(theme::DOCK_TAB_RADIUS);
         let pad = self.s(8.0);
-        let fill_w = self.layer().fill_w;
-        let width = if fill_w > 0.0 {
-            fill_w
+        let avail = self.available_size();
+        let width = if avail.x > 0.0 {
+            avail.x
         } else {
             self.s(200.0)
         };
 
-        // One chrome: tab strip + content, no layout gap between them.
+        // In a filled parent (dock leaf / window body) expand to remaining height.
+        // Otherwise shrink-wrap to last frame's content measure.
         let content_id = widget_id.child("__content");
         let prev = self
             .tab_content_sizes
             .get(&content_id)
             .copied()
             .unwrap_or(Vec2::new(width, self.s(48.0)));
-        let content_h = (prev.y + pad * 2.0).max(self.s(32.0));
-        let outer = self.allocate(Vec2::new(width, tab_h + content_h));
+        let total_h = if self.layer().fill_h > 0.0 && avail.y > 0.0 {
+            avail.y
+        } else {
+            tab_h + (prev.y + pad * 2.0).max(self.s(32.0))
+        };
+        let outer = self.allocate(Vec2::new(width, total_h));
 
         // Outer frame.
         self.round_rect(outer, radius, theme::WIN_BORDER);

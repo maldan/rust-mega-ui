@@ -191,11 +191,8 @@ impl Ui {
             self.window_input_ok(window_id)
         };
         let prev_block = self.block_input;
-        if is_modal {
-            self.block_input = false;
-        } else if !input_ok {
-            self.block_input = true;
-        }
+        // Unlock only the window that owns the pointer / drag; keep others blocked.
+        self.block_input = !(is_modal || input_ok);
 
         let title_id = window_id.child("#title");
         let resize_id = window_id.child("#resize");

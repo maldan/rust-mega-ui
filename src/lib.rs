@@ -377,8 +377,6 @@ impl Ui {
         self.modal_id = None;
         self.modal_open = false;
         self.modal_request_close = false;
-        // Block background until/unless a modal runs and unlocks its own content.
-        self.block_input = modal_blocking;
 
         self.hover_window = self
             .win_order
@@ -407,6 +405,12 @@ impl Ui {
                 }
             }
         }
+
+        // Floating windows sit above dock/root widgets. While the pointer is over a
+        // window (or a window drag is active via focus), block background hit-tests
+        // so toggles/selects underneath cannot steal the title-bar grab.
+        self.block_input =
+            modal_blocking || self.hover_window.is_some() || self.focus_window.is_some();
 
         self.layers
             .push(new_layer(LayoutDir::Vertical, Vec2::ZERO, self.spacing, 0.0, 0.0, CrossAlign::Start));
