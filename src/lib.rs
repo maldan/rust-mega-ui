@@ -9,6 +9,9 @@ mod types;
 mod widgets;
 mod window;
 
+#[cfg(feature = "wgpu")]
+pub mod wgpu;
+
 pub use dock::{DockNode, DockState};
 pub use layout::{CrossAlign, LayoutOpts, MainAlign};
 pub use plot_view::PlotView;
