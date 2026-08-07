@@ -12,7 +12,7 @@ mod window;
 pub use dock::{DockNode, DockState};
 pub use layout::{CrossAlign, LayoutOpts, MainAlign};
 pub use plot_view::PlotView;
-pub use types::{CursorIcon, DrawCommand, Id, Rect, Response, UiInput, UiOutput};
+pub use types::{CursorIcon, DrawCommand, Id, Rect, Response, UiInput, UiInputDebug, UiOutput};
 pub use widgets::{
     AnimationCurve, BrowserItem, BrowserResponse, CurveEditorResponse, CurvePoint, CurvePreset,
     ToastKind, apply_preset, ease_in_out, sample_curve,
@@ -23,7 +23,7 @@ pub use widgets::scroll::ScrollAxes;
 pub use widgets::table::TableColumn;
 pub use window::Window;
 
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 use std::path::Path;
 
 use glam::Vec2;
@@ -85,6 +85,11 @@ pub struct Ui {
     pub(crate) windows: HashMap<Id, WinState>,
     pub(crate) win_order: Vec<Id>,
     pub(crate) win_rects: HashMap<Id, Rect>,
+    pub(crate) window_titles: HashMap<Id, String>,
+    /// Windows that completed `window_ex` last frame (for stale hit-box pruning).
+    pub(crate) windows_built_last_frame: HashSet<Id>,
+    /// Windows built so far this frame.
+    pub(crate) windows_built_this_frame: HashSet<Id>,
     pub(crate) window_layers: Vec<(Id, Vec<DrawCommand>)>,
     pub(crate) modal_layer: Vec<DrawCommand>,
     pub(crate) modal_id: Option<Id>,
@@ -163,6 +168,9 @@ impl Ui {
             windows: HashMap::new(),
             win_order: Vec::new(),
             win_rects: HashMap::new(),
+            window_titles: HashMap::new(),
+            windows_built_last_frame: HashSet::new(),
+            windows_built_this_frame: HashSet::new(),
             window_layers: Vec::new(),
             modal_layer: Vec::new(),
             modal_id: None,
@@ -378,6 +386,11 @@ impl Ui {
         self.modal_open = false;
         self.modal_request_close = false;
 
+        // Drop stale hit-boxes (closed windows, etc.) before hover hit-test.
+        self.win_rects
+            .retain(|id, _| self.windows_built_last_frame.contains(id));
+        self.windows_built_this_frame.clear();
+
         self.hover_window = self
             .win_order
             .iter()
@@ -397,9 +410,12 @@ impl Ui {
                 .unwrap_or(false);
             self.focus_id = None;
             if !blocked {
-                self.focus_window = self.hover_window;
+                // Only trust hover ids that were actually drawn last frame.
+                self.focus_window = self
+                    .hover_window
+                    .filter(|id| self.windows_built_last_frame.contains(id));
                 if !modal_blocking {
-                    if let Some(id) = self.hover_window {
+                    if let Some(id) = self.focus_window {
                         self.bring_to_front(id);
                     }
                 }
@@ -432,6 +448,7 @@ impl Ui {
             self.drag_grab = None;
             self.focus_window = None;
         }
+        self.windows_built_last_frame = std::mem::take(&mut self.windows_built_this_frame);
         self.scroll_wheel_target = self.scroll_hover;
 
         // background → windows (skip modal id) → modal dim+window → overlays
@@ -492,6 +509,35 @@ impl Ui {
             return self.modal_id == Some(id);
         }
         self.hover_window == Some(id) || self.focus_window == Some(id)
+    }
+
+    /// Title for a floating window id (set when the window is built).
+    pub fn window_title(&self, id: Id) -> Option<&str> {
+        self.window_titles.get(&id).map(|s| s.as_str())
+    }
+
+    /// Input routing snapshot — useful when window drag/focus feels stuck.
+    pub fn input_debug(&self) -> UiInputDebug {
+        let ghost_hover = match self.hover_window {
+            Some(id) => !self.windows_built_this_frame.contains(&id),
+            None => false,
+        };
+        UiInputDebug {
+            hover_window: self.hover_window,
+            focus_window: self.focus_window,
+            block_input: self.block_input,
+            active_id: self.active_id,
+            modal_open: self.modal_open,
+            overlay_block: self.overlay_block.is_some(),
+            mouse_absorb: self.mouse_absorb.is_some(),
+            win_rects: self.win_rects.len(),
+            ghost_hover,
+        }
+    }
+
+    pub(crate) fn mark_window_built(&mut self, id: Id, title: &str) {
+        self.windows_built_this_frame.insert(id);
+        self.window_titles.insert(id, title.to_string());
     }
 
     pub(crate) fn set_cursor(&mut self, icon: CursorIcon) {

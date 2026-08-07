@@ -208,6 +208,21 @@ impl CursorIcon {
     }
 }
 
+/// Snapshot of window/input routing state (for debugging stuck drags).
+#[derive(Clone, Copy, Debug, Default)]
+pub struct UiInputDebug {
+    pub hover_window: Option<Id>,
+    pub focus_window: Option<Id>,
+    pub block_input: bool,
+    pub active_id: Option<Id>,
+    pub modal_open: bool,
+    pub overlay_block: bool,
+    pub mouse_absorb: bool,
+    pub win_rects: usize,
+    /// `hover_window` is set but that window was not built this frame.
+    pub ghost_hover: bool,
+}
+
 #[derive(Clone, Copy, Debug, Default)]
 pub struct Response {
     pub hovered: bool,

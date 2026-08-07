@@ -1175,7 +1175,25 @@ impl Scene for Demo {
         }
 
         let fps = (1.0 / dt.max(1e-4)).min(999.0);
+        let dbg = ui.input_debug();
+        let hover_lbl = dbg
+            .hover_window
+            .and_then(|id| ui.window_title(id).map(str::to_string))
+            .unwrap_or_else(|| "-".into());
+        let focus_lbl = dbg
+            .focus_window
+            .and_then(|id| ui.window_title(id).map(str::to_string))
+            .unwrap_or_else(|| "-".into());
+        let active_lbl = dbg
+            .active_id
+            .map(|id| format!("{id:?}"))
+            .unwrap_or_else(|| "-".into());
         ui.status_bar(|ui| {
+            ui.label(&format!(
+                "hover:{} focus:{} block:{} ghost:{} rects:{} active:{}",
+                hover_lbl, focus_lbl, dbg.block_input, dbg.ghost_hover, dbg.win_rects, active_lbl,
+            ));
+            ui.label("·");
             ui.label(&format!("menu: {}", state.last_menu));
             ui.label("·");
             ui.label("RMB = context menu");

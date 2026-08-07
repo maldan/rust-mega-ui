@@ -170,6 +170,8 @@ impl Ui {
         add: impl FnOnce(&mut Self),
     ) {
         if cfg.open.as_ref().is_some_and(|o| !**o) {
+            let window_id = self.current_id(cfg.title);
+            self.win_rects.remove(&window_id);
             return;
         }
 
@@ -232,6 +234,7 @@ impl Ui {
                     self.modal_open = false;
                     self.modal_id = None;
                 }
+                self.win_rects.remove(&window_id);
                 self.windows
                     .insert(window_id, WinState { pos, size, collapsed });
                 self.block_input = prev_block;
@@ -266,6 +269,7 @@ impl Ui {
         if title_hover && self.input.mouse_pressed {
             self.active_id = Some(title_id);
             self.drag_grab = Some(self.input.mouse_pos - pos);
+            self.focus_window = Some(window_id);
         }
         if title_hover {
             self.set_cursor(CursorIcon::Move);
@@ -294,6 +298,7 @@ impl Ui {
             if hover && self.input.mouse_pressed {
                 self.active_id = Some(resize_id);
                 self.drag_grab = Some(self.input.mouse_pos - (pos + size));
+                self.focus_window = Some(window_id);
             }
             if self.active_id == Some(resize_id) {
                 if let Some(grab) = self.drag_grab {
@@ -392,6 +397,7 @@ impl Ui {
         }
 
         self.block_input = prev_block;
+        self.mark_window_built(window_id, cfg.title);
         let cmds = self.draw_list.split_off(draw_start);
         self.window_layers.push((window_id, cmds));
         self.pop_id();
