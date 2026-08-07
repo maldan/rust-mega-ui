@@ -68,7 +68,9 @@ pub(crate) enum LayoutDir {
 
 #[derive(Clone, Copy)]
 pub(crate) struct WinState {
+    /// Top-left in UI points (multiplied by [`Ui::scale`] for screen pixels).
     pub pos: Vec2,
+    /// Size in UI points.
     pub size: Vec2,
     pub collapsed: bool,
 }
@@ -235,7 +237,8 @@ impl Ui {
         }
     }
 
-    /// UI scale (1.0 = 100%). Affects sizes, spacing, and font.
+    /// UI scale (1.0 = 100%). Affects widget sizes, spacing, font, and floating
+    /// window geometry (window pos/size are stored in UI points).
     pub fn set_scale(&mut self, scale: f32) {
         let scale = scale.clamp(0.5, 3.0);
         let old_key = font_px_key(theme::FONT_SIZE * self.scale);
@@ -442,9 +445,14 @@ impl Ui {
         let vp = self.input.viewport;
         let title_h = self.s(theme::WIN_TITLE_H);
         let min = Vec2::new(self.s(theme::WIN_MIN_W), self.s(theme::WIN_MIN_H));
+        let sc = self.scale.max(0.5);
         for w in self.windows.values_mut() {
-            let vis_h = if w.collapsed { title_h } else { w.size.y };
-            window::clamp_win(&mut w.pos, &mut w.size, vis_h, vp, min, title_h);
+            let mut pos = w.pos * sc;
+            let mut size = w.size * sc;
+            let vis_h = if w.collapsed { title_h } else { size.y };
+            window::clamp_win(&mut pos, &mut size, vis_h, vp, min, title_h);
+            w.pos = pos / sc;
+            w.size = size / sc;
         }
     }
 

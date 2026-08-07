@@ -22,6 +22,9 @@ pub(crate) fn clamp_win(
 }
 
 /// Optional window features via builder.
+///
+/// [`Self::pos`] / [`Self::size`] are in **UI points** (same units as widget
+/// sizes before scale). Screen pixels = points × [`Ui::scale`].
 pub struct Window<'a> {
     pub(crate) title: &'a str,
     pub(crate) default_pos: Vec2,
@@ -43,11 +46,13 @@ impl<'a> Window<'a> {
         }
     }
 
+    /// Top-left in UI points.
     pub fn pos(mut self, pos: Vec2) -> Self {
         self.default_pos = pos;
         self
     }
 
+    /// Outer size in UI points (title bar included).
     pub fn size(mut self, size: Vec2) -> Self {
         self.default_size = size;
         self
@@ -117,10 +122,11 @@ impl Ui {
 
         let vp = self.input.viewport;
         if !self.windows.contains_key(&Id::new(cfg.title)) {
+            let size_px = cfg.default_size * self.scale;
             cfg.default_pos = Vec2::new(
-                ((vp.x - cfg.default_size.x) * 0.5).max(0.0),
-                ((vp.y - cfg.default_size.y) * 0.5).max(0.0),
-            );
+                ((vp.x - size_px.x) * 0.5).max(0.0),
+                ((vp.y - size_px.y) * 0.5).max(0.0),
+            ) / self.scale.max(0.5);
         }
 
         let dim = Rect::from_min_size(Vec2::ZERO, vp);
@@ -206,8 +212,10 @@ impl Ui {
             size: cfg.default_size,
             collapsed: false,
         });
-        let mut pos = entry.pos;
-        let mut size = entry.size;
+        // Interact / draw in screen pixels; persist back as UI points.
+        let sc = self.scale.max(0.5);
+        let mut pos = entry.pos * sc;
+        let mut size = entry.size * sc;
         let mut collapsed = entry.collapsed;
         if is_modal {
             collapsed = false;
@@ -215,7 +223,6 @@ impl Ui {
         }
 
         let title_h = self.s(theme::WIN_TITLE_H);
-        let sc = self.scale;
 
         let mut btn_i = 0;
         let mut on_chrome = false;
@@ -235,8 +242,14 @@ impl Ui {
                     self.modal_id = None;
                 }
                 self.win_rects.remove(&window_id);
-                self.windows
-                    .insert(window_id, WinState { pos, size, collapsed });
+                self.windows.insert(
+                    window_id,
+                    WinState {
+                        pos: pos / sc,
+                        size: size / sc,
+                        collapsed,
+                    },
+                );
                 self.block_input = prev_block;
                 let cmds = self.draw_list.split_off(draw_start);
                 self.window_layers.push((window_id, cmds));
@@ -282,12 +295,17 @@ impl Ui {
             self.set_cursor(CursorIcon::Move);
         }
 
-        let handle = self.s(14.0);
-        if cfg.resizable && !collapsed {
-            let resize_rect = Rect::from_min_size(
+        let handle = self.s(16.0);
+        let resize_rect = if cfg.resizable && !collapsed {
+            Some(Rect::from_min_size(
                 pos + Vec2::new(size.x - handle, size.y - handle),
                 Vec2::splat(handle),
-            );
+            ))
+        } else {
+            None
+        };
+
+        if let Some(resize_rect) = resize_rect {
             let hover = !self.block_input
                 && !self.mouse_over_absorb()
                 && resize_rect.contains(self.input.mouse_pos);
@@ -300,9 +318,9 @@ impl Ui {
                 self.drag_grab = Some(self.input.mouse_pos - (pos + size));
                 self.focus_window = Some(window_id);
             }
-            if self.active_id == Some(resize_id) {
+            if self.active_id == Some(resize_id) && self.input.mouse_down {
                 if let Some(grab) = self.drag_grab {
-                    size = self.input.mouse_pos - pos - grab;
+                    size = (self.input.mouse_pos - pos - grab).max(Vec2::ZERO);
                 }
                 self.want_capture = true;
                 self.set_cursor(CursorIcon::ResizeNwse);
@@ -315,8 +333,14 @@ impl Ui {
         let vis_h = if collapsed { title_h } else { size.y };
         clamp_win(&mut pos, &mut size, vis_h, self.input.viewport, min, title_h);
 
-        self.windows
-            .insert(window_id, WinState { pos, size, collapsed });
+        self.windows.insert(
+            window_id,
+            WinState {
+                pos: pos / sc,
+                size: size / sc,
+                collapsed,
+            },
+        );
 
         let rect = Rect::from_min_size(pos, Vec2::new(size.x, vis_h));
         self.win_rects.insert(window_id, rect);
@@ -391,9 +415,29 @@ impl Ui {
                 content_h,
                 CrossAlign::Start,
             ));
+            // Content sits under the grip; block hits there so widgets cannot steal resize.
+            let prev_absorb = self.mouse_absorb;
+            if let Some(grip) = resize_rect {
+                self.mouse_absorb = Some(grip);
+            }
             add(self);
+            self.mouse_absorb = prev_absorb;
             self.layers.pop();
             self.pop_clip();
+
+            // Re-claim the grip after content (widgets that ignore absorb still lose).
+            if let Some(grip) = resize_rect {
+                let on_grip = !self.block_input && grip.contains(self.input.mouse_pos);
+                if on_grip {
+                    self.want_capture = true;
+                    self.set_cursor(CursorIcon::ResizeNwse);
+                }
+                if on_grip && self.input.mouse_pressed {
+                    self.active_id = Some(resize_id);
+                    self.drag_grab = Some(self.input.mouse_pos - (pos + size));
+                    self.focus_window = Some(window_id);
+                }
+            }
         }
 
         self.block_input = prev_block;

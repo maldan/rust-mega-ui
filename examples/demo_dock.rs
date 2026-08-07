@@ -213,7 +213,7 @@ impl Scene for DockDemo {
 
         ui.set_scale(state.scale);
 
-        let bar_h = 26.0 * state.scale;
+        let bar_h = 26.0; // UI points; window pos is scale-independent
         ui.window(
             Window::new("UI Scale")
                 .pos(Vec2::new(16.0, bar_h + 12.0))

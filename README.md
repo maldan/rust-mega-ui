@@ -78,7 +78,7 @@ let input = UiInput {
     ..Default::default()
 };
 
-ui.set_scale(1.0); // 2.0 = UI в 2 раза крупнее
+ui.set_scale(1.0); // 2.0 = UI в 2 раза крупнее (виджеты + окна)
 ui.begin_frame(input);
 
 if ui.button("Save").clicked() { /* … */ }
@@ -298,6 +298,7 @@ ui.menu_bar(|ui| {
 });
 
 ui.window(Window::new("Settings").pos(p).size(s).resizable(true), |ui| {
+    // pos/size — UI points (экран = points × scale)
     ui.label("Hello");
     if ui.button("OK").clicked() {}
     ui.checkbox("Enabled", &mut on);
