@@ -137,6 +137,8 @@ pub struct Ui {
     pub(crate) scroll_consumed: bool,
     pub(crate) needs_repaint: bool,
     pub(crate) clipboard_out: Option<String>,
+    /// Last copy/cut payload — used as paste fallback when the host leaves `UiInput.clipboard` empty.
+    pub(crate) clipboard_buf: String,
     pub(crate) menu_bar_stack: Vec<widgets::menu::MenuBarCtx>,
     pub(crate) menu_stack: Vec<widgets::menu::MenuPopupCtx>,
     pub(crate) menu_bar_open: HashMap<Id, Option<Id>>,
@@ -215,6 +217,7 @@ impl Ui {
             scroll_consumed: false,
             needs_repaint: false,
             clipboard_out: None,
+            clipboard_buf: String::new(),
             menu_bar_stack: Vec::new(),
             menu_stack: Vec::new(),
             menu_bar_open: HashMap::new(),

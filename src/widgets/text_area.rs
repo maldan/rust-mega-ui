@@ -6,6 +6,9 @@ use crate::widgets::edit::{
     byte_at_x, clamp_edit, draw_sel_line, handle_clipboard, handle_typing, has_sel, insert_str,
     move_end, move_home, move_left, move_right, sel_range, EditState,
 };
+use crate::widgets::scroll::{
+    draw_vertical_scroll_bar, interact_vertical_scroll_bar, vertical_scroll_track,
+};
 use crate::{LayoutDir, ScrollState, Ui};
 
 struct Line {
@@ -51,12 +54,14 @@ fn wrap_lines(ui: &Ui, text: &str, width: f32) -> Vec<Line> {
     lines
 }
 
+/// Prefer the visual line where the caret sits after a soft wrap.
 fn caret_line(lines: &[Line], caret: usize) -> usize {
     for (i, line) in lines.iter().enumerate() {
         if caret < line.end {
             return i;
         }
         if caret == line.end {
+            // Soft wrap: caret belongs on the next visual line.
             if i + 1 < lines.len() && lines[i + 1].start == line.end {
                 return i + 1;
             }
@@ -66,8 +71,47 @@ fn caret_line(lines: &[Line], caret: usize) -> usize {
     lines.len().saturating_sub(1)
 }
 
-fn clamp_scroll(scroll: usize, lines: usize, view: usize) -> usize {
-    scroll.min(lines.saturating_sub(view))
+fn scroll_to_caret(offset_y: &mut f32, caret_li: usize, line_h: f32, view_h: f32, max_scroll: f32) {
+    let caret_top = caret_li as f32 * line_h;
+    let caret_bot = caret_top + line_h;
+    if caret_top < *offset_y {
+        *offset_y = caret_top;
+    } else if caret_bot > *offset_y + view_h {
+        *offset_y = caret_bot - view_h;
+    }
+    *offset_y = offset_y.clamp(0.0, max_scroll);
+}
+
+fn layout_text_area(
+    ui: &Ui,
+    text: &str,
+    rect: Rect,
+    pad: f32,
+    bar_w: f32,
+    gap: f32,
+    line_h: f32,
+) -> (Rect, Vec<Line>, bool, f32, f32) {
+    let mut inner = Rect {
+        min: rect.min + Vec2::splat(pad),
+        max: rect.max - Vec2::splat(pad),
+    };
+    let view_h = inner.height().max(1.0);
+    let mut lines = wrap_lines(ui, text, inner.width().max(1.0));
+    let mut content_h = lines.len() as f32 * line_h;
+    let mut need_bar = content_h > view_h + 0.5;
+    if need_bar {
+        inner.max.x = (inner.max.x - bar_w - gap).max(inner.min.x + 1.0);
+        lines = wrap_lines(ui, text, inner.width().max(1.0));
+        content_h = lines.len() as f32 * line_h;
+        need_bar = content_h > view_h + 0.5;
+        if !need_bar {
+            // Bar not needed after rewrap — restore full width.
+            inner.max.x = rect.max.x - pad;
+            lines = wrap_lines(ui, text, inner.width().max(1.0));
+            content_h = lines.len() as f32 * line_h;
+        }
+    }
+    (inner, lines, need_bar, content_h, view_h)
 }
 
 impl Ui {
@@ -97,43 +141,13 @@ impl Ui {
 
         let pad = self.s(8.0);
         let bar_w = self.s(theme::SCROLL_BAR);
-        let line_h = self.text_height();
+        let gap = self.s(theme::SCROLL_GAP);
+        let line_h = self.text_height().max(1.0);
         let shift = self.input.key_shift;
         let mut changed = false;
+        let mut caret_moved = false;
 
-        let mut inner = Rect {
-            min: rect.min + Vec2::splat(pad),
-            max: rect.max - Vec2::splat(pad),
-        };
-        let mut max_lines = ((inner.height() / line_h).floor() as usize).max(1);
-        let mut lines = wrap_lines(self, text, inner.width().max(1.0));
-        let mut need_bar = lines.len() > max_lines;
-        if need_bar {
-            let gap = self.s(theme::SCROLL_GAP);
-            inner.max.x = (rect.max.x - pad - bar_w - gap).max(inner.min.x + 1.0);
-            lines = wrap_lines(self, text, inner.width().max(1.0));
-            max_lines = ((inner.height() / line_h).floor() as usize).max(1);
-            need_bar = lines.len() > max_lines;
-        }
-
-        let track = Rect {
-            min: Vec2::new(rect.max.x - bar_w - 1.0, inner.min.y),
-            max: Vec2::new(rect.max.x - 1.0, inner.max.y),
-        };
         let bar_id = widget_id.child("#bar");
-
-        let hovered = enabled && self.hovered_rect(rect);
-        let on_bar = need_bar && self.hovered_rect(track);
-        if hovered {
-            self.hover_id = Some(widget_id);
-            self.want_capture = true;
-            self.set_cursor(if on_bar {
-                CursorIcon::Pointer
-            } else {
-                CursorIcon::Text
-            });
-            self.scroll_hover = Some(widget_id);
-        }
 
         let mut st = self
             .edits
@@ -145,59 +159,60 @@ impl Ui {
             });
         clamp_edit(&mut st, text.len());
 
+        let (mut inner, mut lines, mut need_bar, mut content_h, view_h) =
+            layout_text_area(self, text, rect, pad, bar_w, gap, line_h);
+        let mut max_scroll = (content_h - view_h).max(0.0);
+
         let mut scroll_st = self.scrolls.get(&widget_id).copied().unwrap_or(ScrollState {
             offset: Vec2::ZERO,
             target: Vec2::ZERO,
             content: Vec2::ZERO,
         });
-        let mut scroll = scroll_st.offset.y as usize;
+        scroll_st.offset.y = scroll_st.offset.y.clamp(0.0, max_scroll);
+        scroll_st.target.y = scroll_st.target.y.clamp(0.0, max_scroll);
 
-        if self.scroll_wheel_target == Some(widget_id) {
+        let track = if need_bar {
+            Some(vertical_scroll_track(inner, bar_w, gap))
+        } else {
+            None
+        };
+        let on_bar = need_bar
+            && track.is_some_and(|t| self.hovered_rect(t) || self.active_id == Some(bar_id));
+
+        let hovered = enabled && (self.hovered_rect(rect) || on_bar);
+        if hovered {
+            self.hover_id = Some(widget_id);
+            self.want_capture = true;
+            self.set_cursor(if on_bar {
+                CursorIcon::Pointer
+            } else {
+                CursorIcon::Text
+            });
+            self.scroll_hover = Some(widget_id);
+        }
+
+        if self.scroll_wheel_target == Some(widget_id) && !self.scroll_consumed {
             let dy = self.input.scroll_delta.y;
-            if dy.abs() > 0.0 {
-                let mut step = (dy / line_h).round() as i32;
-                if step == 0 {
-                    step = if dy > 0.0 { 1 } else { -1 };
-                }
-                scroll = (scroll as i32 - step).max(0) as usize;
+            if dy.abs() > 0.0 && need_bar {
+                scroll_st.offset.y = (scroll_st.offset.y - dy).clamp(0.0, max_scroll);
+                scroll_st.target.y = scroll_st.offset.y;
                 self.consume_scroll();
             }
         }
 
-        // scrollbar interact first
-        if need_bar && enabled {
-            let view_h = track.height();
-            let thumb_h = (view_h * max_lines as f32 / lines.len().max(1) as f32)
-                .max(self.s(theme::SCROLL_THUMB_MIN))
-                .min(view_h);
-            let travel = (view_h - thumb_h).max(0.0);
-            let max_s = lines.len().saturating_sub(max_lines) as f32;
-            let ty = if max_s > 0.0 {
-                track.min.y + scroll as f32 / max_s * travel
-            } else {
-                track.min.y
-            };
-            let thumb = Rect::from_min_size(Vec2::new(track.min.x, ty), Vec2::new(bar_w, thumb_h));
-
-            if self.hovered_rect(thumb) && self.input.mouse_pressed {
-                self.active_id = Some(bar_id);
-                self.drag_grab = Some(self.input.mouse_pos - Vec2::new(0.0, ty));
-            } else if self.hovered_rect(track) && self.input.mouse_pressed {
-                let rel = ((self.input.mouse_pos.y - track.min.y - thumb_h * 0.5)
-                    / travel.max(1.0))
-                .clamp(0.0, 1.0);
-                scroll = (rel * max_s).round() as usize;
-                self.active_id = Some(bar_id);
-                self.drag_grab = Some(Vec2::new(0.0, thumb_h * 0.5));
-            }
-            if self.active_id == Some(bar_id) && self.input.mouse_down {
-                let grab_y = self.drag_grab.map(|g| g.y).unwrap_or(thumb_h * 0.5);
-                let y = self.input.mouse_pos.y - grab_y;
-                let rel = ((y - track.min.y) / travel.max(1.0)).clamp(0.0, 1.0);
-                scroll = (rel * max_s).round() as usize;
-                self.want_capture = true;
-                self.set_cursor(CursorIcon::Pointer);
-            }
+        let bar_dragging = need_bar
+            && enabled
+            && interact_vertical_scroll_bar(
+                self,
+                bar_id,
+                inner,
+                content_h,
+                &mut scroll_st.offset.y,
+                bar_w,
+                gap,
+            );
+        if bar_dragging {
+            scroll_st.target.y = scroll_st.offset.y;
         }
 
         let focused = enabled && self.focus_id == Some(widget_id);
@@ -207,6 +222,9 @@ impl Ui {
             self.focus_id = Some(widget_id);
             self.active_id = Some(widget_id);
         }
+        if on_bar && self.input.mouse_pressed && enabled {
+            self.focus_id = Some(widget_id);
+        }
 
         if focused {
             self.want_capture = true;
@@ -214,88 +232,134 @@ impl Ui {
                 self.set_cursor(CursorIcon::Text);
             }
 
-            changed |= handle_clipboard(self, text, &mut st);
+            let clip_changed = handle_clipboard(self, text, &mut st);
+            changed |= clip_changed;
+            caret_moved |= clip_changed || self.input.key_select_all;
+
             if self.input.key_enter {
                 insert_str(text, &mut st, "\n");
                 changed = true;
+                caret_moved = true;
             }
-            clamp_edit(&mut st, text.len());
-            lines = wrap_lines(self, text, inner.width().max(1.0));
-            need_bar = lines.len() > max_lines;
 
             if self.input.key_left {
                 move_left(text, &mut st, shift);
+                caret_moved = true;
             }
             if self.input.key_right {
                 move_right(text, &mut st, shift);
+                caret_moved = true;
             }
+
+            // Relayout after mutations that change wrap before vertical nav.
+            if changed {
+                clamp_edit(&mut st, text.len());
+                let laid = layout_text_area(self, text, rect, pad, bar_w, gap, line_h);
+                inner = laid.0;
+                lines = laid.1;
+                need_bar = laid.2;
+                content_h = laid.3;
+                max_scroll = (content_h - view_h).max(0.0);
+                scroll_st.offset.y = scroll_st.offset.y.clamp(0.0, max_scroll);
+            } else {
+                clamp_edit(&mut st, text.len());
+                lines = wrap_lines(self, text, inner.width().max(1.0));
+            }
+
             if self.input.key_home {
                 let li = caret_line(&lines, st.caret);
                 move_home(&mut st, lines[li].start, shift);
+                caret_moved = true;
             }
             if self.input.key_end {
                 let li = caret_line(&lines, st.caret);
                 move_end(&mut st, lines[li].end, shift);
+                caret_moved = true;
             }
             if self.input.key_up || self.input.key_down {
                 let li = caret_line(&lines, st.caret);
-                let x = self.text_width(&text[lines[li].start..st.caret]);
+                let x = self.text_width(&text[lines[li].start..st.caret.min(lines[li].end)]);
                 let target = if self.input.key_up {
                     li.saturating_sub(1)
                 } else {
-                    (li + 1).min(lines.len() - 1)
+                    (li + 1).min(lines.len().saturating_sub(1))
                 };
                 let line = &lines[target];
                 st.caret = line.start + byte_at_x(self, &text[line.start..line.end], x);
                 if !shift {
                     st.anchor = st.caret;
                 }
+                caret_moved = true;
             }
 
-            changed |= handle_typing(self, text, &mut st);
+            let typed = handle_typing(self, text, &mut st);
+            changed |= typed;
+            caret_moved |= typed;
             clamp_edit(&mut st, text.len());
-            lines = wrap_lines(self, text, inner.width().max(1.0));
 
-            let hit = |ui: &Ui, pos: Vec2, scroll: usize, lines: &[Line]| -> usize {
+            if typed || self.input.key_enter {
+                let laid = layout_text_area(self, text, rect, pad, bar_w, gap, line_h);
+                inner = laid.0;
+                lines = laid.1;
+                need_bar = laid.2;
+                content_h = laid.3;
+                max_scroll = (content_h - view_h).max(0.0);
+                scroll_st.offset.y = scroll_st.offset.y.clamp(0.0, max_scroll);
+            } else {
+                lines = wrap_lines(self, text, inner.width().max(1.0));
+                content_h = lines.len() as f32 * line_h;
+                max_scroll = (content_h - view_h).max(0.0);
+            }
+
+            let hit = |ui: &Ui, pos: Vec2, offset_y: f32, lines: &[Line]| -> usize {
                 let local = pos - inner.min;
-                let li = scroll as isize + (local.y / line_h).floor() as isize;
+                let li = ((offset_y + local.y.max(0.0)) / line_h).floor() as isize;
                 let li = li.clamp(0, lines.len().saturating_sub(1) as isize) as usize;
                 let line = &lines[li];
                 line.start + byte_at_x(ui, &text[line.start..line.end], local.x.max(0.0))
             };
 
             if editing && hovered && self.input.mouse_pressed && !on_bar {
-                let at = hit(self, self.input.mouse_pos, scroll, &lines);
+                let at = hit(self, self.input.mouse_pos, scroll_st.offset.y, &lines);
                 st.caret = at;
                 if !shift {
                     st.anchor = at;
                 }
+                caret_moved = true;
             }
             if self.active_id == Some(widget_id) && self.input.mouse_down {
                 let local_y = self.input.mouse_pos.y - inner.min.y;
                 if local_y < 0.0 {
-                    scroll = scroll.saturating_sub(1);
+                    scroll_st.offset.y = (scroll_st.offset.y - line_h).max(0.0);
+                    scroll_st.target.y = scroll_st.offset.y;
                 } else if local_y > inner.height() {
-                    scroll += 1;
+                    scroll_st.offset.y = (scroll_st.offset.y + line_h).min(max_scroll);
+                    scroll_st.target.y = scroll_st.offset.y;
                 }
-                scroll = clamp_scroll(scroll, lines.len(), max_lines);
-                st.caret = hit(self, self.input.mouse_pos, scroll, &lines);
+                st.caret = hit(self, self.input.mouse_pos, scroll_st.offset.y, &lines);
+                caret_moved = true;
             }
         }
 
-        let caret_li = caret_line(&lines, st.caret);
-        scroll = clamp_scroll(scroll, lines.len(), max_lines);
-        if caret_li < scroll {
-            scroll = caret_li;
-        }
-        if caret_li >= scroll + max_lines {
-            scroll = caret_li + 1 - max_lines;
-        }
-        scroll = clamp_scroll(scroll, lines.len(), max_lines);
+        content_h = lines.len() as f32 * line_h;
+        max_scroll = (content_h - view_h).max(0.0);
+        scroll_st.offset.y = scroll_st.offset.y.clamp(0.0, max_scroll);
+        scroll_st.target.y = scroll_st.target.y.clamp(0.0, max_scroll);
 
-        scroll_st.offset.y = scroll as f32;
-        scroll_st.target.y = scroll as f32;
-        scroll_st.content.y = lines.len() as f32;
+        if caret_moved {
+            let caret_li = caret_line(&lines, st.caret);
+            scroll_to_caret(
+                &mut scroll_st.offset.y,
+                caret_li,
+                line_h,
+                view_h,
+                max_scroll,
+            );
+            scroll_st.target.y = scroll_st.offset.y;
+        }
+
+        scroll_st.content.y = content_h;
+        let offset_y = scroll_st.offset.y;
         self.scrolls.insert(widget_id, scroll_st);
         self.edits.insert(widget_id, st);
 
@@ -319,9 +383,15 @@ impl Ui {
         };
         let (sel_a, sel_b) = sel_range(st);
 
+        // Pixel scroll: draw every line that intersects the viewport.
+        let first = (offset_y / line_h).floor().max(0.0) as usize;
+        let last = ((offset_y + view_h) / line_h).ceil() as usize;
+        let last = last.min(lines.len());
+
         self.push_clip(inner);
-        for (row, line) in lines.iter().enumerate().skip(scroll).take(max_lines) {
-            let y = inner.min.y + (row - scroll) as f32 * line_h;
+        for row in first..last {
+            let line = &lines[row];
+            let y = inner.min.y + row as f32 * line_h - offset_y;
             let pos = Vec2::new(inner.min.x, y);
 
             if has_sel(st) && sel_a < line.end && sel_b > line.start {
@@ -343,47 +413,26 @@ impl Ui {
             }
 
             self.text(pos, &text[line.start..line.end], text_color);
+        }
 
-            let on_line = st.caret >= line.start
-                && (st.caret < line.end
-                    || (st.caret == line.end && caret_line(&lines, st.caret) == row));
-            if focused && on_line {
-                let cx = pos.x + self.text_width(&text[line.start..st.caret]);
-                self.round_rect(
-                    Rect::from_min_size(Vec2::new(cx, y), Vec2::new(1.0, line_h)),
-                    0.0,
-                    theme::TEXT,
-                );
-            }
+        if focused {
+            let caret_li = caret_line(&lines, st.caret);
+            let line = &lines[caret_li];
+            let y = inner.min.y + caret_li as f32 * line_h - offset_y;
+            let cx = inner.min.x
+                + self.text_width(&text[line.start..st.caret.clamp(line.start, line.end)]);
+            // Keep caret visible even at the exact right edge / empty last line.
+            let caret_x = cx.min(inner.max.x - 1.0).max(inner.min.x);
+            self.round_rect(
+                Rect::from_min_size(Vec2::new(caret_x, y), Vec2::new(1.0, line_h)),
+                0.0,
+                theme::TEXT,
+            );
         }
         self.pop_clip();
 
         if need_bar {
-            let view_h = track.height();
-            let thumb_h = (view_h * max_lines as f32 / lines.len().max(1) as f32)
-                .max(self.s(theme::SCROLL_THUMB_MIN))
-                .min(view_h);
-            let travel = (view_h - thumb_h).max(0.0);
-            let max_s = lines.len().saturating_sub(max_lines) as f32;
-            let ty = if max_s > 0.0 {
-                track.min.y + scroll as f32 / max_s * travel
-            } else {
-                track.min.y
-            };
-            self.round_rect(track, 0.0, theme::SCROLL_BG);
-            let hot = self.active_id == Some(bar_id) || self.hovered_rect(Rect::from_min_size(
-                Vec2::new(track.min.x, ty),
-                Vec2::new(bar_w, thumb_h),
-            ));
-            self.round_rect(
-                Rect::from_min_size(Vec2::new(track.min.x, ty), Vec2::new(bar_w, thumb_h)),
-                0.0,
-                if hot {
-                    theme::SCROLL_THUMB_HOT
-                } else {
-                    theme::SCROLL_THUMB
-                },
-            );
+            draw_vertical_scroll_bar(self, bar_id, inner, content_h, offset_y, bar_w, gap);
         }
 
         Response {

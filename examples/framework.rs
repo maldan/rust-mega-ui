@@ -95,6 +95,8 @@ pub struct FrameInput {
     key_cut: bool,
     key_select_all: bool,
     modifiers: winit::keyboard::ModifiersState,
+    /// System/internal clipboard text for this frame's paste.
+    clipboard_paste: String,
 }
 
 impl FrameInput {
@@ -117,6 +119,11 @@ impl FrameInput {
         self.key_paste = false;
         self.key_cut = false;
         self.key_select_all = false;
+        self.clipboard_paste.clear();
+    }
+
+    fn shortcut_mod(&self) -> bool {
+        self.modifiers.control_key() || self.modifiers.super_key()
     }
 
     pub fn to_ui(&self, viewport: Vec2, dt: f32) -> UiInput {
@@ -141,12 +148,13 @@ impl FrameInput {
             key_home: self.key_home,
             key_end: self.key_end,
             key_shift: self.key_shift,
-            key_ctrl: self.key_ctrl,
+            // Treat Cmd (macOS) like Ctrl so widgets suppress character insert on shortcuts.
+            key_ctrl: self.key_ctrl || self.modifiers.super_key(),
             key_copy: self.key_copy,
             key_paste: self.key_paste,
             key_cut: self.key_cut,
             key_select_all: self.key_select_all,
-            clipboard: String::new(),
+            clipboard: self.clipboard_paste.clone(),
         }
     }
 }
@@ -183,6 +191,7 @@ pub struct Host<S: Scene> {
     last_frame: Instant,
     cursor: CursorIcon,
     draw_stats: DrawStats,
+    clipboard: Option<arboard::Clipboard>,
 }
 
 impl<S: Scene> Host<S> {
@@ -198,6 +207,7 @@ impl<S: Scene> Host<S> {
             last_frame: Instant::now(),
             cursor: CursorIcon::Default,
             draw_stats: DrawStats::default(),
+            clipboard: arboard::Clipboard::new().ok(),
         }
     }
 
@@ -535,6 +545,12 @@ impl<S: Scene> Host<S> {
         let out = self.ui.end_frame();
         let needs_repaint = out.needs_repaint || keep;
 
+        if let Some(text) = out.clipboard {
+            if let Some(cb) = self.clipboard.as_mut() {
+                let _ = cb.set_text(text);
+            }
+        }
+
         self.apply_cursor(&window, out.cursor);
         self.sync_font_atlas();
         self.sync_color_sv_atlas();
@@ -611,6 +627,18 @@ impl<S: Scene> Host<S> {
 
         if needs_repaint {
             window.request_redraw();
+        }
+    }
+
+    fn begin_paste(&mut self) {
+        self.input.key_paste = true;
+        if !self.input.clipboard_paste.is_empty() {
+            return;
+        }
+        if let Some(cb) = self.clipboard.as_mut() {
+            if let Ok(text) = cb.get_text() {
+                self.input.clipboard_paste = text;
+            }
         }
     }
 
@@ -712,7 +740,7 @@ impl<S: Scene> ApplicationHandler for Host<S> {
                 if event.state != ElementState::Pressed {
                     return;
                 }
-                let ctrl = self.input.modifiers.control_key();
+                let shortcut = self.input.shortcut_mod();
                 match &event.logical_key {
                     Key::Named(NamedKey::Backspace) => self.input.key_backspace = true,
                     Key::Named(NamedKey::Enter) => self.input.key_enter = true,
@@ -722,16 +750,28 @@ impl<S: Scene> ApplicationHandler for Host<S> {
                     Key::Named(NamedKey::ArrowDown) => self.input.key_down = true,
                     Key::Named(NamedKey::Home) => self.input.key_home = true,
                     Key::Named(NamedKey::End) => self.input.key_end = true,
-                    Key::Character(c) if ctrl => match c.to_lowercase().as_str() {
+                    Key::Character(c) if shortcut => match c.to_lowercase().as_str() {
                         "c" => self.input.key_copy = true,
-                        "v" => self.input.key_paste = true,
+                        "v" => self.begin_paste(),
                         "x" => self.input.key_cut = true,
                         "a" => self.input.key_select_all = true,
                         _ => {}
                     },
                     _ => {}
                 }
-                if !ctrl {
+                // Physical keys: more reliable with Ctrl/Cmd across platforms.
+                if shortcut {
+                    if let PhysicalKey::Code(code) = event.physical_key {
+                        match code {
+                            KeyCode::KeyC => self.input.key_copy = true,
+                            KeyCode::KeyV => self.begin_paste(),
+                            KeyCode::KeyX => self.input.key_cut = true,
+                            KeyCode::KeyA => self.input.key_select_all = true,
+                            _ => {}
+                        }
+                    }
+                }
+                if !shortcut {
                     if let Some(text) = event.text.as_ref() {
                         for ch in text.chars() {
                             if !ch.is_control() {

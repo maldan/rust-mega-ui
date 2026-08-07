@@ -115,7 +115,9 @@ pub(crate) fn handle_clipboard(ui: &mut Ui, text: &mut String, st: &mut EditStat
     if ui.input.key_copy || ui.input.key_cut {
         let (a, b) = sel_range(*st);
         if a < b {
-            ui.clipboard_out = Some(text[a..b].to_string());
+            let clip = text[a..b].to_string();
+            ui.clipboard_buf = clip.clone();
+            ui.clipboard_out = Some(clip);
         }
         if ui.input.key_cut && a < b {
             text.replace_range(a..b, "");
@@ -124,9 +126,18 @@ pub(crate) fn handle_clipboard(ui: &mut Ui, text: &mut String, st: &mut EditStat
             changed = true;
         }
     }
-    if ui.input.key_paste && !ui.input.clipboard.is_empty() {
-        insert_str(text, st, &ui.input.clipboard);
-        changed = true;
+    if ui.input.key_paste {
+        let paste = if !ui.input.clipboard.is_empty() {
+            ui.input.clipboard.clone()
+        } else if !ui.clipboard_buf.is_empty() {
+            ui.clipboard_buf.clone()
+        } else {
+            String::new()
+        };
+        if !paste.is_empty() {
+            insert_str(text, st, &paste);
+            changed = true;
+        }
     }
     changed
 }

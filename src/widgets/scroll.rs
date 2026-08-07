@@ -151,6 +151,108 @@ fn thumb_len(view: f32, content: f32, min: f32) -> f32 {
     }
 }
 
+/// Vertical scrollbar to the right of `view` (same layout as [`Ui::scroll_area`]).
+pub(crate) fn interact_vertical_scroll_bar(
+    ui: &mut Ui,
+    bar_id: Id,
+    view: Rect,
+    content_h: f32,
+    offset_y: &mut f32,
+    bar: f32,
+    gap: f32,
+) -> bool {
+    let view_h = view.height();
+    let max_s = (content_h - view_h).max(0.0);
+    *offset_y = offset_y.clamp(0.0, max_s);
+    if max_s <= 0.0 {
+        return false;
+    }
+
+    let track = Rect {
+        min: Vec2::new(view.max.x + gap, view.min.y),
+        max: Vec2::new(view.max.x + gap + bar, view.max.y),
+    };
+    let th = thumb_len(view_h, content_h, ui.s(theme::SCROLL_THUMB_MIN));
+    let travel = (view_h - th).max(0.0);
+    let ty = if travel > 0.0 {
+        view.min.y + *offset_y / max_s * travel
+    } else {
+        view.min.y
+    };
+    let thumb = Rect::from_min_size(Vec2::new(track.min.x, ty), Vec2::new(bar, th));
+
+    let hot = ui.hovered_rect(thumb) || ui.hovered_rect(track);
+    if hot {
+        ui.want_capture = true;
+        ui.set_cursor(CursorIcon::Pointer);
+    }
+    if ui.hovered_rect(thumb) && ui.input.mouse_pressed {
+        ui.active_id = Some(bar_id);
+        ui.drag_grab = Some(ui.input.mouse_pos - Vec2::new(0.0, ty));
+    }
+    if ui.hovered_rect(track) && !ui.hovered_rect(thumb) && ui.input.mouse_pressed {
+        let t = ((ui.input.mouse_pos.y - view.min.y - th * 0.5) / travel.max(1.0)).clamp(0.0, 1.0);
+        *offset_y = t * max_s;
+        ui.active_id = Some(bar_id);
+        ui.drag_grab = Some(Vec2::new(0.0, th * 0.5));
+    }
+    let dragging = if ui.active_id == Some(bar_id) && ui.input.mouse_down {
+        let grab = ui.drag_grab.unwrap_or(Vec2::new(0.0, th * 0.5)).y;
+        let t = ((ui.input.mouse_pos.y - view.min.y - grab) / travel.max(1.0)).clamp(0.0, 1.0);
+        *offset_y = t * max_s;
+        ui.want_capture = true;
+        ui.set_cursor(CursorIcon::Pointer);
+        true
+    } else {
+        false
+    };
+    *offset_y = offset_y.clamp(0.0, max_s);
+    dragging
+}
+
+pub(crate) fn draw_vertical_scroll_bar(
+    ui: &mut Ui,
+    bar_id: Id,
+    view: Rect,
+    content_h: f32,
+    offset_y: f32,
+    bar: f32,
+    gap: f32,
+) {
+    let view_h = view.height();
+    let track = Rect {
+        min: Vec2::new(view.max.x + gap, view.min.y),
+        max: Vec2::new(view.max.x + gap + bar, view.max.y),
+    };
+    ui.round_rect(track, 0.0, theme::SCROLL_BG);
+    let th = thumb_len(view_h, content_h, ui.s(theme::SCROLL_THUMB_MIN));
+    let travel = (view_h - th).max(0.0);
+    let max_s = (content_h - view_h).max(0.0);
+    let ty = if max_s > 0.0 && travel > 0.0 {
+        view.min.y + offset_y / max_s * travel
+    } else {
+        view.min.y
+    };
+    let thumb = Rect::from_min_size(Vec2::new(track.min.x + 1.0, ty), Vec2::new(bar - 2.0, th));
+    let hot = ui.active_id == Some(bar_id) || ui.hovered_rect(thumb);
+    ui.round_rect(
+        thumb,
+        3.0,
+        if hot {
+            theme::SCROLL_THUMB_HOT
+        } else {
+            theme::SCROLL_THUMB
+        },
+    );
+}
+
+pub(crate) fn vertical_scroll_track(view: Rect, bar: f32, gap: f32) -> Rect {
+    Rect {
+        min: Vec2::new(view.max.x + gap, view.min.y),
+        max: Vec2::new(view.max.x + gap + bar, view.max.y),
+    }
+}
+
 fn interact_bars(
     ui: &mut Ui,
     st: &mut ScrollState,
@@ -165,44 +267,16 @@ fn interact_bars(
 ) -> bool {
     let mut dragging = false;
     if need_v && axes.vertical() {
-        let track = Rect {
-            min: Vec2::new(view.max.x + gap, view.min.y),
-            max: Vec2::new(view.max.x + gap + bar, view.max.y),
-        };
-        let th = thumb_len(view.height(), st.content.y, ui.s(theme::SCROLL_THUMB_MIN));
-        let travel = (view.height() - th).max(0.0);
-        let max_s = (st.content.y - view.height()).max(0.0);
-        let ty = if max_s > 0.0 && travel > 0.0 {
-            view.min.y + st.offset.y / max_s * travel
-        } else {
-            view.min.y
-        };
-        let thumb = Rect::from_min_size(Vec2::new(track.min.x, ty), Vec2::new(bar, th));
-
-        let hot = ui.hovered_rect(thumb) || ui.hovered_rect(track);
-        if hot {
-            ui.want_capture = true;
-            ui.set_cursor(CursorIcon::Pointer);
-        }
-        if ui.hovered_rect(thumb) && ui.input.mouse_pressed {
-            ui.active_id = Some(v_id);
-            ui.drag_grab = Some(ui.input.mouse_pos - Vec2::new(0.0, ty));
-        }
-        if ui.hovered_rect(track) && !ui.hovered_rect(thumb) && ui.input.mouse_pressed {
-            let t = ((ui.input.mouse_pos.y - view.min.y - th * 0.5) / travel.max(1.0)).clamp(0.0, 1.0);
-            st.target.y = t * max_s;
-            st.offset.y = st.target.y;
-            ui.active_id = Some(v_id);
-            ui.drag_grab = Some(Vec2::new(0.0, th * 0.5));
-            dragging = true;
-        }
-        if ui.active_id == Some(v_id) && ui.input.mouse_down {
-            let grab = ui.drag_grab.unwrap_or(Vec2::new(0.0, th * 0.5)).y;
-            let t = ((ui.input.mouse_pos.y - view.min.y - grab) / travel.max(1.0)).clamp(0.0, 1.0);
-            st.target.y = t * max_s;
-            st.offset.y = st.target.y;
-            ui.want_capture = true;
-            ui.set_cursor(CursorIcon::Pointer);
+        if interact_vertical_scroll_bar(
+            ui,
+            v_id,
+            view,
+            st.content.y,
+            &mut st.offset.y,
+            bar,
+            gap,
+        ) {
+            st.target.y = st.offset.y;
             dragging = true;
         }
     }
@@ -266,30 +340,7 @@ fn draw_bars(
     gap: f32,
 ) {
     if need_v && axes.vertical() {
-        let track = Rect {
-            min: Vec2::new(view.max.x + gap, view.min.y),
-            max: Vec2::new(view.max.x + gap + bar, view.max.y),
-        };
-        ui.round_rect(track, 0.0, theme::SCROLL_BG);
-        let th = thumb_len(view.height(), st.content.y, ui.s(theme::SCROLL_THUMB_MIN));
-        let travel = (view.height() - th).max(0.0);
-        let max_s = (st.content.y - view.height()).max(0.0);
-        let ty = if max_s > 0.0 && travel > 0.0 {
-            view.min.y + st.offset.y / max_s * travel
-        } else {
-            view.min.y
-        };
-        let thumb = Rect::from_min_size(Vec2::new(track.min.x + 1.0, ty), Vec2::new(bar - 2.0, th));
-        let hot = ui.active_id == Some(v_id) || ui.hovered_rect(thumb);
-        ui.round_rect(
-            thumb,
-            3.0,
-            if hot {
-                theme::SCROLL_THUMB_HOT
-            } else {
-                theme::SCROLL_THUMB
-            },
-        );
+        draw_vertical_scroll_bar(ui, v_id, view, st.content.y, st.offset.y, bar, gap);
     }
 
     if need_h && axes.horizontal() {
