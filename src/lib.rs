@@ -18,7 +18,7 @@ pub use plot_view::PlotView;
 pub use types::{CursorIcon, DrawCommand, Id, Rect, Response, UiInput, UiInputDebug, UiOutput};
 pub use widgets::{
     AnimationCurve, BrowserItem, BrowserResponse, CurveEditorResponse, CurvePoint, CurvePreset,
-    ToastKind, apply_preset, ease_in_out, sample_curve,
+    ToastKind, TreeResponse, TreeRow, apply_preset, ease_in_out, sample_curve,
 };
 pub use widgets::color_picker::TEX_SLOT_COLOR_SV;
 pub use widgets::label::TextStyle;
@@ -106,6 +106,8 @@ pub struct Ui {
     pub(crate) block_input: bool,
     pub(crate) headers: HashMap<Id, bool>,
     pub(crate) trees: HashMap<Id, bool>,
+    /// Active tree selection inside [`Ui::tree_scope`] (`None` = no scope).
+    pub(crate) tree_sel: Option<Option<String>>,
     pub(crate) selects: HashMap<Id, bool>,
     pub(crate) vec_locks: HashMap<Id, bool>,
     pub(crate) color_edits: HashMap<Id, widgets::color_picker::ColorEditState>,
@@ -188,6 +190,7 @@ impl Ui {
             block_input: false,
             headers: HashMap::new(),
             trees: HashMap::new(),
+            tree_sel: None,
             selects: HashMap::new(),
             vec_locks: HashMap::new(),
             color_edits: HashMap::new(),

@@ -34,6 +34,8 @@ struct DockDemo {
     clear: [f32; 4],
     notes: String,
     search: String,
+    scene_selected: Option<String>,
+    scene_char_locked: bool,
     log: String,
     last_menu: String,
     progress: f32,
@@ -83,6 +85,8 @@ impl Default for DockDemo {
             clear: [0.05, 0.05, 0.06, 1.0],
             notes: String::from("Scene notes…\nEdit me.\n"),
             search: String::new(),
+            scene_selected: None,
+            scene_char_locked: false,
             log: String::from("dock ready\ndrag splitters to resize panes\n"),
             last_menu: String::from("(none)"),
             progress: 0.0,
@@ -304,6 +308,8 @@ impl Scene for DockDemo {
             clear,
             notes,
             search,
+            scene_selected,
+            scene_char_locked,
             log,
             scale,
             progress,
@@ -363,32 +369,59 @@ impl Scene for DockDemo {
                     ui.icon("search", 14.0);
                 });
                 ui.text_input("scene_search", search);
+                if let Some(sel) = scene_selected.as_deref() {
+                    ui.label(&format!("Selected: {sel}"));
+                } else {
+                    ui.label("Selected: (none)");
+                }
                 ui.separator();
                 let size = ui.available_size();
                 ui.scroll_area("scene_tree", size, ScrollAxes::Vertical, |ui| {
-                    ui.tree_node("world", "World", |ui| {
-                        ui.tree_node_icon("camera", "file", "Camera", |ui| {
-                            ui.label(name.as_str());
-                        });
-                        ui.tree_node_icon("lights", "folder", "Lights", |ui| {
-                            ui.tree_leaf_icon("sun", "file", "Sun");
-                            ui.tree_leaf_icon("fill", "file", "Fill");
-                            ui.tree_leaf_icon("rim", "file", "Rim");
-                        });
-                        ui.tree_node_icon("meshes", "folder_open", "Meshes", |ui| {
-                            ui.collapsing_header("Primitives", |ui| {
-                                ui.tree_leaf_icon("cube", "file", "Cube");
-                                ui.tree_leaf_icon("plane", "file", "Plane");
-                                ui.tree_leaf_icon("sphere", "file", "Sphere");
+                    ui.tree_scope(scene_selected, |ui| {
+                        ui.tree_node("world", "World", |ui| {
+                            ui.tree_node_icon("camera", "file", "Camera", |ui| {
+                                ui.label(name.as_str());
                             });
-                            ui.collapsing_header("Imported", |ui| {
-                                ui.tree_leaf_icon("char", "file", "Character");
-                                ui.tree_leaf_icon("prop", "file", "Prop_A");
+                            ui.tree_node_icon_with(
+                                "lights",
+                                "folder",
+                                "Lights",
+                                |row| {
+                                    row.spacer();
+                                    let _ = row.icon_button("vis", "check", true);
+                                },
+                                |ui| {
+                                    ui.tree_leaf_icon("sun", "file", "Sun");
+                                    ui.tree_leaf_icon("fill", "file", "Fill");
+                                    ui.tree_leaf_icon("rim", "file", "Rim");
+                                },
+                            );
+                            ui.tree_node_icon("meshes", "folder_open", "Meshes", |ui| {
+                                ui.collapsing_header("Primitives", |ui| {
+                                    ui.tree_leaf_icon("cube", "file", "Cube");
+                                    ui.tree_leaf_icon("plane", "file", "Plane");
+                                    ui.tree_leaf_icon("sphere", "file", "Sphere");
+                                });
+                                ui.collapsing_header("Imported", |ui| {
+                                    ui.tree_leaf_icon_with("char", "file", "Character", |row| {
+                                        row.icon("info");
+                                        row.spacer();
+                                        let locked = *scene_char_locked;
+                                        if row.icon_button(
+                                            "lock",
+                                            if locked { "lock" } else { "unlock" },
+                                            locked,
+                                        ) {
+                                            *scene_char_locked = !locked;
+                                        }
+                                    });
+                                    ui.tree_leaf_icon("prop", "file", "Prop_A");
+                                });
                             });
-                        });
-                        ui.tree_node_icon("ui", "folder", "UI", |ui| {
-                            ui.tree_leaf_icon("hud", "file", "HUD");
-                            ui.tree_leaf_icon("menu", "file", "MainMenu");
+                            ui.tree_node_icon("ui", "folder", "UI", |ui| {
+                                ui.tree_leaf_icon("hud", "file", "HUD");
+                                ui.tree_leaf_icon("menu", "file", "MainMenu");
+                            });
                         });
                     });
                 });

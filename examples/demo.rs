@@ -173,6 +173,8 @@ struct Demo {
     explorer_path: PathBuf,
     explorer_selected: Option<String>,
     explorer_opened: String,
+    tree_selected: Option<String>,
+    tree_locked: bool,
     /// Abstract asset browser.
     show_assets: bool,
     asset_path: String,
@@ -220,6 +222,8 @@ impl Default for Demo {
             explorer_path: default_root(),
             explorer_selected: None,
             explorer_opened: String::from("(none)"),
+            tree_selected: None,
+            tree_locked: false,
             show_assets: true,
             asset_path: String::new(),
             asset_selected: None,
@@ -740,13 +744,40 @@ impl Scene for Demo {
                             },
                         );
                         ui.separator();
-                        ui.tree_node("demo_tree", "Demo tree", |ui| {
-                            ui.tree_node("child_a", "Child A", |ui| {
-                                ui.tree_leaf_icon("leaf1", "file", "leaf one");
-                                ui.tree_leaf_icon("leaf2", "file", "leaf two");
-                            });
-                            ui.tree_node_icon("child_b", "folder", "Child B", |ui| {
-                                ui.label("folder contents");
+                        if let Some(sel) = state.tree_selected.as_deref() {
+                            ui.label(&format!("Tree selected: {sel}"));
+                        } else {
+                            ui.label("Tree selected: (none)");
+                        }
+                        let tree_locked = &mut state.tree_locked;
+                        ui.tree_scope(&mut state.tree_selected, |ui| {
+                            ui.tree_node("demo_tree", "Demo tree", |ui| {
+                                ui.tree_node_with(
+                                    "child_a",
+                                    "Child A",
+                                    |row| {
+                                        row.spacer();
+                                        let _ = row.icon_button("vis", "check", true);
+                                    },
+                                    |ui| {
+                                        ui.tree_leaf_icon("leaf1", "file", "leaf one");
+                                        ui.tree_leaf_icon_with("leaf2", "file", "leaf two", |row| {
+                                            row.icon("info");
+                                            row.spacer();
+                                            let locked = *tree_locked;
+                                            if row.icon_button(
+                                                "lock",
+                                                if locked { "lock" } else { "unlock" },
+                                                locked,
+                                            ) {
+                                                *tree_locked = !locked;
+                                            }
+                                        });
+                                    },
+                                );
+                                ui.tree_node_icon("child_b", "folder", "Child B", |ui| {
+                                    ui.label("folder contents");
+                                });
                             });
                         });
                     }
