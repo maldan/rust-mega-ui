@@ -143,11 +143,19 @@ impl Ui {
             ("warning", include_bytes!("../icons/warning.svg").as_slice()),
             ("info", include_bytes!("../icons/info.svg").as_slice()),
             ("grid", include_bytes!("../icons/grid.svg").as_slice()),
+            (
+                "visibility",
+                include_bytes!("../icons/visibility.svg").as_slice(),
+            ),
+            (
+                "visibility_off",
+                include_bytes!("../icons/visibility_off.svg").as_slice(),
+            ),
         ]);
     }
 
     /// Clickable icon button. Returns `true` on click.
-    pub(crate) fn icon_button(&mut self, id: &str, icon: &str, active: bool) -> bool {
+    pub fn icon_button(&mut self, id: &str, icon: &str, active: bool) -> bool {
         let enabled = self.enabled();
         let widget_id = self.current_id(id);
         let size = self.s(22.0);
@@ -167,16 +175,11 @@ impl Ui {
             && hovered
             && self.input.mouse_released;
 
-        if hovered || active {
-            self.round_rect(rect, self.s(3.0), theme::BTN_HOVER);
-        }
         let color = if !enabled {
             theme::TEXT_DISABLED
         } else if pressed {
             theme::TEXT_BRIGHT
-        } else if active {
-            theme::ACCENT
-        } else if hovered {
+        } else if hovered || active {
             theme::TEXT
         } else {
             theme::TEXT_DIM

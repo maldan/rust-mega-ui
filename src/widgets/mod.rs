@@ -13,6 +13,7 @@ pub(crate) mod menu;
 pub mod plot;
 pub mod scroll;
 mod select;
+mod selectable;
 mod separator;
 mod slider;
 mod status_bar;
