@@ -7,7 +7,8 @@ use crate::{LayoutDir, Ui};
 
 impl Ui {
     /// Host RGBA texture slot (`kind = 1`). `size` in screen pixels.
-    pub fn texture(&mut self, slot: u32, size: Vec2) {
+    /// Returns the allocated screen-space rect (for hit-testing / picking).
+    pub fn texture(&mut self, slot: u32, size: Vec2) -> Rect {
         let fill_w = self.layer().fill_w;
         let w = if size.x > 0.0 {
             size.x
@@ -19,6 +20,7 @@ impl Ui {
         let h = size.y.max(1.0);
         let rect = self.allocate(Vec2::new(w, h));
         push_tex_cmd(self, rect, slot);
+        rect
     }
 
     /// Convenience: texture slot 0, size in UI points (scaled).

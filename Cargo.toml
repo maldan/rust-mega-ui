@@ -7,7 +7,7 @@ autoexamples = false
 [features]
 default = []
 ## wgpu pipeline helpers (`mega_ui::wgpu::UiRenderer` + bundled UI shader).
-wgpu = ["dep:wgpu", "dep:bytemuck"]
+wgpu = ["dep:wgpu", "dep:bytemuck", "dep:windows"]
 
 [dependencies]
 glam = "0.33.2"
@@ -22,6 +22,12 @@ env_logger = "0.11"
 log = "0.4"
 pollster = "0.4"
 winit = "0.30"
+
+# Force gpu-allocator onto the same `windows` major as wgpu-hal (0.62).
+# Without this, cargo can resolve gpu-allocator onto windows 0.58 and the
+# D3D12 types no longer match (ID3D12Device / D3D12_RESOURCE_DESC mismatch).
+[target.'cfg(windows)'.dependencies]
+windows = { version = "0.62", optional = true }
 
 [[example]]
 name = "demo"
