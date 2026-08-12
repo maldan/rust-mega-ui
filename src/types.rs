@@ -173,6 +173,8 @@ pub struct UiInput {
     pub key_paste: bool,
     pub key_cut: bool,
     pub key_select_all: bool,
+    /// Ctrl/Cmd+D — duplicate (e.g. selected nodes).
+    pub key_duplicate: bool,
     /// Clipboard text for paste (filled by host when key_paste).
     pub clipboard: String,
 }

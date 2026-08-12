@@ -21,6 +21,11 @@ pub mod port_type {
     pub const INT: u16 = 2;
     pub const STRING: u16 = 3;
     pub const BOOL: u16 = 4;
+    pub const VEC2: u16 = 5;
+    pub const VEC3: u16 = 6;
+    pub const VEC4: u16 = 7;
+    pub const MAT4: u16 = 8;
+    pub const QUAT: u16 = 9;
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -65,6 +70,25 @@ struct NodeDrag {
     primary_start: Vec2,
     /// World positions at drag start (filled lazily as nodes are visited).
     anchors: HashMap<String, Vec2>,
+    /// Selection snapshot at drag start — followers keep moving even if selection changes.
+    group: Vec<String>,
+}
+
+#[derive(Clone, Copy, Debug)]
+struct BoxSelect {
+    /// Screen-space drag origin.
+    start: Vec2,
+    /// Ctrl held at press → add to selection instead of replace.
+    additive: bool,
+}
+
+#[derive(Clone, Debug)]
+struct PendingNodePress {
+    id: String,
+    /// True = start / continue group drag from title; false = body select.
+    on_title: bool,
+    ctrl: bool,
+    mouse_world: Vec2,
 }
 
 /// Retained view / wiring state for one graph. Host keeps this between frames.
@@ -72,7 +96,7 @@ struct NodeDrag {
 pub struct NodeSpace {
     pub pan: Vec2,
     pub zoom: f32,
-    /// Grid snap for node moves in world units. `0` disables. Default `10`.
+    /// Grid snap for node moves in world units. `0` disables. Default `5`.
     pub snap: f32,
     pub links: Vec<NodeLink>,
     pub types: Vec<PortType>,
@@ -80,6 +104,8 @@ pub struct NodeSpace {
     pub selected_link: Option<u64>,
     /// Cleared by host after applying (remove nodes from its list).
     pub request_delete_nodes: Vec<String>,
+    /// Cleared by host after applying (duplicate node payloads + links).
+    pub request_clone_nodes: Vec<String>,
     /// World-space position of last RMB on empty canvas (for spawn menus).
     pub context_world: Option<Vec2>,
     /// True when pointer is over empty canvas (not a node) inside the space.
@@ -90,9 +116,16 @@ pub struct NodeSpace {
     port_pos: HashMap<(String, String), Vec2>,
     /// Last frame outer size in **world** units (title + body).
     node_sizes: HashMap<String, Vec2>,
+    /// Screen-space node bounds from the current/last build (for marquee).
+    node_screen_rects: HashMap<String, Rect>,
+    /// Latest world positions seen this/last frame (for group-drag anchors).
+    node_world_pos: HashMap<String, Vec2>,
     node_order: Vec<String>,
     pan_grab: Option<Vec2>,
     node_drag: Option<NodeDrag>,
+    box_select: Option<BoxSelect>,
+    /// Topmost node press this frame (later draws overwrite → frontmost wins).
+    pending_node_press: Option<PendingNodePress>,
     link_hit: Option<u64>,
     /// Set during [`Ui::node`] when the pointer is over a node this frame.
     pointer_over_node: bool,
@@ -109,21 +142,26 @@ impl NodeSpace {
         Self {
             pan: Vec2::ZERO,
             zoom: 1.0,
-            snap: 10.0,
+            snap: 5.0,
             links: Vec::new(),
             types: default_port_types(),
             selected_nodes: Vec::new(),
             selected_link: None,
             request_delete_nodes: Vec::new(),
+            request_clone_nodes: Vec::new(),
             context_world: None,
             background_hovered: false,
             next_link_id: 1,
             pending: None,
             port_pos: HashMap::new(),
             node_sizes: HashMap::new(),
+            node_screen_rects: HashMap::new(),
+            node_world_pos: HashMap::new(),
             node_order: Vec::new(),
             pan_grab: None,
             node_drag: None,
+            box_select: None,
+            pending_node_press: None,
             link_hit: None,
             pointer_over_node: false,
         }
@@ -154,6 +192,41 @@ impl NodeSpace {
         std::mem::take(&mut self.request_delete_nodes)
     }
 
+    pub fn take_clone_nodes(&mut self) -> Vec<String> {
+        std::mem::take(&mut self.request_clone_nodes)
+    }
+
+    /// Suggested world offset when the host duplicates a selection.
+    pub fn clone_offset(&self) -> Vec2 {
+        let s = if self.snap > 1e-6 { self.snap } else { 5.0 };
+        // Large enough that clones don't sit on top of originals (hit-test overlap).
+        Vec2::new(s * 16.0, s * 16.0)
+    }
+
+    /// Duplicate links whose both endpoints are in `id_map` (old → new).
+    pub fn duplicate_links(&mut self, id_map: &HashMap<String, String>) {
+        let mut extras = Vec::new();
+        for link in &self.links {
+            let Some(from) = id_map.get(&link.from_node) else {
+                continue;
+            };
+            let Some(to) = id_map.get(&link.to_node) else {
+                continue;
+            };
+            let id = self.next_link_id;
+            self.next_link_id += 1;
+            extras.push(NodeLink {
+                id,
+                from_node: from.clone(),
+                from_port: link.from_port.clone(),
+                to_node: to.clone(),
+                to_port: link.to_port.clone(),
+                ty: link.ty,
+            });
+        }
+        self.links.extend(extras);
+    }
+
     /// Remove links that reference `node_id`.
     pub fn detach_node(&mut self, node_id: &str) {
         self.links
@@ -161,6 +234,8 @@ impl NodeSpace {
         self.selected_nodes.retain(|id| id != node_id);
         self.port_pos.retain(|(n, _), _| n != node_id);
         self.node_sizes.remove(node_id);
+        self.node_screen_rects.remove(node_id);
+        self.node_world_pos.remove(node_id);
         self.node_order.retain(|id| id != node_id);
     }
 
@@ -183,7 +258,7 @@ impl NodeSpace {
         self.selected_nodes.iter().any(|x| x == id)
     }
 
-    /// Click select: Ctrl toggles; otherwise replace (unless already selected — keep multi).
+    /// Click select: Ctrl toggles; click unselected replaces; click selected keeps multi.
     fn select_for_click(&mut self, id: &str, ctrl: bool) {
         if ctrl {
             if let Some(i) = self.selected_nodes.iter().position(|x| x == id) {
@@ -191,7 +266,7 @@ impl NodeSpace {
             } else {
                 self.selected_nodes.push(id.to_string());
             }
-        } else {
+        } else if !self.is_selected(id) {
             self.selected_nodes = vec![id.to_string()];
         }
         self.selected_link = None;
@@ -212,23 +287,33 @@ impl NodeSpace {
     fn begin_node_drag(&mut self, id: &str, pos: Vec2, mouse_world: Vec2, ctrl: bool) {
         self.select_for_drag(id, ctrl);
         self.bring_front(id);
+        let group = self.selected_nodes.clone();
         let mut anchors = HashMap::new();
+        for gid in &group {
+            if let Some(&p) = self.node_world_pos.get(gid) {
+                anchors.insert(gid.clone(), p);
+            }
+        }
         anchors.insert(id.to_string(), pos);
         self.node_drag = Some(NodeDrag {
             primary: id.to_string(),
             grab: mouse_world - pos,
             primary_start: pos,
             anchors,
+            group,
         });
     }
 
     /// Update `pos` while a group/single drag is active.
     fn apply_node_drag(&mut self, id: &str, pos: &mut Vec2, mouse_world: Vec2) -> bool {
-        let is_sel = self.is_selected(id);
         let snap = self.snap;
         let Some(drag) = self.node_drag.as_mut() else {
             return false;
         };
+        let in_group = id == drag.primary || drag.group.iter().any(|x| x == id);
+        if !in_group {
+            return false;
+        }
         let raw = mouse_world - drag.grab;
         let primary_now = if snap <= 1e-6 {
             raw
@@ -238,12 +323,10 @@ impl NodeSpace {
         if id == drag.primary {
             *pos = primary_now;
             true
-        } else if is_sel {
+        } else {
             let start = *drag.anchors.entry(id.to_string()).or_insert(*pos);
             *pos = start + (primary_now - drag.primary_start);
             true
-        } else {
-            false
         }
     }
 
@@ -272,17 +355,42 @@ fn default_port_types() -> Vec<PortType> {
         PortType {
             id: port_type::INT,
             name: "int".into(),
-            color: [0.45, 0.85, 0.45, 1.0],
+            color: [0.95, 0.55, 0.35, 1.0],
         },
         PortType {
             id: port_type::STRING,
             name: "string".into(),
-            color: [0.95, 0.55, 0.35, 1.0],
+            color: [0.35, 0.82, 0.40, 1.0],
         },
         PortType {
             id: port_type::BOOL,
             name: "bool".into(),
             color: [0.90, 0.40, 0.55, 1.0],
+        },
+        PortType {
+            id: port_type::VEC2,
+            name: "vec2".into(),
+            color: [0.55, 0.85, 0.95, 1.0],
+        },
+        PortType {
+            id: port_type::VEC3,
+            name: "vec3".into(),
+            color: [0.40, 0.80, 0.70, 1.0],
+        },
+        PortType {
+            id: port_type::VEC4,
+            name: "vec4".into(),
+            color: [0.35, 0.70, 0.85, 1.0],
+        },
+        PortType {
+            id: port_type::MAT4,
+            name: "mat4".into(),
+            color: [0.75, 0.55, 0.95, 1.0],
+        },
+        PortType {
+            id: port_type::QUAT,
+            name: "quat".into(),
+            color: [0.95, 0.75, 0.35, 1.0],
         },
     ]
 }
@@ -323,6 +431,17 @@ fn dist_point_polyline(p: Vec2, pts: &[Vec2]) -> f32 {
     best
 }
 
+fn rect_from_points(a: Vec2, b: Vec2) -> Rect {
+    Rect {
+        min: Vec2::new(a.x.min(b.x), a.y.min(b.y)),
+        max: Vec2::new(a.x.max(b.x), a.y.max(b.y)),
+    }
+}
+
+fn rects_overlap(a: Rect, b: Rect) -> bool {
+    a.min.x < b.max.x && a.max.x > b.min.x && a.min.y < b.max.y && a.max.y > b.min.y
+}
+
 const NODE_MIN_W: f32 = 168.0;
 const NODE_PAD: f32 = 10.0;
 const PIN_R: f32 = 5.5;
@@ -359,6 +478,8 @@ impl Ui {
         space.background_hovered = false;
         space.link_hit = None;
         space.pointer_over_node = false;
+        space.pending_node_press = None;
+        space.node_screen_rects.clear();
 
         // Background
         self.round_rect(rect, self.s(4.0), [0.02, 0.02, 0.02, 1.0]);
@@ -388,8 +509,12 @@ impl Ui {
             self.want_capture = true;
         }
 
-        // Links (last-frame port positions) + hit-test
-        if in_rect && space.pending.is_none() && space.node_drag.is_none() && space.pan_grab.is_none()
+        // Links hit-test (skip while boxing / dragging / panning)
+        if in_rect
+            && space.pending.is_none()
+            && space.node_drag.is_none()
+            && space.pan_grab.is_none()
+            && space.box_select.is_none()
         {
             let mut best: Option<(u64, f32)> = None;
             for link in &space.links {
@@ -456,6 +581,22 @@ impl Ui {
 
         add(self);
 
+        // Wire drag wins over node press
+        if space.pending.is_some() {
+            space.pending_node_press = None;
+        }
+        // Frontmost node under cursor handles the press (later draws overwrite pending).
+        if let Some(press) = space.pending_node_press.take() {
+            if let Some(&pos) = space.node_world_pos.get(&press.id) {
+                if press.on_title {
+                    space.begin_node_drag(&press.id, pos, press.mouse_world, press.ctrl);
+                } else {
+                    space.select_for_click(&press.id, press.ctrl);
+                    space.bring_front(&press.id);
+                }
+            }
+        }
+
         // Pending wire
         if let Some(ref pending) = space.pending {
             let color = space.type_color(pending.ty);
@@ -474,6 +615,7 @@ impl Ui {
         let hovered_bg = in_rect
             && space.pending.is_none()
             && space.node_drag.is_none()
+            && space.box_select.is_none()
             && !space.pointer_over_node
             && space.link_hit.is_none()
             && !self.input.mouse_middle_down;
@@ -483,39 +625,71 @@ impl Ui {
             self.want_capture = true;
         }
 
-        // Pan: MMB anywhere, or LMB on empty background
+        // Pan: MMB anywhere
         let pan_id = space_id.child("#pan");
-        let start_mmb_pan = in_rect && self.input.mouse_middle_pressed && space.pending.is_none();
-        let start_lmb_pan = hovered_bg && self.input.mouse_pressed;
-        if start_mmb_pan || start_lmb_pan {
+        if in_rect && self.input.mouse_middle_pressed && space.pending.is_none() {
             self.active_id = Some(pan_id);
             space.pan_grab = Some(mouse - space.pan);
-            if start_lmb_pan {
+            space.box_select = None;
+        }
+
+        // Marquee: LMB drag on empty canvas (Ctrl = additive)
+        if hovered_bg && self.input.mouse_pressed {
+            let additive = self.input.key_ctrl;
+            space.box_select = Some(BoxSelect {
+                start: mouse,
+                additive,
+            });
+            if !additive {
                 space.selected_nodes.clear();
                 space.selected_link = None;
             }
+            self.active_id = Some(space_id.child("#box"));
         }
 
-        // Link select / Alt+click delete
+        // Link LMB → select only (never when over a node / already dragging)
         if space.link_hit.is_some()
             && self.input.mouse_pressed
             && space.pending.is_none()
+            && space.node_drag.is_none()
+            && !space.pointer_over_node
             && !self.input.mouse_middle_down
+            && space.box_select.is_none()
         {
             let lid = space.link_hit.unwrap();
-            if self.input.key_shift || space.selected_link == Some(lid) {
-                // Shift+click, or click already-selected wire → delete
-                space.remove_link(lid);
-                space.selected_link = None;
-            } else {
-                space.selected_link = Some(lid);
-                space.selected_nodes.clear();
-                self.active_id = Some(space_id.child("#link"));
-            }
+            space.selected_link = Some(lid);
+            space.selected_nodes.clear();
+            self.active_id = Some(space_id.child("#link"));
         }
 
-        let panning = self.active_id == Some(pan_id)
-            && (self.input.mouse_down || self.input.mouse_middle_down);
+        // Link RMB → delete
+        if space.link_hit.is_some()
+            && self.input.mouse_right_pressed
+            && space.pending.is_none()
+            && !space.pointer_over_node
+        {
+            let lid = space.link_hit.unwrap();
+            space.remove_link(lid);
+            space.selected_link = None;
+        }
+
+        // Draw / update marquee
+        if let Some(box_sel) = space.box_select {
+            let r = rect_from_points(box_sel.start, mouse);
+            let fill = [0.20, 0.45, 0.90, 0.12];
+            let border = [0.35, 0.60, 1.0, 0.55];
+            self.round_rect(r, 0.0, fill);
+            // border as thin lines
+            let t = 1.0;
+            self.line(Vec2::new(r.min.x, r.min.y), Vec2::new(r.max.x, r.min.y), t, border);
+            self.line(Vec2::new(r.min.x, r.max.y), Vec2::new(r.max.x, r.max.y), t, border);
+            self.line(Vec2::new(r.min.x, r.min.y), Vec2::new(r.min.x, r.max.y), t, border);
+            self.line(Vec2::new(r.max.x, r.min.y), Vec2::new(r.max.x, r.max.y), t, border);
+            self.want_capture = true;
+            self.request_repaint();
+        }
+
+        let panning = self.active_id == Some(pan_id) && self.input.mouse_middle_down;
         if panning {
             if let Some(grab) = space.pan_grab {
                 space.pan = mouse - grab;
@@ -524,17 +698,47 @@ impl Ui {
                 self.request_repaint();
             }
         }
-        if self.input.mouse_released || self.input.mouse_middle_released {
-            if self.input.mouse_middle_released || self.active_id == Some(pan_id) {
-                space.pan_grab = None;
+
+        if self.input.mouse_released {
+            if let Some(box_sel) = space.box_select.take() {
+                let r = rect_from_points(box_sel.start, mouse);
+                let drag_len = (mouse - box_sel.start).length();
+                if drag_len >= 4.0 {
+                    let mut hits: Vec<String> = space
+                        .node_screen_rects
+                        .iter()
+                        .filter(|(_, nr)| rects_overlap(r, **nr))
+                        .map(|(id, _)| id.clone())
+                        .collect();
+                    hits.sort();
+                    if box_sel.additive {
+                        for id in hits {
+                            if !space.is_selected(&id) {
+                                space.selected_nodes.push(id);
+                            }
+                        }
+                    } else {
+                        space.selected_nodes = hits;
+                    }
+                    space.selected_link = None;
+                }
+                // tiny drag = click on empty: selection already cleared if !additive
             }
             space.node_drag = None;
-            if self.input.mouse_released && space.pending.is_some() {
+            if space.pending.is_some() {
                 space.pending = None;
             }
         }
+        if self.input.mouse_middle_released {
+            space.pan_grab = None;
+        }
 
-        if in_rect && self.input.mouse_right_pressed && hovered_bg {
+        // RMB on empty → context spawn pos (not when deleting a link)
+        if in_rect
+            && self.input.mouse_right_pressed
+            && hovered_bg
+            && space.link_hit.is_none()
+        {
             space.context_world = Some(space.screen_to_world(mouse));
         }
 
@@ -551,6 +755,11 @@ impl Ui {
                 }
                 space.request_delete_nodes.extend(ids);
             }
+        }
+
+        // Clone selection (Ctrl+D) — host duplicates payloads via take_clone_nodes
+        if in_rect && self.input.key_duplicate && !space.selected_nodes.is_empty() {
+            space.request_clone_nodes = space.selected_nodes.clone();
         }
 
         self.node_space_ptr = prev_ptr;
@@ -622,9 +831,12 @@ impl Ui {
         let mouse_world = space.screen_to_world(mouse);
         let ctrl = self.input.key_ctrl;
 
+        space.node_world_pos.insert(id.to_string(), *pos);
+
         // Apply ongoing group drag before layout (followers move same frame).
         let dragging = space.apply_node_drag(id, pos, mouse_world);
         if dragging {
+            space.node_world_pos.insert(id.to_string(), *pos);
             self.set_cursor(CursorIcon::Move);
             self.want_capture = true;
             self.request_repaint();
@@ -656,49 +868,23 @@ impl Ui {
         self.push_id(id);
         let node_id = *self.id_stack.last().unwrap();
         let title_id = node_id.child("#title");
-        let close_id = node_id.child("#close");
 
-        // Close button (always) — top-right of title
-        let btn = 16.0 * z.clamp(0.75, 1.35);
-        let btn_pad = 4.0 * z;
-        let mut close_r = Rect::from_min_size(
-            Vec2::new(
-                rect.max.x - btn_pad - btn,
-                rect.min.y + (title_h * z - btn) * 0.5,
-            ),
-            Vec2::splat(btn),
-        );
-        let close_hover = hovered && close_r.contains(mouse) && !self.block_input;
-        if close_hover {
-            self.want_capture = true;
-            self.set_cursor(CursorIcon::Pointer);
-            if self.input.mouse_pressed {
-                self.active_id = Some(close_id);
-            }
-        }
-        if self.active_id == Some(close_id) && self.input.mouse_released && close_hover {
-            space.detach_node(id);
-            space.request_delete_nodes.push(id.to_string());
-            self.pop_id();
-            return;
-        }
-
-        // Title drag (ignore close button)
-        let title_hover = hovered && title_bar.contains(mouse) && !close_r.contains(mouse);
+        // Title hover chrome; press is deferred so the frontmost overlapping node wins.
+        let title_hover = hovered && title_bar.contains(mouse);
         if title_hover {
             self.set_cursor(CursorIcon::Move);
             self.want_capture = true;
         }
-        if title_hover && self.input.mouse_pressed && space.node_drag.is_none() {
-            self.active_id = Some(title_id);
-            space.begin_node_drag(id, *pos, mouse_world, ctrl);
-            let _ = space.apply_node_drag(id, pos, mouse_world);
-        }
-
-        // Body click → selection (Ctrl toggles)
-        if hovered && self.input.mouse_pressed && !title_hover && !close_hover {
-            space.select_for_click(id, ctrl);
-            space.bring_front(id);
+        if hovered && self.input.mouse_pressed && space.node_drag.is_none() {
+            space.pending_node_press = Some(PendingNodePress {
+                id: id.to_string(),
+                on_title: title_hover,
+                ctrl,
+                mouse_world,
+            });
+            if title_hover {
+                self.active_id = Some(title_id);
+            }
         }
 
         let selected = space.is_selected(id);
@@ -718,16 +904,10 @@ impl Ui {
         // Refresh geometry after drag write
         screen_pos = space.world_to_screen(*pos);
         rect = Rect::from_min_size(screen_pos, screen_size);
-        close_r = Rect::from_min_size(
-            Vec2::new(
-                rect.max.x - btn_pad - btn,
-                rect.min.y + (title_h * z - btn) * 0.5,
-            ),
-            Vec2::splat(btn),
-        );
 
         self.round_rect(rect, radius, border);
         self.round_rect(rect.inset(1.0), (radius - 1.0).max(0.0), theme::WIN_BODY);
+        space.node_screen_rects.insert(id.to_string(), rect);
 
         let title_color = if self.active_id == Some(title_id) || dragging {
             theme::WIN_TITLE_PRESS
@@ -745,25 +925,6 @@ impl Ui {
         self.text(
             rect.min + Vec2::new(self.s(10.0), (title_h * z - th) * 0.5),
             title,
-            theme::TITLE_TEXT,
-        );
-
-        // Close chrome
-        let close_bg = if self.active_id == Some(close_id) && self.input.mouse_down {
-            theme::BTN_PRESS
-        } else if close_hover {
-            theme::BTN_HOVER
-        } else {
-            [0.20, 0.20, 0.20, 1.0]
-        };
-        self.round_rect(close_r, 3.0 * z.clamp(0.75, 1.2), close_bg);
-        let xw = self.text_width("x");
-        self.text(
-            Vec2::new(
-                close_r.min.x + (close_r.width() - xw) * 0.5,
-                close_r.min.y + (close_r.height() - th) * 0.5,
-            ),
-            "x",
             theme::TITLE_TEXT,
         );
 

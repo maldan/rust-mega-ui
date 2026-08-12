@@ -55,6 +55,7 @@ pub struct FrameInput {
     key_paste: bool,
     key_cut: bool,
     key_select_all: bool,
+    key_duplicate: bool,
     modifiers: winit::keyboard::ModifiersState,
     /// System/internal clipboard text for this frame's paste.
     clipboard_paste: String,
@@ -83,6 +84,7 @@ impl FrameInput {
         self.key_paste = false;
         self.key_cut = false;
         self.key_select_all = false;
+        self.key_duplicate = false;
         self.clipboard_paste.clear();
     }
 
@@ -122,6 +124,7 @@ impl FrameInput {
             key_paste: self.key_paste,
             key_cut: self.key_cut,
             key_select_all: self.key_select_all,
+            key_duplicate: self.key_duplicate,
             clipboard: self.clipboard_paste.clone(),
         }
     }
@@ -491,6 +494,7 @@ impl<S: Scene> ApplicationHandler for Host<S> {
                         "v" => self.begin_paste(),
                         "x" => self.input.key_cut = true,
                         "a" => self.input.key_select_all = true,
+                        "d" => self.input.key_duplicate = true,
                         _ => {}
                     },
                     _ => {}
@@ -503,6 +507,7 @@ impl<S: Scene> ApplicationHandler for Host<S> {
                             KeyCode::KeyV => self.begin_paste(),
                             KeyCode::KeyX => self.input.key_cut = true,
                             KeyCode::KeyA => self.input.key_select_all = true,
+                            KeyCode::KeyD => self.input.key_duplicate = true,
                             _ => {}
                         }
                     }
