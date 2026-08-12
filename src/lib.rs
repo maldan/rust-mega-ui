@@ -3,6 +3,7 @@ mod draw;
 mod font;
 mod icon;
 mod layout;
+mod node_space;
 mod plot_view;
 pub(crate) mod theme;
 mod types;
@@ -14,6 +15,9 @@ pub mod wgpu;
 
 pub use dock::{DockNode, DockState};
 pub use layout::{CrossAlign, LayoutOpts, MainAlign};
+pub use node_space::{
+    port_type, NodeLink, NodePortSide, NodeSpace, PortType,
+};
 pub use plot_view::PlotView;
 pub use types::{CursorIcon, DrawCommand, Id, Rect, Response, UiInput, UiInputDebug, UiOutput};
 pub use widgets::{
@@ -28,6 +32,7 @@ pub use window::Window;
 
 use std::collections::{HashMap, HashSet};
 use std::path::Path;
+use std::ptr::NonNull;
 
 use glam::Vec2;
 
@@ -159,6 +164,11 @@ pub struct Ui {
     pub(crate) overlay_block: Option<Rect>,
     /// When true, `text` / `round_rect` paint into the overlay list.
     pub(crate) draw_to_overlay: bool,
+    /// Active [`NodeSpace`] during `node_space` closure (host stack borrow).
+    pub(crate) node_space_ptr: Option<NonNull<node_space::NodeSpace>>,
+    pub(crate) node_space_clip: Option<Rect>,
+    pub(crate) node_space_id: Option<Id>,
+    pub(crate) current_node_id: Option<String>,
 }
 
 impl Default for Ui {
@@ -237,6 +247,10 @@ impl Ui {
             curve_edits: HashMap::new(),
             overlay_block: None,
             draw_to_overlay: false,
+            node_space_ptr: None,
+            node_space_clip: None,
+            node_space_id: None,
+            current_node_id: None,
         }
     }
 

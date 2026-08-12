@@ -35,9 +35,13 @@ pub struct FrameInput {
     mouse_right_down: bool,
     mouse_right_pressed: bool,
     mouse_right_released: bool,
+    mouse_middle_down: bool,
+    mouse_middle_pressed: bool,
+    mouse_middle_released: bool,
     scroll_delta: Vec2,
     text: String,
     key_backspace: bool,
+    key_delete: bool,
     key_enter: bool,
     key_left: bool,
     key_right: bool,
@@ -62,9 +66,12 @@ impl FrameInput {
         self.mouse_released = false;
         self.mouse_right_pressed = false;
         self.mouse_right_released = false;
+        self.mouse_middle_pressed = false;
+        self.mouse_middle_released = false;
         self.scroll_delta = Vec2::ZERO;
         self.text.clear();
         self.key_backspace = false;
+        self.key_delete = false;
         self.key_enter = false;
         self.key_left = false;
         self.key_right = false;
@@ -92,11 +99,15 @@ impl FrameInput {
             mouse_right_down: self.mouse_right_down,
             mouse_right_pressed: self.mouse_right_pressed,
             mouse_right_released: self.mouse_right_released,
+            mouse_middle_down: self.mouse_middle_down,
+            mouse_middle_pressed: self.mouse_middle_pressed,
+            mouse_middle_released: self.mouse_middle_released,
             viewport,
             scroll_delta: self.scroll_delta,
             dt,
             text: self.text.clone(),
             key_backspace: self.key_backspace,
+            key_delete: self.key_delete,
             key_enter: self.key_enter,
             key_left: self.key_left,
             key_right: self.key_right,
@@ -431,6 +442,15 @@ impl<S: Scene> ApplicationHandler for Host<S> {
                         }
                         self.input.mouse_right_down = down;
                     }
+                    MouseButton::Middle => {
+                        if down && !self.input.mouse_middle_down {
+                            self.input.mouse_middle_pressed = true;
+                        }
+                        if !down && self.input.mouse_middle_down {
+                            self.input.mouse_middle_released = true;
+                        }
+                        self.input.mouse_middle_down = down;
+                    }
                     _ => {}
                 }
                 if let Some(window) = &self.window {
@@ -458,6 +478,7 @@ impl<S: Scene> ApplicationHandler for Host<S> {
                 let shortcut = self.input.shortcut_mod();
                 match &event.logical_key {
                     Key::Named(NamedKey::Backspace) => self.input.key_backspace = true,
+                    Key::Named(NamedKey::Delete) => self.input.key_delete = true,
                     Key::Named(NamedKey::Enter) => self.input.key_enter = true,
                     Key::Named(NamedKey::ArrowLeft) => self.input.key_left = true,
                     Key::Named(NamedKey::ArrowRight) => self.input.key_right = true,

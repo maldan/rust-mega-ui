@@ -147,6 +147,10 @@ pub struct UiInput {
     pub mouse_right_down: bool,
     pub mouse_right_pressed: bool,
     pub mouse_right_released: bool,
+    /// Middle mouse button (node-space pan, etc.).
+    pub mouse_middle_down: bool,
+    pub mouse_middle_pressed: bool,
+    pub mouse_middle_released: bool,
     pub viewport: Vec2,
     /// Wheel delta in pixels (x = horizontal, y = vertical; +y = scroll up / content down).
     pub scroll_delta: Vec2,
@@ -155,6 +159,7 @@ pub struct UiInput {
     /// Characters typed this frame.
     pub text: String,
     pub key_backspace: bool,
+    pub key_delete: bool,
     pub key_enter: bool,
     pub key_left: bool,
     pub key_right: bool,

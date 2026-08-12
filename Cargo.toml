@@ -38,3 +38,8 @@ required-features = ["wgpu"]
 name = "demo_dock"
 path = "examples/demo_dock.rs"
 required-features = ["wgpu"]
+
+[[example]]
+name = "demo_nodes"
+path = "examples/demo_nodes.rs"
+required-features = ["wgpu"]
