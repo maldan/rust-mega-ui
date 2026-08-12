@@ -91,15 +91,20 @@ impl Ui {
     }
 
     pub fn menu_item_enabled(&mut self, label: &str, enabled: bool) -> Response {
-        let Some(item) = self.menu_row_with_icon(label, None, enabled, false) else {
+        self.menu_item_inner(label, None, enabled, true)
+    }
+
+    /// Like [`Self::menu_item`], but does not dismiss the menu (for drill-down pages).
+    pub fn menu_item_keep_open(&mut self, label: &str) -> Response {
+        self.menu_item_inner(label, None, self.enabled(), false)
+    }
+
+    /// Submenu-looking row with a chevron; keeps the menu open on click.
+    pub fn menu_item_submenu(&mut self, label: &str) -> Response {
+        let Some(item) = self.menu_row_with_icon(label, None, self.enabled(), true) else {
             return Response::default();
         };
-
-        let clicked = enabled && item.hovered && self.input.mouse_released;
-        if clicked {
-            self.close_all_menus();
-        }
-
+        let clicked = self.enabled() && item.hovered && self.input.mouse_released;
         Response {
             hovered: item.hovered,
             clicked,
@@ -118,11 +123,21 @@ impl Ui {
         label: &str,
         enabled: bool,
     ) -> Response {
-        let Some(item) = self.menu_row_with_icon(label, Some(icon), enabled, false) else {
+        self.menu_item_inner(label, Some(icon), enabled, true)
+    }
+
+    fn menu_item_inner(
+        &mut self,
+        label: &str,
+        icon: Option<&str>,
+        enabled: bool,
+        close_on_click: bool,
+    ) -> Response {
+        let Some(item) = self.menu_row_with_icon(label, icon, enabled, false) else {
             return Response::default();
         };
         let clicked = enabled && item.hovered && self.input.mouse_released;
-        if clicked {
+        if clicked && close_on_click {
             self.close_all_menus();
         }
         Response {
@@ -136,6 +151,44 @@ impl Ui {
     /// while a menu is open.
     pub fn menu_separator(&mut self) {
         self.menu_separator_inner();
+    }
+
+    /// Non-interactive section header inside a menu (dim label, does not close).
+    pub fn menu_section(&mut self, label: &str) {
+        let Some(ctx) = self.menu_stack.last() else {
+            return;
+        };
+        let item_h = self.s(theme::MENU_ITEM_H);
+        let pad = self.s(10.0);
+        let width = ctx.width;
+        let y = ctx.cursor_y;
+        let origin_x = ctx.origin.x;
+        let rect = Rect::from_min_size(
+            Vec2::new(origin_x + self.s(3.0), y),
+            Vec2::new((width - self.s(6.0)).max(1.0), item_h),
+        );
+        self.absorb_rect(rect);
+
+        let label_w = self.text_width(label);
+        if let Some(ctx) = self.menu_stack.last_mut() {
+            ctx.cursor_y += item_h;
+            ctx.max_label_w = ctx.max_label_w.max(label_w);
+        }
+
+        let text_h = self.text_height();
+        self.text_overlay(
+            Vec2::new(
+                rect.min.x + pad,
+                rect.min.y + (item_h - text_h) * 0.5,
+            ),
+            label,
+            theme::TEXT_DIM,
+        );
+    }
+
+    /// True while any context menu is open.
+    pub fn context_menu_open(&self) -> bool {
+        self.context_menu.is_some()
     }
 }
 
@@ -308,14 +361,14 @@ impl Ui {
 
         self.push_id(label);
         let parent_popup = self.menu_stack.last().unwrap().popup_rect;
-        let mut origin = Vec2::new(parent_popup.max.x - self.s(2.0), item.rect.min.y);
         let est_w = self
             .menu_popup_size
             .get(&item_id)
             .map(|s| s.x)
             .unwrap_or(self.s(theme::MENU_MIN_W));
+        let mut origin = Vec2::new(parent_popup.max.x - self.s(4.0), item.rect.min.y);
         if origin.x + est_w > self.input.viewport.x - self.s(4.0) {
-            origin.x = (parent_popup.min.x - est_w + self.s(2.0)).max(0.0);
+            origin.x = (parent_popup.min.x - est_w + self.s(4.0)).max(0.0);
         }
         self.open_menu_popup(item_id, origin, add);
         self.pop_id();
@@ -324,18 +377,21 @@ impl Ui {
     fn open_menu_popup(&mut self, id: Id, origin: Vec2, add: impl FnOnce(&mut Self)) {
         let min_w = self.s(theme::MENU_MIN_W);
         let pad = self.s(4.0);
-        let prev = self
-            .menu_popup_size
-            .get(&id)
-            .copied()
-            .unwrap_or(Vec2::new(min_w, self.s(theme::MENU_ITEM_H) + pad * 2.0));
+        let prev = self.menu_popup_size.get(&id).copied().unwrap_or(Vec2::new(
+            min_w,
+            self.s(theme::MENU_ITEM_H) * 12.0 + pad * 2.0,
+        ));
 
         let mut popup = Rect::from_min_size(origin, prev);
-        // Clamp vertically into the viewport.
-        let overflow = popup.max.y - self.input.viewport.y;
-        if overflow > 0.0 {
-            popup.min.y = (popup.min.y - overflow).max(0.0);
+        let overflow_y = popup.max.y - self.input.viewport.y;
+        if overflow_y > 0.0 {
+            popup.min.y = (popup.min.y - overflow_y).max(0.0);
             popup.max.y = popup.min.y + prev.y;
+        }
+        let overflow_x = popup.max.x - self.input.viewport.x;
+        if overflow_x > 0.0 {
+            popup.min.x = (popup.min.x - overflow_x).max(0.0);
+            popup.max.x = popup.min.x + prev.x;
         }
 
         let radius = self.s(theme::BTN_RADIUS);
@@ -373,27 +429,16 @@ impl Ui {
         self.menu_popup_size
             .insert(id, Vec2::new(content_w, content_h));
 
-        // Drop submenu if pointer left both parent and child.
-        if let Some(sub) = ctx.open_sub {
-            let in_parent = ctx.pointer_inside;
-            let in_child = ctx
-                .child_popup
-                .map(|r| r.contains(self.input.mouse_pos))
-                .unwrap_or(false);
-            if !in_parent && !in_child {
-                if self.menu_sub_open.get(&id).copied().flatten() == Some(sub) {
-                    self.menu_sub_open.insert(id, None);
-                }
-            }
-        }
+        let tight = Rect::from_min_size(popup.min, Vec2::new(content_w, content_h));
+        self.absorb_rect(tight);
 
         if let Some(parent) = self.menu_stack.last_mut() {
-            parent.child_popup = Some(popup);
-            if ctx.pointer_inside {
+            parent.child_popup = Some(tight);
+            if ctx.pointer_inside || tight.contains(self.input.mouse_pos) {
                 parent.pointer_inside = true;
             }
         }
-        if ctx.pointer_inside {
+        if ctx.pointer_inside || tight.contains(self.input.mouse_pos) {
             if let Some(b) = self.menu_bar_stack.last_mut() {
                 b.pointer_in_menu = true;
             }
@@ -424,6 +469,9 @@ impl Ui {
             Vec2::new(origin_x + self.s(3.0), y),
             Vec2::new((width - self.s(6.0)).max(1.0), item_h),
         );
+        // Always absorb the row — popup bg size can lag one frame behind content,
+        // and lower items (submenus) would otherwise sit outside the hit target.
+        self.absorb_rect(rect);
 
         let label_w = self.text_width(label) + icon_gap;
         if let Some(ctx) = self.menu_stack.last_mut() {
@@ -545,8 +593,10 @@ impl Ui {
                 .mouse_absorb
                 .map(|r| r.contains(self.input.mouse_pos))
                 .unwrap_or(false);
+            // Close only on press outside the menu tree (parent + submenus).
             if self.input.mouse_pressed && !pointer_in {
                 self.context_menu = None;
+                self.menu_sub_open.clear();
             }
             self.pop_id();
         }

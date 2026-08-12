@@ -416,12 +416,13 @@ impl Ui {
                 CrossAlign::Start,
             ));
             // Content sits under the grip; block hits there so widgets cannot steal resize.
-            let prev_absorb = self.mouse_absorb;
+            // Union (do not replace/restore): menus/selects inside the window call
+            // absorb_rect — wiping absorb here would drop their hit targets and break
+            // submenus / overlay_block for the next frame.
             if let Some(grip) = resize_rect {
-                self.mouse_absorb = Some(grip);
+                self.absorb_rect(grip);
             }
             add(self);
-            self.mouse_absorb = prev_absorb;
             self.layers.pop();
             self.pop_clip();
 

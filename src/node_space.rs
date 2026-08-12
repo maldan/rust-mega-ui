@@ -108,6 +108,8 @@ pub struct NodeSpace {
     pub request_clone_nodes: Vec<String>,
     /// World-space position of last RMB on empty canvas (for spawn menus).
     pub context_world: Option<Vec2>,
+    /// True on the frame RMB requested a context menu on empty canvas.
+    pub context_menu_request: bool,
     /// True when pointer is over empty canvas (not a node) inside the space.
     pub background_hovered: bool,
 
@@ -150,6 +152,7 @@ impl NodeSpace {
             request_delete_nodes: Vec::new(),
             request_clone_nodes: Vec::new(),
             context_world: None,
+            context_menu_request: false,
             background_hovered: false,
             next_link_id: 1,
             pending: None,
@@ -476,6 +479,7 @@ impl Ui {
 
         space.zoom = space.zoom.clamp(0.35, 2.5);
         space.background_hovered = false;
+        space.context_menu_request = false;
         space.link_hit = None;
         space.pointer_over_node = false;
         space.pending_node_press = None;
@@ -487,27 +491,15 @@ impl Ui {
         self.draw_node_grid(rect, space);
 
         let mouse = self.input.mouse_pos;
-        let in_rect =
-            rect.contains(mouse) && !self.block_input && !self.mouse_over_absorb();
-
-        // Zoom toward cursor
-        if in_rect && self.input.scroll_delta.y.abs() > 0.0 && space.pending.is_none() {
-            let old_z = space.zoom;
-            let factor = if self.input.scroll_delta.y > 0.0 {
-                1.08
-            } else {
-                1.0 / 1.08
-            };
-            let new_z = (old_z * factor).clamp(0.35, 2.5);
-            if (new_z - old_z).abs() > 1e-5 {
-                let world = space.screen_to_world(mouse);
-                space.zoom = new_z;
-                space.pan = mouse - world * space.zoom;
-                self.request_repaint();
-            }
-            self.consume_scroll();
-            self.want_capture = true;
-        }
+        // Context menus / selects are drawn after the canvas; block canvas input while
+        // a menu is open or last-frame overlay covered the pointer.
+        let over_popup = self.context_menu.is_some()
+            || self.mouse_over_absorb()
+            || self
+                .overlay_block
+                .map(|r| r.contains(mouse))
+                .unwrap_or(false);
+        let in_rect = rect.contains(mouse) && !self.block_input && !over_popup;
 
         // Links hit-test (skip while boxing / dragging / panning)
         if in_rect
@@ -580,6 +572,30 @@ impl Ui {
         self.node_space_id = Some(space_id);
 
         add(self);
+
+        // Zoom after children so open selects can consume the wheel first.
+        if in_rect
+            && !self.scroll_consumed
+            && !self.mouse_over_absorb()
+            && self.input.scroll_delta.y.abs() > 0.0
+            && space.pending.is_none()
+        {
+            let old_z = space.zoom;
+            let factor = if self.input.scroll_delta.y > 0.0 {
+                1.08
+            } else {
+                1.0 / 1.08
+            };
+            let new_z = (old_z * factor).clamp(0.35, 2.5);
+            if (new_z - old_z).abs() > 1e-5 {
+                let world = space.screen_to_world(mouse);
+                space.zoom = new_z;
+                space.pan = mouse - world * space.zoom;
+                self.request_repaint();
+            }
+            self.consume_scroll();
+            self.want_capture = true;
+        }
 
         // Wire drag wins over node press
         if space.pending.is_some() {
@@ -740,6 +756,7 @@ impl Ui {
             && space.link_hit.is_none()
         {
             space.context_world = Some(space.screen_to_world(mouse));
+            space.context_menu_request = true;
         }
 
         // Delete selection: Delete always; Backspace when not typing

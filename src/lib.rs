@@ -113,7 +113,7 @@ pub struct Ui {
     pub(crate) trees: HashMap<Id, bool>,
     /// Active tree selection inside [`Ui::tree_scope`] (`None` = no scope).
     pub(crate) tree_sel: Option<Option<String>>,
-    pub(crate) selects: HashMap<Id, bool>,
+    pub(crate) selects: HashMap<Id, widgets::select::SelectState>,
     pub(crate) vec_locks: HashMap<Id, bool>,
     pub(crate) color_edits: HashMap<Id, widgets::color_picker::ColorEditState>,
     pub(crate) color_sv: widgets::color_picker::ColorSvAtlas,
@@ -722,6 +722,20 @@ impl Ui {
     /// Hit-test with current clip. Popup absorb blocks widgets under overlays.
     pub fn rect_hovered(&self, rect: Rect) -> bool {
         self.hovered_rect(rect)
+    }
+
+    /// True if `pos` (screen pixels) lies over any floating window from last frame.
+    /// Useful for hosts that route camera orbit only when the pointer is over the
+    /// 3D viewport and not covered by a window.
+    pub fn pointer_over_window_at(&self, pos: Vec2) -> bool {
+        self.win_rects.values().any(|r| r.contains(pos))
+    }
+
+    /// True if `pos` is over a popup absorb rect (select / menu) from last frame.
+    pub fn pointer_over_popup_at(&self, pos: Vec2) -> bool {
+        self.overlay_block
+            .map(|r| r.contains(pos))
+            .unwrap_or(false)
     }
 
     /// Hit-test with current clip. Popup absorb blocks widgets under overlays.

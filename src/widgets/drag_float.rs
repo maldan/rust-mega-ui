@@ -9,8 +9,8 @@ use crate::widgets::edit::{
 use crate::{LayoutDir, Ui};
 
 pub(crate) fn format_float(v: f32, step: f32) -> String {
-    let v = snap_to_step(v, step);
-    let d = step_decimals(step);
+    // Step only hints minimum fraction digits for drag UX — never snap for display.
+    let d = step_decimals(step).max(6).min(9);
     let s = format!("{v:.prec$}", prec = d);
     // Trim only fractional trailing zeros ("20.00" → "20"), never the integer part
     // ("20".trim_end_matches('0') would wrongly become "2").
@@ -36,7 +36,7 @@ fn step_decimals(step: f32) -> usize {
     if step <= 0.0 || step >= 1.0 {
         return 0;
     }
-    (-(step as f64).log10()).round().clamp(0.0, 6.0) as usize
+    (-(step as f64).log10()).round().clamp(0.0, 9.0) as usize
 }
 
 fn snap_to_step(v: f32, step: f32) -> f32 {
@@ -55,12 +55,14 @@ fn filter_float(s: &str) -> String {
 }
 
 impl Ui {
-    /// Numeric field: type floats, Up/Down = step, left grip = drag value.
+    /// Numeric field: type any float precision; Up/Down and grip drag use `step`.
     pub fn drag_float(&mut self, id: &str, value: &mut f32, step: f32) -> Response {
         self.drag_float_grip(id, value, step, None)
     }
 
     /// Like [`Self::drag_float`], with an optional colored drag grip.
+    ///
+    /// `step` controls grip-drag and arrow nudges only — typed values are kept exact.
     pub fn drag_float_grip(
         &mut self,
         id: &str,
@@ -113,10 +115,10 @@ impl Ui {
             self.focus_id = None;
             // x = last mouse, y = leftover pixels toward next step
             self.drag_grab = Some(Vec2::new(self.input.mouse_pos.x, 0.0));
-            // commit any open edit buffer
+            // commit any open edit buffer (typed value stays exact — no step snap)
             if let Some(buf) = self.num_bufs.remove(&widget_id) {
                 if let Ok(v) = buf.parse::<f32>() {
-                    *value = snap_to_step(v, step);
+                    *value = v;
                 }
             }
         }
@@ -152,19 +154,13 @@ impl Ui {
         let focused = enabled && self.focus_id == Some(widget_id);
 
         if !focused && !dragging {
+            // Commit typed buffer as-is. Step is only for drag / arrow nudges.
             if let Some(buf) = self.num_bufs.remove(&widget_id) {
                 if let Ok(v) = buf.parse::<f32>() {
-                    let v = snap_to_step(v, step);
                     if *value != v {
                         *value = v;
                         changed = true;
                     }
-                }
-            } else {
-                // keep stored value on the step grid
-                let v = snap_to_step(*value, step);
-                if (*value - v).abs() > f32::EPSILON {
-                    *value = v;
                 }
             }
         } else if focused && !self.num_bufs.contains_key(&widget_id) {

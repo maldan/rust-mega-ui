@@ -12,7 +12,7 @@ pub mod label;
 pub(crate) mod menu;
 pub mod plot;
 pub mod scroll;
-mod select;
+pub(crate) mod select;
 mod selectable;
 mod separator;
 mod slider;
