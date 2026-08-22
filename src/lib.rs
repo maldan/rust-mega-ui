@@ -22,7 +22,8 @@ pub use plot_view::PlotView;
 pub use types::{CursorIcon, DrawCommand, Id, Rect, Response, UiInput, UiInputDebug, UiOutput};
 pub use widgets::{
     AnimationCurve, BrowserItem, BrowserResponse, CurveEditorResponse, CurvePoint, CurvePreset,
-    ToastKind, TreeResponse, TreeRow, apply_preset, ease_in_out, sample_curve,
+    GradientEditorResponse, GradientStop, ToastKind, TreeResponse, TreeRow, apply_preset,
+    ease_in_out, sample_curve, sample_gradient,
 };
 pub use widgets::color_picker::TEX_SLOT_COLOR_SV;
 pub use widgets::label::TextStyle;
@@ -42,6 +43,7 @@ use icon::Icons;
 use layout::{GridCtx, cross_y};
 pub(crate) use layout::new_layer;
 use widgets::curve::CurveEditState;
+use widgets::gradient::GradientEditState;
 use widgets::table::TableCtx;
 
 fn font_px_key(px: f32) -> u32 {
@@ -160,6 +162,7 @@ pub struct Ui {
     pub(crate) group_sizes: HashMap<Id, Vec2>,
     pub(crate) grid_stack: Vec<GridCtx>,
     pub(crate) curve_edits: HashMap<Id, CurveEditState>,
+    pub(crate) gradient_edits: HashMap<Id, GradientEditState>,
     /// Last frame's popup absorb — blocks window focus on press before menus rebuild.
     pub(crate) overlay_block: Option<Rect>,
     /// When true, `text` / `round_rect` paint into the overlay list.
@@ -245,6 +248,7 @@ impl Ui {
             group_sizes: HashMap::new(),
             grid_stack: Vec::new(),
             curve_edits: HashMap::new(),
+            gradient_edits: HashMap::new(),
             overlay_block: None,
             draw_to_overlay: false,
             node_space_ptr: None,

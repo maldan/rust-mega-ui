@@ -7,9 +7,10 @@ use crate::theme;
 use crate::types::{CursorIcon, Rect};
 use crate::{LayoutDir, Ui};
 
-const HANDLE_LEN: f32 = 48.0;
-const POINT_R: f32 = 5.0;
-const HIT_R: f32 = 8.0;
+const POINT_R: f32 = 6.0;
+const HIT_R: f32 = 16.0;
+const DBL_CLICK_SEC: f32 = 0.35;
+const DBL_CLICK_PX: f32 = 8.0;
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum CurvePreset {
@@ -174,22 +175,27 @@ pub fn sample_curve(curve: &AnimationCurve, t: f32) -> f32 {
     if t >= pts[pts.len() - 1].t {
         return pts[pts.len() - 1].v;
     }
+    let smooth = auto_smooth_tangents(curve);
     for i in 0..pts.len() - 1 {
         let p0 = &pts[i];
         let p1 = &pts[i + 1];
         if t >= p0.t && t <= p1.t {
             let dt = (p1.t - p0.t).max(1e-5);
             let u = (t - p0.t) / dt;
-            let m0 = p0.tangent_out * dt;
-            let m1 = if i + 1 < pts.len() {
-                pts[i + 1].tangent_out * dt
-            } else {
-                0.0
-            };
+            let m0 = sample_tangent(curve, &smooth, i) * dt;
+            let m1 = sample_tangent(curve, &smooth, i + 1) * dt;
             return hermite(p0.v, p1.v, m0, m1, u);
         }
     }
     pts[pts.len() - 1].v
+}
+
+fn sample_tangent(curve: &AnimationCurve, smooth: &[f32], i: usize) -> f32 {
+    if curve.preset == CurvePreset::Custom {
+        smooth.get(i).copied().unwrap_or(0.0)
+    } else {
+        curve.points.get(i).map(|p| p.tangent_out).unwrap_or(0.0)
+    }
 }
 
 fn hermite(p0: f32, p1: f32, m0: f32, m1: f32, u: f32) -> f32 {
@@ -217,7 +223,6 @@ pub struct CurveEditorResponse {
 pub(crate) enum CurveDrag {
     None,
     Point(usize),
-    Tangent(usize),
 }
 
 #[derive(Clone, Copy, Debug)]
@@ -225,6 +230,8 @@ pub(crate) struct CurveEditState {
     pub selected: Option<usize>,
     pub drag: CurveDrag,
     pub preview_t: f32,
+    pub last_press_pos: Vec2,
+    pub since_press: f32,
 }
 
 impl Default for CurveEditState {
@@ -233,6 +240,8 @@ impl Default for CurveEditState {
             selected: None,
             drag: CurveDrag::None,
             preview_t: 0.0,
+            last_press_pos: Vec2::ZERO,
+            since_press: 10.0,
         }
     }
 }
@@ -305,49 +314,44 @@ impl Ui {
         }
         self.draw_polyline(&line_pts, self.s(2.0), theme::PLOT_LINE);
 
-        // Tangents + points
         let n = curve.points.len();
-        let smooth = auto_smooth_tangents(curve);
+        let mp = self.input.mouse_pos;
+        let hit_r = HIT_R * self.scale;
+        let hover_pt = nearest_point(curve, &view, plot_rect, mp, hit_r);
+
         for i in 0..n {
-            let pt = &curve.points[i];
-            let center = view.plot_to_screen(plot_rect, pt.t, pt.v);
-            let tangent = if curve.preset == CurvePreset::Custom {
-                pt.tangent_out
-            } else {
-                smooth[i]
-            };
-            let handle = center + Vec2::new(HANDLE_LEN * self.scale, -tangent * HANDLE_LEN * self.scale);
-            if i < n - 1 || curve.preset == CurvePreset::Custom {
-                self.draw_line_segment(center, handle, self.s(1.0), theme::TEXT_DIM);
-                let grip = Rect::from_min_size(
-                    handle - Vec2::splat(self.s(3.0)),
-                    Vec2::splat(self.s(6.0)),
-                );
-                self.round_rect(grip, self.s(2.0), theme::SLIDER_THUMB);
-            }
-            let p_rect = Rect::from_min_size(
-                center - Vec2::splat(POINT_R * self.scale),
-                Vec2::splat(POINT_R * 2.0 * self.scale),
-            );
+            let center = point_screen(curve, &view, plot_rect, i);
             let sel = st.selected == Some(i);
+            let hot = hover_pt == Some(i);
+            let r = POINT_R * self.scale * if sel { 1.25 } else { 1.0 };
+            let p_rect = Rect::from_min_size(center - Vec2::splat(r), Vec2::splat(r * 2.0));
             self.round_rect(
                 p_rect,
-                POINT_R * self.scale,
+                r,
                 if sel {
                     theme::ACCENT
-                } else {
+                } else if hot {
                     theme::SLIDER_THUMB_HOT
+                } else {
+                    theme::SLIDER_THUMB
                 },
             );
         }
 
-        // Preview playhead
         let preview_v = sample_curve(curve, st.preview_t);
         let px = view.plot_to_screen(plot_rect, st.preview_t, preview_v);
         let vline_a = Vec2::new(px.x, plot_rect.min.y);
         let vline_b = Vec2::new(px.x, plot_rect.max.y);
         self.draw_line_segment(vline_a, vline_b, self.s(1.0), theme::ACCENT_DIM);
         self.pop_clip();
+
+        self.label_styled(
+            "Drag keys · double-click / Ctrl+click add · Del or RMB delete",
+            crate::widgets::label::TextStyle {
+                color: theme::TEXT_DIM,
+                size: 11.0,
+            },
+        );
 
         out.sampled = Some(sample_curve(curve, st.preview_t));
         out.selected = st.selected;
@@ -359,65 +363,69 @@ impl Ui {
         let hovered = self.hovered_rect(plot_rect);
         if hovered {
             self.want_capture = true;
+            if st.selected.is_some() {
+                self.focus_id = Some(widget_id);
+            }
+            self.set_cursor(if hover_pt.is_some() {
+                CursorIcon::Move
+            } else {
+                CursorIcon::Pointer
+            });
         }
 
-        // Interaction
-        if hovered && self.input.mouse_pressed {
-            let mp = self.input.mouse_pos;
-            // Hit tangent grips first
-            let mut hit = None;
-            for i in 0..n {
-                let pt = &curve.points[i];
-                let center = view.plot_to_screen(plot_rect, pt.t, pt.v);
-                let tangent = if curve.preset == CurvePreset::Custom {
-                    pt.tangent_out
-                } else {
-                    smooth[i]
-                };
-                let handle = center + Vec2::new(HANDLE_LEN * self.scale, -tangent * HANDLE_LEN * self.scale);
-                if mp.distance(handle) < HIT_R * self.scale {
-                    hit = Some(CurveDrag::Tangent(i));
-                    break;
-                }
-            }
-            if hit.is_none() {
-                for i in 0..n {
-                    let pt = &curve.points[i];
-                    let center = view.plot_to_screen(plot_rect, pt.t, pt.v);
-                    if mp.distance(center) < HIT_R * self.scale {
-                        hit = Some(CurveDrag::Point(i));
-                        st.selected = Some(i);
-                        break;
-                    }
-                }
-            }
-            if hit.is_none() {
-                // Add point on curve
-                let plot = view.screen_to_plot(plot_rect, mp);
-                let t = plot.x.clamp(0.0, 1.0);
-                let v = sample_curve(curve, t);
-                curve.points.push(CurvePoint {
-                    t,
-                    v,
-                    tangent_out: 0.0,
-                });
-                sort_points(curve);
-                curve.preset = CurvePreset::Custom;
-                apply_preset(curve, CurvePreset::Custom);
-                if let Some(idx) = curve.points.iter().position(|p| (p.t - t).abs() < 1e-4) {
-                    st.selected = Some(idx);
-                }
+        st.since_press = (st.since_press + self.input.dt).min(10.0);
+
+        let can_delete = hovered || self.focus_id == Some(widget_id);
+        if can_delete && (self.input.key_delete || self.input.key_backspace) {
+            if delete_middle(curve, &mut st.selected) {
                 out.changed = true;
             }
-            if let Some(d) = hit {
+        }
+
+        if hovered && self.input.mouse_right_pressed {
+            self.focus_id = Some(widget_id);
+            if let Some(i) = hover_pt {
+                st.selected = Some(i);
+                if delete_middle(curve, &mut st.selected) {
+                    out.changed = true;
+                }
+            }
+        }
+
+        if hovered && self.input.mouse_pressed {
+            self.focus_id = Some(widget_id);
+            let is_double = st.since_press < DBL_CLICK_SEC
+                && mp.distance(st.last_press_pos) < DBL_CLICK_PX * self.scale;
+            st.last_press_pos = mp;
+            st.since_press = 0.0;
+
+            let mut hit = None;
+            if let Some(i) = hover_pt {
+                hit = Some(CurveDrag::Point(i));
+                st.selected = Some(i);
+            }
+
+            let want_add = hit.is_none() && (self.input.key_ctrl || is_double);
+            if want_add {
+                let plot = view.screen_to_plot(plot_rect, mp);
+                if let Some(idx) = insert_key(curve, plot.x.clamp(0.02, 0.98), plot.y.clamp(0.0, 1.0))
+                {
+                    st.selected = Some(idx);
+                    st.drag = CurveDrag::Point(idx);
+                    self.active_id = Some(widget_id);
+                    out.changed = true;
+                }
+            } else if let Some(d) = hit {
                 st.drag = d;
                 self.active_id = Some(widget_id);
+            } else {
+                st.selected = None;
+                st.drag = CurveDrag::None;
             }
         }
 
         let active = self.active_id == Some(widget_id);
         if active && self.input.mouse_down {
-            let mp = self.input.mouse_pos;
             match st.drag {
                 CurveDrag::Point(i) => {
                     if i < curve.points.len() {
@@ -426,7 +434,7 @@ impl Ui {
                         let v = plot.y.clamp(0.0, 1.0);
                         if i == 0 {
                             t = 0.0;
-                        } else if i == curve.points.len() - 1 {
+                        } else if i + 1 == curve.points.len() {
                             t = 1.0;
                         } else {
                             let lo = curve.points[i - 1].t + 0.01;
@@ -436,19 +444,6 @@ impl Ui {
                         curve.points[i].t = t;
                         curve.points[i].v = v;
                         curve.preset = CurvePreset::Custom;
-                        out.changed = true;
-                    }
-                }
-                CurveDrag::Tangent(i) => {
-                    if i < curve.points.len() {
-                        curve.preset = CurvePreset::Custom;
-                        let center = view.plot_to_screen(
-                            plot_rect,
-                            curve.points[i].t,
-                            curve.points[i].v,
-                        );
-                        let dy = (center.y - mp.y) / (HANDLE_LEN * self.scale);
-                        curve.points[i].tangent_out = dy;
                         out.changed = true;
                     }
                 }
@@ -462,23 +457,12 @@ impl Ui {
             if curve.preset == CurvePreset::Custom {
                 apply_preset(curve, CurvePreset::Custom);
             }
-        }
-
-        // Shift+click deletes middle point
-        if hovered && self.input.mouse_pressed && self.input.key_shift {
-            if let Some(i) = st.selected {
-                if i > 0 && i < curve.points.len() - 1 {
-                    curve.points.remove(i);
-                    st.selected = None;
-                    curve.preset = CurvePreset::Custom;
-                    apply_preset(curve, CurvePreset::Custom);
-                    out.changed = true;
-                }
+            if let Some(sel) = st.selected {
+                st.selected = Some(sel.min(curve.points.len().saturating_sub(1)));
             }
         }
 
-        self.set_cursor(CursorIcon::Pointer);
-
+        out.selected = st.selected;
         self.curve_edits.insert(widget_id, st);
         out
     }
@@ -490,6 +474,58 @@ impl Ui {
             st.preview_t = t.clamp(0.0, 1.0);
         }
     }
+}
+
+fn point_screen(curve: &AnimationCurve, view: &PlotView, plot_rect: Rect, i: usize) -> Vec2 {
+    let p = &curve.points[i];
+    view.plot_to_screen(plot_rect, p.t, p.v)
+}
+
+fn nearest_point(
+    curve: &AnimationCurve,
+    view: &PlotView,
+    plot_rect: Rect,
+    mp: Vec2,
+    max_dist: f32,
+) -> Option<usize> {
+    let mut best: Option<(f32, usize)> = None;
+    for i in 0..curve.points.len() {
+        let d = mp.distance(point_screen(curve, view, plot_rect, i));
+        if d <= max_dist && best.is_none_or(|(bd, _)| d < bd) {
+            best = Some((d, i));
+        }
+    }
+    best.map(|(_, i)| i)
+}
+
+fn insert_key(curve: &mut AnimationCurve, t: f32, v: f32) -> Option<usize> {
+    let t = t.clamp(0.02, 0.98);
+    if curve.points.iter().any(|p| (p.t - t).abs() < 0.02) {
+        return None;
+    }
+    curve.points.push(CurvePoint {
+        t,
+        v: v.clamp(0.0, 1.0),
+        tangent_out: 0.0,
+    });
+    sort_points(curve);
+    curve.preset = CurvePreset::Custom;
+    apply_preset(curve, CurvePreset::Custom);
+    curve.points.iter().position(|p| (p.t - t).abs() < 1e-4)
+}
+
+fn delete_middle(curve: &mut AnimationCurve, selected: &mut Option<usize>) -> bool {
+    let Some(i) = *selected else {
+        return false;
+    };
+    if i == 0 || i + 1 >= curve.points.len() {
+        return false;
+    }
+    curve.points.remove(i);
+    *selected = Some((i - 1).max(1).min(curve.points.len().saturating_sub(2)));
+    curve.preset = CurvePreset::Custom;
+    apply_preset(curve, CurvePreset::Custom);
+    true
 }
 
 fn draw_grid(ui: &mut Ui, rect: Rect, view: &PlotView) {

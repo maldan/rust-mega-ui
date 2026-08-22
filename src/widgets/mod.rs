@@ -6,6 +6,7 @@ mod collapsing_header;
 pub(crate) mod color_picker;
 mod drag_float;
 pub(crate) mod edit;
+pub(crate) mod gradient;
 mod group;
 mod knob;
 pub mod label;
@@ -31,5 +32,6 @@ pub use curve::{
     sample_curve,
 };
 pub use browser::{BrowserItem, BrowserResponse};
+pub use gradient::{sample_gradient, GradientEditorResponse, GradientStop};
 pub use tree::{TreeResponse, TreeRow};
 pub use toast::ToastKind;

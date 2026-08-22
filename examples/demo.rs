@@ -785,7 +785,7 @@ impl Scene for Demo {
                         ui.label("Live plot");
                         ui.plot(Vec2::new(0.0, 100.0), &state.plot);
                         ui.separator();
-                        ui.label("Curve editor (click add point, Shift+click delete)");
+                        ui.label("Curve editor (drag keys, double-click / Ctrl+click add, Del / RMB delete)");
                         let curve_resp = ui.curve_editor(
                             "anim_curve",
                             &mut state.anim_curve,

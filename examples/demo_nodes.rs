@@ -880,7 +880,7 @@ impl Scene for NodesDemo {
         ui.load_builtin_icons();
     }
 
-    fn build(ui: &mut Ui, state: &mut Self, viewport: Vec2, _dt: f32, _stats: DrawStats) -> bool {
+    fn build(ui: &mut Ui, state: &mut Self, viewport: Vec2, dt: f32, stats: DrawStats) -> bool {
         state.apply_deletes();
         state.apply_clones();
         state.evaluate();
@@ -1124,14 +1124,17 @@ impl Scene for NodesDemo {
             });
         }
 
+        let fps = (1.0 / dt.max(1e-4)).min(999.0);
         ui.status_bar(|ui| {
             ui.label(&state.status.clone());
             ui.spacer();
             ui.label(&format!(
-                "zoom {:.0}% · {} nodes · {} links",
+                "zoom {:.0}% · {} nodes · {} links · quads {} · FPS {:.0}",
                 state.space.zoom * 100.0,
                 state.nodes.len(),
-                state.space.links.len()
+                state.space.links.len(),
+                stats.quads,
+                fps
             ));
         });
 

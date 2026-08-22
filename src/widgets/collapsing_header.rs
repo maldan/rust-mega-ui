@@ -6,8 +6,17 @@ use crate::{CrossAlign, LayoutDir, Ui};
 
 impl Ui {
     pub fn collapsing_header(&mut self, label: &str, add: impl FnOnce(&mut Self)) {
+        self.collapsing_header_with(label, false, add);
+    }
+
+    pub fn collapsing_header_with(
+        &mut self,
+        label: &str,
+        default_open: bool,
+        add: impl FnOnce(&mut Self),
+    ) {
         let id = self.current_id(label);
-        let mut open = self.headers.get(&id).copied().unwrap_or(false);
+        let mut open = self.headers.get(&id).copied().unwrap_or(default_open);
 
         let height = self.s(26.0);
         let radius = self.s(theme::BTN_RADIUS);

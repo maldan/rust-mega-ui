@@ -4,7 +4,10 @@ use crate::theme;
 use crate::types::{CursorIcon, Rect, Response};
 use crate::{LayoutDir, Ui};
 
-fn format_val(v: f32, min: f32, max: f32) -> String {
+fn format_val(v: f32, min: f32, max: f32, step: f32) -> String {
+    if step >= 1.0 {
+        return format!("{:.0}", v);
+    }
     let span = (max - min).abs();
     if span >= 50.0 {
         format!("{:.0}", v)
@@ -17,6 +20,20 @@ fn format_val(v: f32, min: f32, max: f32) -> String {
 
 impl Ui {
     pub fn slider(&mut self, id: &str, value: &mut f32, range: std::ops::RangeInclusive<f32>) -> Response {
+        self.slider_stepped(id, value, range, 0.0)
+    }
+
+    /// Like [`Self::slider`], but drags (and the resulting value) snap to
+    /// multiples of `step` — e.g. `step = 1.0` gives an integer-only slider
+    /// that still drags smoothly, unlike [`Self::drag_float`]'s text field.
+    /// `step <= 0.0` disables snapping (identical to [`Self::slider`]).
+    pub fn slider_stepped(
+        &mut self,
+        id: &str,
+        value: &mut f32,
+        range: std::ops::RangeInclusive<f32>,
+        step: f32,
+    ) -> Response {
         let widget_id = self.current_id(id);
         let (min, max) = (*range.start(), *range.end());
 
@@ -53,7 +70,10 @@ impl Ui {
         let mut changed = false;
         if active && self.input.mouse_down {
             let t = ((self.input.mouse_pos.x - track_row.min.x) / track_row.width()).clamp(0.0, 1.0);
-            let new = min + t * (max - min);
+            let mut new = min + t * (max - min);
+            if step > 0.0 {
+                new = ((new / step).round() * step).clamp(min.min(max), min.max(max));
+            }
             if (new - *value).abs() > f32::EPSILON {
                 *value = new;
                 changed = true;
@@ -69,9 +89,9 @@ impl Ui {
         };
 
         // Labels: min | value | max
-        let min_s = format_val(min, min, max);
-        let val_s = format_val(*value, min, max);
-        let max_s = format_val(max, min, max);
+        let min_s = format_val(min, min, max, step);
+        let val_s = format_val(*value, min, max, step);
+        let max_s = format_val(max, min, max, step);
         let val_w = self.text_width(&val_s);
         let max_w = self.text_width(&max_s);
 
