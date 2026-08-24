@@ -32,6 +32,8 @@ pub use curve::{
     sample_curve,
 };
 pub use browser::{BrowserItem, BrowserResponse};
-pub use gradient::{sample_gradient, GradientEditorResponse, GradientStop};
+pub use gradient::{
+    sample_gradient, GradientEditorResponse, GradientStop, OpacityStop,
+};
 pub use tree::{TreeResponse, TreeRow};
 pub use toast::ToastKind;

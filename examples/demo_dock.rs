@@ -9,7 +9,7 @@ mod framework;
 
 use framework::{DrawStats, Host, Scene};
 use glam::{Vec2, Vec3};
-use mega_ui::{BrowserItem, DockNode, DockState, ScrollAxes, TableColumn, TextStyle, Ui, Window};
+use mega_ui::{BrowserItem, DockNode, DockState, GradientStop, OpacityStop, ScrollAxes, TableColumn, TextStyle, Ui, Window, sample_gradient};
 
 struct DockDemo {
     dock: DockState,
@@ -49,6 +49,9 @@ struct DockDemo {
     asset_selected: Option<String>,
     asset_opened: String,
     confirm_open: bool,
+    gradient_stops: Vec<GradientStop>,
+    gradient_opacities: Vec<OpacityStop>,
+    gradient_sample: f32,
 }
 
 impl Default for DockDemo {
@@ -102,6 +105,31 @@ impl Default for DockDemo {
             asset_selected: None,
             asset_opened: String::from("(none)"),
             confirm_open: false,
+            gradient_stops: vec![
+                GradientStop {
+                    t: 0.0,
+                    color: [0.12, 0.32, 0.72, 1.0],
+                },
+                GradientStop {
+                    t: 0.5,
+                    color: [0.95, 0.52, 0.14, 1.0],
+                },
+                GradientStop {
+                    t: 1.0,
+                    color: [0.85, 0.28, 0.28, 1.0],
+                },
+            ],
+            gradient_opacities: vec![
+                OpacityStop {
+                    t: 0.0,
+                    alpha: 1.0,
+                },
+                OpacityStop {
+                    t: 1.0,
+                    alpha: 1.0,
+                },
+            ],
+            gradient_sample: 0.5,
         }
     }
 }
@@ -185,7 +213,13 @@ impl Scene for DockDemo {
             });
             ui.menu("View", |ui| {
                 ui.menu("UI Scale", |ui| {
-                    for (label, v) in [("100%", 1.0), ("125%", 1.25), ("150%", 1.5), ("200%", 2.0)] {
+                    for (label, v) in [
+                        ("100%", 1.0),
+                        ("125%", 1.25),
+                        ("150%", 1.5),
+                        ("175%", 1.75),
+                        ("200%", 2.0),
+                    ] {
                         if ui.menu_item(label).clicked() {
                             state.scale = v;
                             state.last_menu = format!("View / UI Scale / {label}");
@@ -233,7 +267,13 @@ impl Scene for DockDemo {
                         .push_str(&format!("scale -> {:.2}\n", state.scale));
                 }
                 ui.horizontal(|ui| {
-                    for (label, v) in [("0.75", 0.75), ("1.0", 1.0), ("1.5", 1.5), ("2.0", 2.0)] {
+                    for (label, v) in [
+                        ("0.75", 0.75),
+                        ("1.0", 1.0),
+                        ("1.5", 1.5),
+                        ("1.75", 1.75),
+                        ("2.0", 2.0),
+                    ] {
                         if ui.button(label).clicked() {
                             state.scale = v;
                         }
@@ -322,6 +362,9 @@ impl Scene for DockDemo {
             asset_selected,
             asset_opened,
             confirm_open,
+            gradient_stops,
+            gradient_opacities,
+            gradient_sample,
             ..
         } = state;
 
@@ -633,6 +676,22 @@ impl Scene for DockDemo {
                             ui.color_box(22.0, [0.85, 0.28, 0.28, 1.0]);
                             ui.color_box(22.0, [0.35, 0.78, 0.42, 1.0]);
                             ui.color_box(22.0, [0.95, 0.72, 0.18, 1.0]);
+                        });
+                    });
+                    ui.group("Gradient", |ui| {
+                        ui.label("Color below · opacity above · Ctrl/double-click add");
+                        let _ = ui.gradient_editor(
+                            "dock_gradient",
+                            gradient_stops,
+                            gradient_opacities,
+                            Vec2::new(0.0, 32.0),
+                        );
+                        ui.slider("dock_grad_sample", gradient_sample, 0.0..=1.0);
+                        let sampled =
+                            sample_gradient(gradient_stops, gradient_opacities, *gradient_sample);
+                        ui.horizontal(|ui| {
+                            ui.label(&format!("Sampled @ {:.2}", *gradient_sample));
+                            ui.color_box(22.0, sampled);
                         });
                     });
                     ui.group("Table", |ui| {

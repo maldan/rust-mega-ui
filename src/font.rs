@@ -355,18 +355,56 @@ pub fn push_solid(
     push_textured(out, rect, white_uv, white_uv, color, clip);
 }
 
+fn lerp4(a: [f32; 4], b: [f32; 4], t: f32) -> [f32; 4] {
+    [
+        a[0] + (b[0] - a[0]) * t,
+        a[1] + (b[1] - a[1]) * t,
+        a[2] + (b[2] - a[2]) * t,
+        a[3] + (b[3] - a[3]) * t,
+    ]
+}
+
+fn corner_color_at(colors: [[f32; 4]; 4], u: f32, v: f32) -> [f32; 4] {
+    // colors: TL, TR, BR, BL
+    let top = lerp4(colors[0], colors[1], u);
+    let bot = lerp4(colors[3], colors[2], u);
+    lerp4(top, bot, v)
+}
+
 /// Solid white-texel quad with per-corner colors (TL, TR, BR, BL).
-/// Clipping is not supported for gradients (caller must keep rect unclipped).
+/// When `clip` is set, the rect is intersected and corner colors are remapped.
 pub fn push_gradient(
     out: &mut Vec<DrawCommand>,
     rect: Rect,
     colors: [[f32; 4]; 4],
     white_uv: [f32; 2],
+    clip: Option<Rect>,
 ) {
-    if rect.width() <= 0.0 || rect.height() <= 0.0 {
+    let w = rect.width();
+    let h = rect.height();
+    if w <= 0.0 || h <= 0.0 {
         return;
     }
+    let (draw, cols) = match clip {
+        Some(c) => {
+            let Some(clipped) = rect.intersect(c) else {
+                return;
+            };
+            let u0 = (clipped.min.x - rect.min.x) / w;
+            let u1 = (clipped.max.x - rect.min.x) / w;
+            let v0 = (clipped.min.y - rect.min.y) / h;
+            let v1 = (clipped.max.y - rect.min.y) / h;
+            let cols = [
+                corner_color_at(colors, u0, v0),
+                corner_color_at(colors, u1, v0),
+                corner_color_at(colors, u1, v1),
+                corner_color_at(colors, u0, v1),
+            ];
+            (clipped, cols)
+        }
+        None => (rect, colors),
+    };
     out.push(DrawCommand::gradient(
-        rect, white_uv, white_uv, colors, 0.0, 0,
+        draw, white_uv, white_uv, cols, 0.0, 0,
     ));
 }

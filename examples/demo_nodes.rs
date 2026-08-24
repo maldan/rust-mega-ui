@@ -26,7 +26,8 @@ use std::collections::HashMap;
 use framework::{DrawStats, Host, Scene};
 use glam::{Mat4, Quat, Vec2, Vec3};
 use mega_ui::{
-    port_type, DockNode, DockState, NodePortSide, NodeSpace, ScrollAxes, TextStyle, Ui,
+    port_type, DockNode, DockState, GradientStop, NodePortSide, NodeSpace, OpacityStop,
+    ScrollAxes, TextStyle, Ui, sample_gradient,
 };
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -85,6 +86,10 @@ struct NodesDemo {
     next_id: u64,
     status: String,
     log: String,
+    scale: f32,
+    gradient_stops: Vec<GradientStop>,
+    gradient_opacities: Vec<OpacityStop>,
+    gradient_sample: f32,
 }
 
 impl Default for NodesDemo {
@@ -283,6 +288,32 @@ impl Default for NodesDemo {
             next_id,
             status: "Ctrl+D clone · Delete remove · RMB wire del".into(),
             log: String::from("graph ready\n"),
+            scale: 1.0,
+            gradient_stops: vec![
+                GradientStop {
+                    t: 0.0,
+                    color: [0.12, 0.32, 0.72, 1.0],
+                },
+                GradientStop {
+                    t: 0.5,
+                    color: [0.95, 0.52, 0.14, 1.0],
+                },
+                GradientStop {
+                    t: 1.0,
+                    color: [0.85, 0.28, 0.28, 1.0],
+                },
+            ],
+            gradient_opacities: vec![
+                OpacityStop {
+                    t: 0.0,
+                    alpha: 1.0,
+                },
+                OpacityStop {
+                    t: 1.0,
+                    alpha: 1.0,
+                },
+            ],
+            gradient_sample: 0.5,
         }
     }
 }
@@ -885,6 +916,8 @@ impl Scene for NodesDemo {
         state.apply_clones();
         state.evaluate();
 
+        ui.set_scale(state.scale);
+
         ui.menu_bar(|ui| {
             ui.menu("Graph", |ui| {
                 if ui.menu_item("Fit origin").clicked() {
@@ -908,6 +941,21 @@ impl Scene for NodesDemo {
                     }
                 });
             });
+            ui.menu("View", |ui| {
+                ui.menu("UI Scale", |ui| {
+                    for (label, v) in [
+                        ("100%", 1.0),
+                        ("125%", 1.25),
+                        ("150%", 1.5),
+                        ("175%", 1.75),
+                        ("200%", 2.0),
+                    ] {
+                        if ui.menu_item(label).clicked() {
+                            state.scale = v;
+                        }
+                    }
+                });
+            });
         });
 
         let status_h = 24.0 * ui.scale();
@@ -921,6 +969,9 @@ impl Scene for NodesDemo {
                 next_id,
                 status,
                 log,
+                gradient_stops,
+                gradient_opacities,
+                gradient_sample,
                 ..
             } = state;
 
@@ -1006,6 +1057,21 @@ impl Scene for NodesDemo {
                         ui.label(&format!("Nodes: {}", nodes.len()));
                         ui.label(&format!("Links: {}", space.links.len()));
                         ui.label(&format!("Selected: {}", space.selected_nodes.len()));
+                        ui.separator();
+                        ui.label("Gradient editor");
+                        let _ = ui.gradient_editor(
+                            "nodes_gradient",
+                            gradient_stops,
+                            gradient_opacities,
+                            Vec2::new(0.0, 32.0),
+                        );
+                        ui.slider("nodes_grad_sample", gradient_sample, 0.0..=1.0);
+                        let sampled =
+                            sample_gradient(gradient_stops, gradient_opacities, *gradient_sample);
+                        ui.horizontal(|ui| {
+                            ui.label(&format!("Sampled @ {:.2}", *gradient_sample));
+                            ui.color_box(22.0, sampled);
+                        });
                         ui.separator();
 
                         if space.selected_nodes.len() > 1 {

@@ -14,7 +14,9 @@ use std::time::Instant;
 use framework::{DrawStats, Host, Scene};
 use glam::{Vec2, Vec3};
 use mega_ui::{BrowserItem, ScrollAxes, TableColumn, TextStyle, Ui, Window};
-use mega_ui::{AnimationCurve, ease_in_out, sample_curve};
+use mega_ui::{
+    AnimationCurve, GradientStop, OpacityStop, ease_in_out, sample_curve, sample_gradient,
+};
 
 struct FsEntry {
     name: String,
@@ -184,6 +186,9 @@ struct Demo {
     anim_curve: AnimationCurve,
     curve_scrub: f32,
     curve_drive: f32,
+    gradient_stops: Vec<GradientStop>,
+    gradient_opacities: Vec<OpacityStop>,
+    gradient_sample: f32,
     show_calc: bool,
     calc: CalcState,
 }
@@ -232,6 +237,31 @@ impl Default for Demo {
             anim_curve: ease_in_out(),
             curve_scrub: 0.35,
             curve_drive: 0.0,
+            gradient_stops: vec![
+                GradientStop {
+                    t: 0.0,
+                    color: [0.12, 0.32, 0.72, 1.0],
+                },
+                GradientStop {
+                    t: 0.5,
+                    color: [0.95, 0.52, 0.14, 1.0],
+                },
+                GradientStop {
+                    t: 1.0,
+                    color: [0.85, 0.28, 0.28, 1.0],
+                },
+            ],
+            gradient_opacities: vec![
+                OpacityStop {
+                    t: 0.0,
+                    alpha: 1.0,
+                },
+                OpacityStop {
+                    t: 1.0,
+                    alpha: 1.0,
+                },
+            ],
+            gradient_sample: 0.5,
             show_calc: true,
             calc: CalcState::default(),
         }
@@ -488,6 +518,10 @@ impl Scene for Demo {
                     if ui.menu_item("150%").clicked() {
                         state.ui_scale = 1.5;
                         state.last_menu = String::from("View / UI Scale / 150%");
+                    }
+                    if ui.menu_item("175%").clicked() {
+                        state.ui_scale = 1.75;
+                        state.last_menu = String::from("View / UI Scale / 175%");
                     }
                     if ui.menu_item("200%").clicked() {
                         state.ui_scale = 2.0;
@@ -807,6 +841,24 @@ impl Scene for Demo {
                             ui.notify("Curve changed");
                         }
                         ui.separator();
+                        ui.label("Gradient (color stops below, opacity above · Ctrl/double-click add · Del/RMB delete)");
+                        let _grad = ui.gradient_editor(
+                            "demo_gradient",
+                            &mut state.gradient_stops,
+                            &mut state.gradient_opacities,
+                            Vec2::new(0.0, 32.0),
+                        );
+                        ui.slider("grad_sample", &mut state.gradient_sample, 0.0..=1.0);
+                        let sampled = sample_gradient(
+                            &state.gradient_stops,
+                            &state.gradient_opacities,
+                            state.gradient_sample,
+                        );
+                        ui.horizontal(|ui| {
+                            ui.label(&format!("Sampled @ {:.2}", state.gradient_sample));
+                            ui.color_box(22.0, sampled);
+                        });
+                        ui.separator();
                         ui.label(&format!("plot points: {}", state.plot.len()));
                     }
                 });
@@ -868,6 +920,9 @@ impl Scene for Demo {
                     }
                     if ui.button("150%").clicked() {
                         state.ui_scale = 1.5;
+                    }
+                    if ui.button("175%").clicked() {
+                        state.ui_scale = 1.75;
                     }
                     if ui.button("200%").clicked() {
                         state.ui_scale = 2.0;

@@ -22,8 +22,8 @@ pub use plot_view::PlotView;
 pub use types::{CursorIcon, DrawCommand, Id, Rect, Response, UiInput, UiInputDebug, UiOutput};
 pub use widgets::{
     AnimationCurve, BrowserItem, BrowserResponse, CurveEditorResponse, CurvePoint, CurvePreset,
-    GradientEditorResponse, GradientStop, ToastKind, TreeResponse, TreeRow, apply_preset,
-    ease_in_out, sample_curve, sample_gradient,
+    GradientEditorResponse, GradientStop, OpacityStop, ToastKind, TreeResponse, TreeRow,
+    apply_preset, ease_in_out, sample_curve, sample_gradient,
 };
 pub use widgets::color_picker::TEX_SLOT_COLOR_SV;
 pub use widgets::label::TextStyle;
@@ -823,7 +823,7 @@ impl Ui {
     /// Overlay quad with per-corner colors (TL, TR, BR, BL). Sharp corners only.
     pub(crate) fn gradient_overlay(&mut self, rect: Rect, colors: [[f32; 4]; 4]) {
         let uv = self.font.white_uv();
-        crate::font::push_gradient(&mut self.overlay, rect, colors, uv);
+        crate::font::push_gradient(&mut self.overlay, rect, colors, uv, None);
     }
 
     pub(crate) fn text(&mut self, pos: Vec2, text: &str, color: [f32; 4]) {
