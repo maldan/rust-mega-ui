@@ -495,10 +495,7 @@ impl Ui {
         // a menu is open or last-frame overlay covered the pointer.
         let over_popup = self.context_menu.is_some()
             || self.mouse_over_absorb()
-            || self
-                .overlay_block
-                .map(|r| r.contains(mouse))
-                .unwrap_or(false);
+            || self.overlay_block.iter().any(|r| r.contains(mouse));
         let in_rect = rect.contains(mouse) && !self.block_input && !over_popup;
 
         // Links hit-test (skip while boxing / dragging / panning)

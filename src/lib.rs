@@ -132,7 +132,9 @@ pub struct Ui {
     pub(crate) table_stack: Vec<TableCtx>,
     pub(crate) clip_stack: Vec<Rect>,
     pub(crate) overlay: Vec<DrawCommand>,
-    pub(crate) mouse_absorb: Option<Rect>,
+    /// Popup / resize-grip hit regions. Kept as a list (not AABB-union) so
+    /// disjoint grips do not block title bars in the empty space between them.
+    pub(crate) mouse_absorb: Vec<Rect>,
     pub(crate) hover_id: Option<Id>,
     pub(crate) active_id: Option<Id>,
     pub(crate) focus_id: Option<Id>,
@@ -164,7 +166,7 @@ pub struct Ui {
     pub(crate) curve_edits: HashMap<Id, CurveEditState>,
     pub(crate) gradient_edits: HashMap<Id, GradientEditState>,
     /// Last frame's popup absorb — blocks window focus on press before menus rebuild.
-    pub(crate) overlay_block: Option<Rect>,
+    pub(crate) overlay_block: Vec<Rect>,
     /// When true, `text` / `round_rect` paint into the overlay list.
     pub(crate) draw_to_overlay: bool,
     /// Active [`NodeSpace`] during `node_space` closure (host stack borrow).
@@ -220,7 +222,7 @@ impl Ui {
             table_stack: Vec::new(),
             clip_stack: Vec::new(),
             overlay: Vec::new(),
-            mouse_absorb: None,
+            mouse_absorb: Vec::new(),
             hover_id: None,
             active_id: None,
             focus_id: None,
@@ -249,7 +251,7 @@ impl Ui {
             grid_stack: Vec::new(),
             curve_edits: HashMap::new(),
             gradient_edits: HashMap::new(),
-            overlay_block: None,
+            overlay_block: Vec::new(),
             draw_to_overlay: false,
             node_space_ptr: None,
             node_space_clip: None,
@@ -398,7 +400,7 @@ impl Ui {
         self.clip_stack.clear();
         self.table_stack.clear();
         self.grid_stack.clear();
-        self.mouse_absorb = None;
+        self.mouse_absorb.clear();
         self.hover_id = None;
         self.want_capture = false;
         self.cursor_icon = CursorIcon::Default;
@@ -436,8 +438,8 @@ impl Ui {
         if self.input.mouse_pressed {
             let blocked = self
                 .overlay_block
-                .map(|r| r.contains(self.input.mouse_pos))
-                .unwrap_or(false);
+                .iter()
+                .any(|r| r.contains(self.input.mouse_pos));
             self.focus_id = None;
             if !blocked {
                 // Only trust hover ids that were actually drawn last frame.
@@ -519,9 +521,9 @@ impl Ui {
 
         // Popups + full-screen modal dim both block the next press under them.
         self.overlay_block = if self.modal_open {
-            Some(Rect::from_min_size(Vec2::ZERO, self.input.viewport))
+            vec![Rect::from_min_size(Vec2::ZERO, self.input.viewport)]
         } else {
-            self.mouse_absorb
+            self.mouse_absorb.clone()
         };
 
         UiOutput {
@@ -563,8 +565,8 @@ impl Ui {
             block_input: self.block_input,
             active_id: self.active_id,
             modal_open: self.modal_open,
-            overlay_block: self.overlay_block.is_some(),
-            mouse_absorb: self.mouse_absorb.is_some(),
+            overlay_block: !self.overlay_block.is_empty(),
+            mouse_absorb: !self.mouse_absorb.is_empty(),
             win_rects: self.win_rects.len(),
             ghost_hover,
         }
@@ -737,9 +739,7 @@ impl Ui {
 
     /// True if `pos` is over a popup absorb rect (select / menu) from last frame.
     pub fn pointer_over_popup_at(&self, pos: Vec2) -> bool {
-        self.overlay_block
-            .map(|r| r.contains(pos))
-            .unwrap_or(false)
+        self.overlay_block.iter().any(|r| r.contains(pos))
     }
 
     /// Hit-test with current clip. Popup absorb blocks widgets under overlays.
@@ -764,8 +764,8 @@ impl Ui {
     /// True when the pointer is over an overlay popup (menu / select / …).
     pub(crate) fn mouse_over_absorb(&self) -> bool {
         self.mouse_absorb
-            .map(|r| r.contains(self.input.mouse_pos))
-            .unwrap_or(false)
+            .iter()
+            .any(|r| r.contains(self.input.mouse_pos))
     }
 
     /// Hit-test for overlay popups (ignores window clip + mouse_absorb).

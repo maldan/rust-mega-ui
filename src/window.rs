@@ -416,9 +416,10 @@ impl Ui {
                 CrossAlign::Start,
             ));
             // Content sits under the grip; block hits there so widgets cannot steal resize.
-            // Union (do not replace/restore): menus/selects inside the window call
+            // Append (do not replace/clear): menus/selects inside the window also call
             // absorb_rect — wiping absorb here would drop their hit targets and break
-            // submenus / overlay_block for the next frame.
+            // submenus / overlay_block for the next frame. Regions stay as a list so
+            // disjoint grips do not AABB-union into a fake blocker over other title bars.
             if let Some(grip) = resize_rect {
                 self.absorb_rect(grip);
             }

@@ -329,11 +329,7 @@ impl Ui {
                 // close unless popup kept it
                 if self.menu_stack.is_empty() {
                     // popup already finished; check absorb
-                    let inside = self
-                        .mouse_absorb
-                        .map(|r| r.contains(self.input.mouse_pos))
-                        .unwrap_or(false);
-                    if !inside {
+                    if !self.mouse_over_absorb() {
                         self.menu_bar_open.insert(id, None);
                     }
                 }
@@ -589,12 +585,8 @@ impl Ui {
         if let Some(pos) = open {
             self.push_id(id);
             self.open_menu_popup(widget_id, pos, add);
-            let pointer_in = self
-                .mouse_absorb
-                .map(|r| r.contains(self.input.mouse_pos))
-                .unwrap_or(false);
             // Close only on press outside the menu tree (parent + submenus).
-            if self.input.mouse_pressed && !pointer_in {
+            if self.input.mouse_pressed && !self.mouse_over_absorb() {
                 self.context_menu = None;
                 self.menu_sub_open.clear();
             }
@@ -603,13 +595,7 @@ impl Ui {
     }
 
     pub(crate) fn absorb_rect(&mut self, rect: Rect) {
-        self.mouse_absorb = Some(match self.mouse_absorb {
-            Some(prev) => Rect {
-                min: Vec2::new(prev.min.x.min(rect.min.x), prev.min.y.min(rect.min.y)),
-                max: Vec2::new(prev.max.x.max(rect.max.x), prev.max.y.max(rect.max.y)),
-            },
-            None => rect,
-        });
+        self.mouse_absorb.push(rect);
     }
 }
 
