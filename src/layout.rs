@@ -417,6 +417,7 @@ pub(crate) fn new_layer(
         origin,
         spacing,
         used: Vec2::ZERO,
+        hug_x: 0.0,
         row_height: 0.0,
         fill_w,
         fill_h,

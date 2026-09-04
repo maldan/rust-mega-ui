@@ -41,6 +41,24 @@ impl Default for AnimationCurve {
     }
 }
 
+pub fn flat_pass_curve() -> AnimationCurve {
+    AnimationCurve {
+        points: vec![
+            CurvePoint {
+                t: 0.0,
+                v: 1.0,
+                tangent_out: 0.0,
+            },
+            CurvePoint {
+                t: 1.0,
+                v: 1.0,
+                tangent_out: 0.0,
+            },
+        ],
+        preset: CurvePreset::Custom,
+    }
+}
+
 pub fn ease_in_out() -> AnimationCurve {
     let mut c = AnimationCurve {
         points: vec![
@@ -247,12 +265,35 @@ impl Default for CurveEditState {
 }
 
 impl Ui {
-  /// Edit an animation curve in normalized time 0..1.
+    /// Edit an animation curve in normalized time 0..1.
     pub fn curve_editor(
         &mut self,
         id: &str,
         curve: &mut AnimationCurve,
         size: Vec2,
+    ) -> CurveEditorResponse {
+        self.curve_editor_opts(id, curve, size, true, true, &[])
+    }
+
+    /// Frequency-response editor: X = log Hz (0..1), Y = pass (1) / cut (0).
+    pub fn eq_curve_editor(
+        &mut self,
+        id: &str,
+        curve: &mut AnimationCurve,
+        size: Vec2,
+        ticks: &[(f32, &str)],
+    ) -> CurveEditorResponse {
+        self.curve_editor_opts(id, curve, size, false, false, ticks)
+    }
+
+    fn curve_editor_opts(
+        &mut self,
+        id: &str,
+        curve: &mut AnimationCurve,
+        size: Vec2,
+        presets: bool,
+        hint: bool,
+        ticks: &[(f32, &str)],
     ) -> CurveEditorResponse {
         let enabled = self.enabled();
         let widget_id = self.current_id(id);
@@ -268,7 +309,11 @@ impl Ui {
         let h = self.s(size.y.max(80.0));
 
         if curve.points.len() < 2 {
-            apply_preset(curve, CurvePreset::EaseInOut);
+            if presets {
+                apply_preset(curve, CurvePreset::EaseInOut);
+            } else {
+                *curve = flat_pass_curve();
+            }
         }
 
         let mut st = self
@@ -277,32 +322,41 @@ impl Ui {
             .copied()
             .unwrap_or_default();
 
-        // Preset buttons
-        self.row(|ui| {
-            let presets = [
-                ("Linear", CurvePreset::Linear),
-                ("In", CurvePreset::EaseIn),
-                ("Out", CurvePreset::EaseOut),
-                ("InOut", CurvePreset::EaseInOut),
-            ];
-            for (label, p) in presets {
-                if ui.button(label).clicked() {
-                    apply_preset(curve, p);
-                    out.changed = true;
-                    curve.preset = p;
+        if presets {
+            self.row(|ui| {
+                let presets = [
+                    ("Linear", CurvePreset::Linear),
+                    ("In", CurvePreset::EaseIn),
+                    ("Out", CurvePreset::EaseOut),
+                    ("InOut", CurvePreset::EaseInOut),
+                ];
+                for (label, p) in presets {
+                    if ui.button(label).clicked() {
+                        apply_preset(curve, p);
+                        out.changed = true;
+                        curve.preset = p;
+                    }
                 }
-            }
-        });
+            });
+        }
 
         let outer = self.allocate(Vec2::new(w, h));
         let radius = self.s(theme::BTN_RADIUS);
         let inner = outer.inset(self.s(4.0));
-        let plot_rect = inner;
+        let axis_h = if ticks.is_empty() { 0.0 } else { self.s(13.0) };
+        let plot_rect = Rect {
+            min: inner.min,
+            max: Vec2::new(inner.max.x, (inner.max.y - axis_h).max(inner.min.y + 8.0)),
+        };
         let view = PlotView::default();
-        self.round_rect(plot_rect, radius, theme::PLOT_BG);
+        self.round_rect(inner, radius, theme::PLOT_BG);
 
         self.push_clip(plot_rect);
-        draw_grid(self, plot_rect, &view);
+        if ticks.is_empty() {
+            draw_grid(self, plot_rect, &view);
+        } else {
+            crate::widgets::plot::draw_tick_grid_x(self, plot_rect, ticks);
+        }
 
         let samples = 64;
         let mut line_pts = Vec::with_capacity(samples + 1);
@@ -340,18 +394,25 @@ impl Ui {
 
         let preview_v = sample_curve(curve, st.preview_t);
         let px = view.plot_to_screen(plot_rect, st.preview_t, preview_v);
-        let vline_a = Vec2::new(px.x, plot_rect.min.y);
-        let vline_b = Vec2::new(px.x, plot_rect.max.y);
-        self.draw_line_segment(vline_a, vline_b, self.s(1.0), theme::ACCENT_DIM);
+        if hint {
+            let vline_a = Vec2::new(px.x, plot_rect.min.y);
+            let vline_b = Vec2::new(px.x, plot_rect.max.y);
+            self.draw_line_segment(vline_a, vline_b, self.s(1.0), theme::ACCENT_DIM);
+        }
         self.pop_clip();
+        if !ticks.is_empty() {
+            crate::widgets::plot::draw_tick_labels_x(self, inner, plot_rect, ticks);
+        }
 
-        self.label_styled(
-            "Drag keys · double-click / Ctrl+click add · Del or RMB delete",
-            crate::widgets::label::TextStyle {
-                color: theme::TEXT_DIM,
-                size: 11.0,
-            },
-        );
+        if hint {
+            self.label_styled(
+                "Drag keys · double-click / Ctrl+click add · Del or RMB delete",
+                crate::widgets::label::TextStyle {
+                    color: theme::TEXT_DIM,
+                    size: 11.0,
+                },
+            );
+        }
 
         out.sampled = Some(sample_curve(curve, st.preview_t));
         out.selected = st.selected;

@@ -63,6 +63,11 @@ impl Ui {
     }
 
     pub fn table_row(&mut self, add: impl FnOnce(&mut Self)) -> Response {
+        self.table_row_selected(false, add)
+    }
+
+    /// Like [`Self::table_row`], with an explicit selected highlight.
+    pub fn table_row_selected(&mut self, selected: bool, add: impl FnOnce(&mut Self)) -> Response {
         let Some(ctx) = self.table_stack.last() else {
             return Response::default();
         };
@@ -84,7 +89,9 @@ impl Ui {
         }
         let clicked = self.active_id == Some(id) && hovered && self.input.mouse_released;
 
-        let bg = if hovered {
+        let bg = if selected {
+            theme::BROWSER_SELECTED
+        } else if hovered {
             theme::TABLE_ROW_HOVER
         } else if row_i % 2 == 0 {
             theme::TABLE_ROW

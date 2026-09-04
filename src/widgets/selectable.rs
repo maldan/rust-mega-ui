@@ -28,11 +28,13 @@ impl Ui {
         let radius = self.s(theme::GROUP_RADIUS);
         let border = self.s(1.0).max(1.0);
 
-        let prev = self
+        let sc = self.scale.max(1e-4);
+        let prev_pt = self
             .group_sizes
             .get(&widget_id)
             .copied()
-            .unwrap_or(Vec2::new(self.s(120.0), self.s(40.0)));
+            .unwrap_or(Vec2::new(120.0, 40.0));
+        let prev = prev_pt * sc;
 
         let fill_w = self.layer().fill_w;
         let width = if fill_w > 0.0 && matches!(self.layer().dir, LayoutDir::Vertical) {
@@ -84,7 +86,7 @@ impl Ui {
         let used = self.layers.pop().unwrap().used;
         self.group_sizes.insert(
             widget_id,
-            Vec2::new(used.x.max(1.0), used.y.max(1.0)),
+            Vec2::new((used.x / sc).max(1.0), (used.y / sc).max(1.0)),
         );
         self.pop_id();
 

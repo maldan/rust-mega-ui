@@ -29,7 +29,7 @@ mod vector;
 
 pub use curve::{
     AnimationCurve, CurveEditorResponse, CurvePoint, CurvePreset, apply_preset, ease_in_out,
-    sample_curve,
+    flat_pass_curve, sample_curve,
 };
 pub use browser::{BrowserItem, BrowserResponse};
 pub use gradient::{

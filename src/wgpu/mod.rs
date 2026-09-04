@@ -597,7 +597,9 @@ fn create_rgba_texture(
         mip_level_count: 1,
         sample_count: 1,
         dimension: ::wgpu::TextureDimension::D2,
-        format: ::wgpu::TextureFormat::Rgba8Unorm,
+        // Photo / UI RGBA bytes are sRGB-encoded. With an sRGB swapchain,
+        // Unorm (linear) sampling washes colors out; UnormSrgb samples correctly.
+        format: ::wgpu::TextureFormat::Rgba8UnormSrgb,
         usage: ::wgpu::TextureUsages::TEXTURE_BINDING | ::wgpu::TextureUsages::COPY_DST,
         view_formats: &[],
     });

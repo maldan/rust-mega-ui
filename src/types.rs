@@ -154,6 +154,8 @@ pub struct UiInput {
     pub viewport: Vec2,
     /// Wheel delta in pixels (x = horizontal, y = vertical; +y = scroll up / content down).
     pub scroll_delta: Vec2,
+    /// Relative mouse motion this frame (pixels; +y is down). Used by knobs.
+    pub mouse_delta: Vec2,
     /// Frame delta time in seconds.
     pub dt: f32,
     /// Characters typed this frame.
@@ -185,6 +187,10 @@ pub struct UiOutput {
     pub want_capture_mouse: bool,
     pub want_capture_keyboard: bool,
     pub cursor: CursorIcon,
+    /// Hide the OS cursor (knob vertical-drag, FL-style).
+    pub hide_cursor: bool,
+    /// Screen position to restore when the hidden cursor is shown again.
+    pub cursor_anchor: Option<Vec2>,
     /// Keep redrawing (e.g. smooth scroll animation).
     pub needs_repaint: bool,
     /// Set clipboard to this text (copy/cut).
@@ -245,4 +251,25 @@ impl Response {
     pub fn changed(self) -> bool {
         self.changed
     }
+}
+
+/// Allocated hit region for custom widgets (piano roll, canvases).
+#[derive(Clone, Copy, Debug)]
+pub struct Area {
+    pub rect: Rect,
+    pub hovered: bool,
+    /// Left or right button pressed on this area; stays true until release.
+    pub active: bool,
+}
+
+/// Pointer snapshot for custom widgets. `input` itself is crate-private.
+#[derive(Clone, Copy, Debug)]
+pub struct Pointer {
+    pub pos: Vec2,
+    pub down: bool,
+    pub pressed: bool,
+    pub released: bool,
+    pub right_down: bool,
+    pub right_pressed: bool,
+    pub scroll: Vec2,
 }

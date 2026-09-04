@@ -106,6 +106,7 @@ impl FrameInput {
             mouse_middle_released: self.mouse_middle_released,
             viewport,
             scroll_delta: self.scroll_delta,
+            mouse_delta: Vec2::ZERO,
             dt,
             text: self.text.clone(),
             key_backspace: self.key_backspace,
@@ -151,6 +152,7 @@ pub struct Host<S: Scene> {
     input: FrameInput,
     last_frame: Instant,
     cursor: CursorIcon,
+    cursor_visible: bool,
     draw_stats: DrawStats,
     clipboard: Option<arboard::Clipboard>,
 }
@@ -167,6 +169,7 @@ impl<S: Scene> Host<S> {
             input: FrameInput::default(),
             last_frame: Instant::now(),
             cursor: CursorIcon::Default,
+            cursor_visible: true,
             draw_stats: DrawStats::default(),
             clipboard: arboard::Clipboard::new().ok(),
         }
@@ -291,7 +294,7 @@ impl<S: Scene> Host<S> {
             }
         }
 
-        self.apply_cursor(&window, out.cursor);
+        self.apply_cursor(&window, out.cursor, !out.hide_cursor);
 
         let Some(gpu) = self.gpu.as_mut() else {
             return;
@@ -371,12 +374,16 @@ impl<S: Scene> Host<S> {
         }
     }
 
-    fn apply_cursor(&mut self, window: &WinitWindow, cursor: CursorIcon) {
-        if cursor == self.cursor {
+    fn apply_cursor(&mut self, window: &WinitWindow, cursor: CursorIcon, visible: bool) {
+        if cursor == self.cursor && visible == self.cursor_visible {
             return;
         }
         self.cursor = cursor;
-        window.set_cursor(map_cursor(cursor));
+        self.cursor_visible = visible;
+        window.set_cursor_visible(visible);
+        if visible {
+            window.set_cursor(map_cursor(cursor));
+        }
     }
 }
 

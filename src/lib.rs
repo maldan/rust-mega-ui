@@ -16,14 +16,16 @@ pub mod wgpu;
 pub use dock::{DockNode, DockState};
 pub use layout::{CrossAlign, LayoutOpts, MainAlign};
 pub use node_space::{
-    port_type, NodeLink, NodePortSide, NodeSpace, PortType,
+    port_type, NodeFrame, NodeLink, NodePortSide, NodeSpace, PortType,
 };
 pub use plot_view::PlotView;
-pub use types::{CursorIcon, DrawCommand, Id, Rect, Response, UiInput, UiInputDebug, UiOutput};
+pub use types::{
+    Area, CursorIcon, DrawCommand, Id, Pointer, Rect, Response, UiInput, UiInputDebug, UiOutput,
+};
 pub use widgets::{
     AnimationCurve, BrowserItem, BrowserResponse, CurveEditorResponse, CurvePoint, CurvePreset,
     GradientEditorResponse, GradientStop, OpacityStop, ToastKind, TreeResponse, TreeRow,
-    apply_preset, ease_in_out, sample_curve, sample_gradient,
+    apply_preset, ease_in_out, flat_pass_curve, sample_curve, sample_gradient,
 };
 pub use widgets::color_picker::TEX_SLOT_COLOR_SV;
 pub use widgets::label::TextStyle;
@@ -56,6 +58,8 @@ pub(crate) struct Layer {
     pub origin: Vec2,
     pub spacing: f32,
     pub used: Vec2,
+    /// Width from widgets that don't stretch to `fill_w` (lets nodes shrink).
+    pub hug_x: f32,
     pub row_height: f32,
     pub fill_w: f32,
     /// Max content height from origin (0 = unbounded).
@@ -141,6 +145,8 @@ pub struct Ui {
     pub(crate) drag_grab: Option<Vec2>,
     pub(crate) want_capture: bool,
     pub(crate) cursor_icon: CursorIcon,
+    pub(crate) hide_cursor: bool,
+    pub(crate) cursor_anchor: Option<Vec2>,
     pub(crate) spacing: f32,
     pub(crate) base_spacing: f32,
     pub(crate) scale: f32,
@@ -174,6 +180,10 @@ pub struct Ui {
     pub(crate) node_space_clip: Option<Rect>,
     pub(crate) node_space_id: Option<Id>,
     pub(crate) current_node_id: Option<String>,
+    pub(crate) current_node_caption: Option<String>,
+    pub(crate) node_port_in: u32,
+    pub(crate) node_port_out: u32,
+    pub(crate) node_port_rows: Vec<Rect>,
 }
 
 impl Default for Ui {
@@ -229,6 +239,8 @@ impl Ui {
             drag_grab: None,
             want_capture: false,
             cursor_icon: CursorIcon::Default,
+            hide_cursor: false,
+            cursor_anchor: None,
             spacing: 6.0,
             base_spacing: 6.0,
             scale: 1.0,
@@ -257,6 +269,10 @@ impl Ui {
             node_space_clip: None,
             node_space_id: None,
             current_node_id: None,
+            current_node_caption: None,
+            node_port_in: 0,
+            node_port_out: 0,
+            node_port_rows: Vec::new(),
         }
     }
 
@@ -378,6 +394,81 @@ impl Ui {
         self.round_rect(rect, self.s(3.0), color);
         rect
     }
+
+    /// Colored hit-target. For grids (piano roll, step sequencer).
+    pub fn click_rect(&mut self, id: &str, size: Vec2, color: [f32; 4]) -> Response {
+        let widget_id = self.current_id(id);
+        let rect = self.allocate(size);
+        let resp = self.interact_rect(widget_id, rect);
+        let color = if resp.hovered {
+            [
+                (color[0] + 0.12).min(1.0),
+                (color[1] + 0.12).min(1.0),
+                (color[2] + 0.12).min(1.0),
+                color[3],
+            ]
+        } else {
+            color
+        };
+        self.round_rect(rect, self.s(2.0), color);
+        resp
+    }
+
+    pub fn pointer(&self) -> Pointer {
+        Pointer {
+            pos: self.input.mouse_pos,
+            down: self.input.mouse_down,
+            pressed: self.input.mouse_pressed,
+            released: self.input.mouse_released,
+            right_down: self.input.mouse_right_down,
+            right_pressed: self.input.mouse_right_pressed,
+            scroll: self.input.scroll_delta,
+        }
+    }
+
+    /// Empty hit-area. Draw into `area.rect` with [`Self::fill_rect`] / [`Self::text_at`].
+    pub fn area(&mut self, id: &str, size: Vec2) -> Area {
+        let widget_id = self.current_id(id);
+        let rect = self.allocate(size);
+        let hovered = self.hovered_rect(rect);
+        if hovered {
+            self.hover_id = Some(widget_id);
+            self.want_capture = true;
+        }
+        if hovered && (self.input.mouse_pressed || self.input.mouse_right_pressed) {
+            self.active_id = Some(widget_id);
+            self.want_capture = true;
+        }
+        let active = self.active_id == Some(widget_id);
+        if active {
+            self.want_capture = true;
+        }
+        Area {
+            rect,
+            hovered,
+            active,
+        }
+    }
+
+    pub fn fill_rect(&mut self, rect: Rect, color: [f32; 4]) {
+        self.round_rect(rect, 0.0, color);
+    }
+
+    pub fn fill_round(&mut self, rect: Rect, radius: f32, color: [f32; 4]) {
+        self.round_rect(rect, radius, color);
+    }
+
+    pub fn text_at(&mut self, pos: Vec2, text: &str) {
+        self.text(pos, text, theme::TEXT);
+    }
+
+    pub fn text_at_size(&mut self, pos: Vec2, text: &str, size: f32) {
+        self.text_sized(pos, text, theme::TEXT, size);
+    }
+
+    pub fn set_mouse_cursor(&mut self, icon: CursorIcon) {
+        self.set_cursor(icon);
+    }
 }
 
 impl Ui {
@@ -404,6 +495,7 @@ impl Ui {
         self.hover_id = None;
         self.want_capture = false;
         self.cursor_icon = CursorIcon::Default;
+        self.hide_cursor = false;
         self.scroll_hover = None;
         self.scroll_consumed = false;
         self.needs_repaint = atlas_reset;
@@ -480,10 +572,12 @@ impl Ui {
     }
 
     pub fn end_frame(&mut self) -> UiOutput {
+        let cursor_anchor = self.cursor_anchor;
         if self.input.mouse_released {
             self.active_id = None;
             self.drag_grab = None;
             self.focus_window = None;
+            self.cursor_anchor = None;
         }
         self.windows_built_last_frame = std::mem::take(&mut self.windows_built_this_frame);
         self.scroll_wheel_target = self.scroll_hover;
@@ -531,6 +625,8 @@ impl Ui {
             want_capture_mouse: self.want_capture || self.modal_open,
             want_capture_keyboard: self.focus_id.is_some() || self.modal_open,
             cursor: self.cursor_icon,
+            hide_cursor: self.hide_cursor,
+            cursor_anchor,
             needs_repaint: self.needs_repaint,
             clipboard: self.clipboard_out.take(),
         }
@@ -610,25 +706,45 @@ impl Ui {
         self.layers.last_mut().unwrap()
     }
 
-    /// Remaining space in the current layout (width = fill_w, height = to bottom of fill_h).
+    /// Remaining space in the current layout.
+    ///
+    /// When the layer has no fill bound, leftover viewport to the right / below the cursor
+    /// is used so a following panel can still fill the window.
     pub fn available_size(&self) -> Vec2 {
         let layer = self.layers.last().unwrap();
-        let w = layer.fill_w.max(0.0);
+        let vp = self.input.viewport;
+        let w = if layer.fill_w > 0.0 {
+            layer.fill_w.max(0.0)
+        } else {
+            (vp.x - layer.cursor.x).max(0.0)
+        };
         let h = if layer.fill_h > 0.0 {
             (layer.origin.y + layer.fill_h - layer.cursor.y).max(0.0)
         } else {
-            0.0
+            (vp.y - layer.cursor.y).max(0.0)
         };
         Vec2::new(w, h)
     }
 
     pub(crate) fn allocate(&mut self, size: Vec2) -> Rect {
+        self.allocate_ex(size, true)
+    }
+
+    /// Same as [`Self::allocate`], but the width does not drive parent hug-sizing.
+    pub(crate) fn allocate_fill_x(&mut self, size: Vec2) -> Rect {
+        self.allocate_ex(size, false)
+    }
+
+    fn allocate_ex(&mut self, size: Vec2, hug_x: bool) -> Rect {
         let layer = self.layer();
         let rect = match layer.dir {
             LayoutDir::Vertical => {
                 let rect = Rect::from_min_size(layer.cursor, size);
                 layer.cursor.y += size.y + layer.spacing;
                 layer.used.x = layer.used.x.max(size.x);
+                if hug_x {
+                    layer.hug_x = layer.hug_x.max(size.x);
+                }
                 layer.used.y = layer.cursor.y - layer.origin.y - layer.spacing;
                 rect
             }

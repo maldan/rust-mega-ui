@@ -3,7 +3,7 @@
 //! Host owns [`NodeSpace`] (view + links) and its own node list / field data.
 //! This module only draws and manipulates — no graph execution.
 
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 use std::ptr::NonNull;
 
 use glam::Vec2;
@@ -28,7 +28,7 @@ pub mod port_type {
     pub const QUAT: u16 = 9;
 }
 
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
 pub enum NodePortSide {
     Input,
     Output,
@@ -63,6 +63,13 @@ struct PendingWire {
 }
 
 #[derive(Clone, Debug)]
+pub struct NodeFrame {
+    pub id: String,
+    pub label: String,
+    pub node_ids: Vec<String>,
+}
+
+#[derive(Clone, Debug)]
 struct NodeDrag {
     primary: String,
     /// `mouse_world - primary_pos` at press.
@@ -72,6 +79,15 @@ struct NodeDrag {
     anchors: HashMap<String, Vec2>,
     /// Selection snapshot at drag start — followers keep moving even if selection changes.
     group: Vec<String>,
+}
+
+#[derive(Clone, Debug)]
+struct FrameDrag {
+    frame_id: String,
+    /// `mouse_world - origin` at press.
+    grab: Vec2,
+    origin_start: Vec2,
+    anchors: HashMap<String, Vec2>,
 }
 
 #[derive(Clone, Copy, Debug)]
@@ -100,22 +116,40 @@ pub struct NodeSpace {
     pub snap: f32,
     pub links: Vec<NodeLink>,
     pub types: Vec<PortType>,
+    /// Unordered type pairs that may connect (auto-cast), e.g. Gray↔Color.
+    pub cast_pairs: Vec<(u16, u16)>,
     pub selected_nodes: Vec<String>,
     pub selected_link: Option<u64>,
+    /// Visual groups around nodes. Membership is sticky; bounds auto-fit members.
+    pub frames: Vec<NodeFrame>,
+    pub selected_frame: Option<String>,
+    pub next_frame_id: u64,
+    /// Host-owned: nodes currently evaluating (green border).
+    pub running_nodes: HashSet<String>,
+    /// Host-owned: nodes with bypass on (muted chrome).
+    pub bypassed_nodes: HashSet<String>,
     /// Cleared by host after applying (remove nodes from its list).
     pub request_delete_nodes: Vec<String>,
     /// Cleared by host after applying (duplicate node payloads + links).
     pub request_clone_nodes: Vec<String>,
+    /// Cleared by host after copying selection (Ctrl+C).
+    pub request_copy_nodes: Vec<String>,
+    /// Cleared by host after pasting (Ctrl+V). World position under cursor.
+    pub request_paste_at: Option<Vec2>,
     /// World-space position of last RMB on empty canvas (for spawn menus).
     pub context_world: Option<Vec2>,
     /// True on the frame RMB requested a context menu on empty canvas.
     pub context_menu_request: bool,
     /// True when pointer is over empty canvas (not a node) inside the space.
     pub background_hovered: bool,
+    /// True when pointer is inside the node-space rect this frame.
+    pub pointer_in_space: bool,
+    /// Center nodes in the canvas on the next build (screen-space pan).
+    pub fit_view: bool,
 
     pub next_link_id: u64,
     pending: Option<PendingWire>,
-    port_pos: HashMap<(String, String), Vec2>,
+    port_pos: HashMap<(String, NodePortSide, String), Vec2>,
     /// Last frame outer size in **world** units (title + body).
     node_sizes: HashMap<String, Vec2>,
     /// Screen-space node bounds from the current/last build (for marquee).
@@ -125,12 +159,15 @@ pub struct NodeSpace {
     node_order: Vec<String>,
     pan_grab: Option<Vec2>,
     node_drag: Option<NodeDrag>,
+    frame_drag: Option<FrameDrag>,
     box_select: Option<BoxSelect>,
     /// Topmost node press this frame (later draws overwrite → frontmost wins).
     pending_node_press: Option<PendingNodePress>,
     link_hit: Option<u64>,
     /// Set during [`Ui::node`] when the pointer is over a node this frame.
     pointer_over_node: bool,
+    pointer_over_frame: bool,
+    frame_screen_rects: HashMap<String, Rect>,
 }
 
 impl Default for NodeSpace {
@@ -147,13 +184,23 @@ impl NodeSpace {
             snap: 5.0,
             links: Vec::new(),
             types: default_port_types(),
+            cast_pairs: Vec::new(),
             selected_nodes: Vec::new(),
             selected_link: None,
+            frames: Vec::new(),
+            selected_frame: None,
+            next_frame_id: 1,
+            running_nodes: HashSet::new(),
+            bypassed_nodes: HashSet::new(),
             request_delete_nodes: Vec::new(),
             request_clone_nodes: Vec::new(),
+            request_copy_nodes: Vec::new(),
+            request_paste_at: None,
             context_world: None,
             context_menu_request: false,
             background_hovered: false,
+            pointer_in_space: false,
+            fit_view: false,
             next_link_id: 1,
             pending: None,
             port_pos: HashMap::new(),
@@ -163,10 +210,13 @@ impl NodeSpace {
             node_order: Vec::new(),
             pan_grab: None,
             node_drag: None,
+            frame_drag: None,
             box_select: None,
             pending_node_press: None,
             link_hit: None,
             pointer_over_node: false,
+            pointer_over_frame: false,
+            frame_screen_rects: HashMap::new(),
         }
     }
 
@@ -181,6 +231,43 @@ impl NodeSpace {
                 color,
             });
         }
+    }
+
+    /// Allow wiring between two distinct port types (both directions).
+    pub fn allow_cast(&mut self, a: u16, b: u16) {
+        if a == b {
+            return;
+        }
+        let pair = if a < b { (a, b) } else { (b, a) };
+        if !self.cast_pairs.contains(&pair) {
+            self.cast_pairs.push(pair);
+        }
+    }
+
+    /// Pan/zoom so known nodes sit in `canvas` (window-space rect of this space).
+    pub fn fit_nodes_in_rect(&mut self, canvas: Rect) {
+        if self.node_world_pos.is_empty() {
+            return;
+        }
+        let mut min = Vec2::splat(f32::MAX);
+        let mut max = Vec2::splat(f32::MIN);
+        for (id, pos) in &self.node_world_pos {
+            let sz = self
+                .node_sizes
+                .get(id)
+                .copied()
+                .unwrap_or(Vec2::new(180.0, 80.0));
+            min = min.min(*pos);
+            max = max.max(*pos + sz);
+        }
+        let size = (max - min).max(Vec2::splat(8.0));
+        let view = Vec2::new(canvas.width(), canvas.height());
+        let pad = 36.0;
+        let zx = (view.x - pad * 2.0).max(32.0) / size.x;
+        let zy = (view.y - pad * 2.0).max(32.0) / size.y;
+        self.zoom = zx.min(zy).clamp(ZOOM_MIN, 1.25);
+        let center = (min + max) * 0.5;
+        self.pan = canvas.min + view * 0.5 - center * self.zoom;
     }
 
     pub fn type_color(&self, id: u16) -> [f32; 4] {
@@ -199,11 +286,59 @@ impl NodeSpace {
         std::mem::take(&mut self.request_clone_nodes)
     }
 
+    pub fn take_copy_nodes(&mut self) -> Vec<String> {
+        std::mem::take(&mut self.request_copy_nodes)
+    }
+
+    pub fn take_paste_at(&mut self) -> Option<Vec2> {
+        self.request_paste_at.take()
+    }
+
     /// Suggested world offset when the host duplicates a selection.
     pub fn clone_offset(&self) -> Vec2 {
         let s = if self.snap > 1e-6 { self.snap } else { 5.0 };
         // Large enough that clones don't sit on top of originals (hit-test overlap).
         Vec2::new(s * 16.0, s * 16.0)
+    }
+
+    /// Wrap `ids` in a new frame. A node belongs to at most one frame. Needs ≥2 ids.
+    pub fn group_nodes(&mut self, ids: &[String]) -> Option<String> {
+        let mut seen = HashSet::new();
+        let mut node_ids = Vec::new();
+        for id in ids {
+            if seen.insert(id.clone()) {
+                node_ids.push(id.clone());
+            }
+        }
+        if node_ids.len() < 2 {
+            return None;
+        }
+        for frame in &mut self.frames {
+            frame.node_ids.retain(|n| !seen.contains(n));
+        }
+        self.frames.retain(|f| !f.node_ids.is_empty());
+        let id = format!("f{}", self.next_frame_id);
+        self.next_frame_id += 1;
+        self.frames.push(NodeFrame {
+            id: id.clone(),
+            label: "Group".into(),
+            node_ids,
+        });
+        self.selected_frame = Some(id.clone());
+        self.selected_nodes.clear();
+        self.selected_link = None;
+        Some(id)
+    }
+
+    pub fn ungroup_frame(&mut self, frame_id: &str) {
+        self.frames.retain(|f| f.id != frame_id);
+        if self.selected_frame.as_deref() == Some(frame_id) {
+            self.selected_frame = None;
+        }
+        self.frame_screen_rects.remove(frame_id);
+        if self.frame_drag.as_ref().is_some_and(|d| d.frame_id == frame_id) {
+            self.frame_drag = None;
+        }
     }
 
     /// Duplicate links whose both endpoints are in `id_map` (old → new).
@@ -235,11 +370,21 @@ impl NodeSpace {
         self.links
             .retain(|l| l.from_node != node_id && l.to_node != node_id);
         self.selected_nodes.retain(|id| id != node_id);
-        self.port_pos.retain(|(n, _), _| n != node_id);
+        self.port_pos.retain(|(n, _, _), _| n != node_id);
         self.node_sizes.remove(node_id);
         self.node_screen_rects.remove(node_id);
         self.node_world_pos.remove(node_id);
         self.node_order.retain(|id| id != node_id);
+        for frame in &mut self.frames {
+            frame.node_ids.retain(|n| n != node_id);
+        }
+        self.frames.retain(|f| !f.node_ids.is_empty());
+        let fid = self.selected_frame.clone();
+        if let Some(id) = fid {
+            if !self.frames.iter().any(|f| f.id == id) {
+                self.selected_frame = None;
+            }
+        }
     }
 
     pub fn remove_link(&mut self, id: u64) {
@@ -261,8 +406,14 @@ impl NodeSpace {
         self.selected_nodes.iter().any(|x| x == id)
     }
 
+    fn clear_frame_sel(&mut self) {
+        self.selected_frame = None;
+        self.frame_drag = None;
+    }
+
     /// Click select: Ctrl toggles; click unselected replaces; click selected keeps multi.
     fn select_for_click(&mut self, id: &str, ctrl: bool) {
+        self.clear_frame_sel();
         if ctrl {
             if let Some(i) = self.selected_nodes.iter().position(|x| x == id) {
                 self.selected_nodes.remove(i);
@@ -277,6 +428,7 @@ impl NodeSpace {
 
     /// Press on title to drag: Ctrl adds; click unselected replaces; click selected keeps group.
     fn select_for_drag(&mut self, id: &str, ctrl: bool) {
+        self.clear_frame_sel();
         if ctrl {
             if !self.is_selected(id) {
                 self.selected_nodes.push(id.to_string());
@@ -288,6 +440,7 @@ impl NodeSpace {
     }
 
     fn begin_node_drag(&mut self, id: &str, pos: Vec2, mouse_world: Vec2, ctrl: bool) {
+        self.frame_drag = None;
         self.select_for_drag(id, ctrl);
         self.bring_front(id);
         let group = self.selected_nodes.clone();
@@ -307,9 +460,56 @@ impl NodeSpace {
         });
     }
 
+    fn begin_frame_drag(&mut self, frame_id: &str, mouse_world: Vec2) {
+        self.node_drag = None;
+        self.bring_frame_front(frame_id);
+        self.selected_frame = Some(frame_id.to_string());
+        self.selected_nodes.clear();
+        self.selected_link = None;
+        let origin = self
+            .frame_world_rect_id(frame_id)
+            .map(|r| r.min)
+            .unwrap_or(mouse_world);
+        let mut anchors = HashMap::new();
+        if let Some(frame) = self.frames.iter().find(|f| f.id == frame_id) {
+            for nid in &frame.node_ids {
+                if let Some(&p) = self.node_world_pos.get(nid) {
+                    anchors.insert(nid.clone(), p);
+                }
+            }
+        }
+        self.frame_drag = Some(FrameDrag {
+            frame_id: frame_id.to_string(),
+            grab: mouse_world - origin,
+            origin_start: origin,
+            anchors,
+        });
+    }
+
     /// Update `pos` while a group/single drag is active.
     fn apply_node_drag(&mut self, id: &str, pos: &mut Vec2, mouse_world: Vec2) -> bool {
         let snap = self.snap;
+        if self.node_drag.is_none() {
+            let in_frame = match self.frame_drag.as_ref() {
+                None => false,
+                Some(drag) if drag.anchors.contains_key(id) => true,
+                Some(drag) => self
+                    .frames
+                    .iter()
+                    .any(|f| f.id == drag.frame_id && f.node_ids.iter().any(|n| n == id)),
+            };
+            if in_frame {
+                let Some(drag) = self.frame_drag.as_mut() else {
+                    return false;
+                };
+                let raw = mouse_world - drag.grab;
+                let origin_now = snap_vec(raw, snap);
+                let start = *drag.anchors.entry(id.to_string()).or_insert(*pos);
+                *pos = start + (origin_now - drag.origin_start);
+                return true;
+            }
+            return false;
+        }
         let Some(drag) = self.node_drag.as_mut() else {
             return false;
         };
@@ -318,11 +518,7 @@ impl NodeSpace {
             return false;
         }
         let raw = mouse_world - drag.grab;
-        let primary_now = if snap <= 1e-6 {
-            raw
-        } else {
-            Vec2::new((raw.x / snap).round() * snap, (raw.y / snap).round() * snap)
-        };
+        let primary_now = snap_vec(raw, snap);
         if id == drag.primary {
             *pos = primary_now;
             true
@@ -333,13 +529,68 @@ impl NodeSpace {
         }
     }
 
-    fn compatible(a: u16, b: u16) -> bool {
-        a == port_type::ANY || b == port_type::ANY || a == b
+    fn frame_world_rect_id(&self, frame_id: &str) -> Option<Rect> {
+        let frame = self.frames.iter().find(|f| f.id == frame_id)?;
+        self.frame_world_rect(frame)
+    }
+
+    fn frame_world_rect(&self, frame: &NodeFrame) -> Option<Rect> {
+        let mut min = Vec2::splat(f32::MAX);
+        let mut max = Vec2::splat(f32::MIN);
+        let mut any = false;
+        for nid in &frame.node_ids {
+            let Some(&p) = self.node_world_pos.get(nid) else {
+                continue;
+            };
+            let size = self
+                .node_sizes
+                .get(nid)
+                .copied()
+                .unwrap_or(Vec2::new(NODE_MIN_W, 80.0));
+            any = true;
+            min = Vec2::new(min.x.min(p.x), min.y.min(p.y));
+            max = Vec2::new(max.x.max(p.x + size.x), max.y.max(p.y + size.y));
+        }
+        if !any {
+            return None;
+        }
+        Some(Rect {
+            min: min - Vec2::splat(FRAME_PAD),
+            max: max + Vec2::splat(FRAME_PAD),
+        })
+    }
+
+    fn frame_at(&self, screen: Vec2) -> Option<String> {
+        for frame in self.frames.iter().rev() {
+            if self
+                .frame_screen_rects
+                .get(&frame.id)
+                .is_some_and(|r| r.contains(screen))
+            {
+                return Some(frame.id.clone());
+            }
+        }
+        None
+    }
+
+    fn compatible(&self, a: u16, b: u16) -> bool {
+        if a == port_type::ANY || b == port_type::ANY || a == b {
+            return true;
+        }
+        let pair = if a < b { (a, b) } else { (b, a) };
+        self.cast_pairs.contains(&pair)
     }
 
     fn bring_front(&mut self, id: &str) {
         self.node_order.retain(|x| x != id);
         self.node_order.push(id.to_string());
+    }
+
+    fn bring_frame_front(&mut self, id: &str) {
+        if let Some(i) = self.frames.iter().position(|f| f.id == id) {
+            let frame = self.frames.remove(i);
+            self.frames.push(frame);
+        }
     }
 }
 
@@ -403,8 +654,18 @@ fn cubic_bezier(p0: Vec2, p1: Vec2, p2: Vec2, p3: Vec2, t: f32) -> Vec2 {
     p0 * (u * u * u) + p1 * (3.0 * u * u * t) + p2 * (3.0 * u * t * t) + p3 * (t * t * t)
 }
 
-fn link_curve(from: Vec2, to: Vec2) -> Vec<Vec2> {
-    let dx = ((to.x - from.x).abs() * 0.5).max(48.0);
+/// Widget scale inside a node. Must track zoom (no 0.45 floor): chrome uses `z`
+/// for the box, so a higher floor made ports/layout sit in a different space.
+fn node_content_scale(ui_scale: f32, zoom: f32) -> f32 {
+    (ui_scale * zoom).clamp(0.05, 16.0)
+}
+
+fn link_handle(from: Vec2, to: Vec2, zoom: f32) -> f32 {
+    ((to.x - from.x).abs() * 0.5).max(48.0 * zoom.clamp(ZOOM_MIN, 1.0))
+}
+
+fn link_curve(from: Vec2, to: Vec2, zoom: f32) -> Vec<Vec2> {
+    let dx = link_handle(from, to, zoom);
     let c1 = from + Vec2::new(dx, 0.0);
     let c2 = to - Vec2::new(dx, 0.0);
     let n = 18;
@@ -449,6 +710,18 @@ const NODE_MIN_W: f32 = 168.0;
 const NODE_PAD: f32 = 10.0;
 const PIN_R: f32 = 5.5;
 const PIN_HIT: f32 = 10.0;
+const FRAME_PAD: f32 = 20.0;
+const FRAME_LABEL: f32 = 20.0;
+const ZOOM_MIN: f32 = 0.1;
+const ZOOM_MAX: f32 = 8.0;
+
+fn snap_vec(p: Vec2, snap: f32) -> Vec2 {
+    if snap <= 1e-6 {
+        p
+    } else {
+        Vec2::new((p.x / snap).round() * snap, (p.y / snap).round() * snap)
+    }
+}
 
 impl Ui {
     /// Fill `size` (or remaining layout space if zero) with a node graph canvas.
@@ -477,18 +750,24 @@ impl Ui {
         self.push_id(id);
         let space_id = *self.id_stack.last().unwrap();
 
-        space.zoom = space.zoom.clamp(0.35, 2.5);
+        space.zoom = space.zoom.clamp(ZOOM_MIN, ZOOM_MAX);
         space.background_hovered = false;
         space.context_menu_request = false;
         space.link_hit = None;
         space.pointer_over_node = false;
+        space.pointer_over_frame = false;
         space.pending_node_press = None;
+        space.pointer_in_space = false;
+        space.request_paste_at = None;
+        space.request_copy_nodes.clear();
         space.node_screen_rects.clear();
+        space.frame_screen_rects.clear();
 
         // Background
         self.round_rect(rect, self.s(4.0), [0.02, 0.02, 0.02, 1.0]);
         self.push_clip(rect);
         self.draw_node_grid(rect, space);
+        self.draw_node_frames(space);
 
         let mouse = self.input.mouse_pos;
         // Context menus / selects are drawn after the canvas; block canvas input while
@@ -497,6 +776,7 @@ impl Ui {
             || self.mouse_over_absorb()
             || self.overlay_block.iter().any(|r| r.contains(mouse));
         let in_rect = rect.contains(mouse) && !self.block_input && !over_popup;
+        space.pointer_in_space = in_rect;
 
         // Links hit-test (skip while boxing / dragging / panning)
         if in_rect
@@ -507,19 +787,21 @@ impl Ui {
         {
             let mut best: Option<(u64, f32)> = None;
             for link in &space.links {
-                let Some(&a) = space
-                    .port_pos
-                    .get(&(link.from_node.clone(), link.from_port.clone()))
-                else {
+                let Some(&a) = space.port_pos.get(&(
+                    link.from_node.clone(),
+                    NodePortSide::Output,
+                    link.from_port.clone(),
+                )) else {
                     continue;
                 };
-                let Some(&b) = space
-                    .port_pos
-                    .get(&(link.to_node.clone(), link.to_port.clone()))
-                else {
+                let Some(&b) = space.port_pos.get(&(
+                    link.to_node.clone(),
+                    NodePortSide::Input,
+                    link.to_port.clone(),
+                )) else {
                     continue;
                 };
-                let pts = link_curve(a, b);
+                let pts = link_curve(a, b, space.zoom);
                 let d = dist_point_polyline(mouse, &pts);
                 if d < 9.0 && best.map(|(_, bd)| d < bd).unwrap_or(true) {
                     best = Some((link.id, d));
@@ -532,16 +814,18 @@ impl Ui {
             let clip = self.clip();
             let out = &mut self.draw_list;
             for link in &space.links {
-                let Some(&a) = space
-                    .port_pos
-                    .get(&(link.from_node.clone(), link.from_port.clone()))
-                else {
+                let Some(&a) = space.port_pos.get(&(
+                    link.from_node.clone(),
+                    NodePortSide::Output,
+                    link.from_port.clone(),
+                )) else {
                     continue;
                 };
-                let Some(&b) = space
-                    .port_pos
-                    .get(&(link.to_node.clone(), link.to_port.clone()))
-                else {
+                let Some(&b) = space.port_pos.get(&(
+                    link.to_node.clone(),
+                    NodePortSide::Input,
+                    link.to_port.clone(),
+                )) else {
                     continue;
                 };
                 let mut color = space.type_color(link.ty);
@@ -553,7 +837,7 @@ impl Ui {
                     color[2] = (color[2] + 0.25).min(1.0);
                 }
                 let thick = if selected { 3.2 } else { 2.2 } * space.zoom.clamp(0.7, 1.4);
-                let pts = link_curve(a, b);
+                let pts = link_curve(a, b, space.zoom);
                 push_polyline(out, &pts, thick, color, clip);
             }
         }
@@ -568,7 +852,20 @@ impl Ui {
         self.node_space_clip = Some(rect);
         self.node_space_id = Some(space_id);
 
+        if space.fit_view
+            && rect.width() > 80.0
+            && rect.height() > 80.0
+            && !space.node_world_pos.is_empty()
+        {
+            space.fit_nodes_in_rect(rect);
+            space.fit_view = false;
+        }
+
         add(self);
+
+        if space.fit_view && !space.node_world_pos.is_empty() {
+            self.request_repaint();
+        }
 
         // Zoom after children so open selects can consume the wheel first.
         if in_rect
@@ -583,7 +880,7 @@ impl Ui {
             } else {
                 1.0 / 1.08
             };
-            let new_z = (old_z * factor).clamp(0.35, 2.5);
+            let new_z = (old_z * factor).clamp(ZOOM_MIN, ZOOM_MAX);
             if (new_z - old_z).abs() > 1e-5 {
                 let world = space.screen_to_world(mouse);
                 space.zoom = new_z;
@@ -610,6 +907,32 @@ impl Ui {
             }
         }
 
+        // Frame under pointer (padding / title) — nodes already claimed the press if overlapping.
+        let mouse_world = space.screen_to_world(mouse);
+        let frame_hit = if in_rect
+            && space.pending.is_none()
+            && space.node_drag.is_none()
+            && space.pan_grab.is_none()
+            && !space.pointer_over_node
+            && space.link_hit.is_none()
+        {
+            space.frame_at(mouse)
+        } else {
+            None
+        };
+        space.pointer_over_frame = frame_hit.is_some();
+        if let Some(fid) = frame_hit.as_deref() {
+            self.set_cursor(CursorIcon::Move);
+            if self.input.mouse_pressed
+                && space.frame_drag.is_none()
+                && space.node_drag.is_none()
+                && space.box_select.is_none()
+            {
+                space.begin_frame_drag(fid, mouse_world);
+                self.active_id = Some(space_id.child("#frame"));
+            }
+        }
+
         // Pending wire
         if let Some(ref pending) = space.pending {
             let color = space.type_color(pending.ty);
@@ -618,9 +941,14 @@ impl Ui {
                 NodePortSide::Output => (pending.start, end),
                 NodePortSide::Input => (end, pending.start),
             };
-            let pts = link_curve(a, b);
+            let pts = link_curve(a, b, space.zoom);
             let thick = 2.4 * space.zoom.clamp(0.7, 1.4);
             self.draw_polyline(&pts, thick, color);
+            self.want_capture = true;
+            self.request_repaint();
+        }
+
+        if space.frame_drag.is_some() {
             self.want_capture = true;
             self.request_repaint();
         }
@@ -628,8 +956,10 @@ impl Ui {
         let hovered_bg = in_rect
             && space.pending.is_none()
             && space.node_drag.is_none()
+            && space.frame_drag.is_none()
             && space.box_select.is_none()
             && !space.pointer_over_node
+            && !space.pointer_over_frame
             && space.link_hit.is_none()
             && !self.input.mouse_middle_down;
         space.background_hovered = hovered_bg;
@@ -656,6 +986,7 @@ impl Ui {
             if !additive {
                 space.selected_nodes.clear();
                 space.selected_link = None;
+                space.selected_frame = None;
             }
             self.active_id = Some(space_id.child("#box"));
         }
@@ -666,12 +997,15 @@ impl Ui {
             && space.pending.is_none()
             && space.node_drag.is_none()
             && !space.pointer_over_node
+            && !space.pointer_over_frame
+            && space.frame_drag.is_none()
             && !self.input.mouse_middle_down
             && space.box_select.is_none()
         {
             let lid = space.link_hit.unwrap();
             space.selected_link = Some(lid);
             space.selected_nodes.clear();
+            space.selected_frame = None;
             self.active_id = Some(space_id.child("#link"));
         }
 
@@ -734,10 +1068,12 @@ impl Ui {
                         space.selected_nodes = hits;
                     }
                     space.selected_link = None;
+                    space.selected_frame = None;
                 }
                 // tiny drag = click on empty: selection already cleared if !additive
             }
             space.node_drag = None;
+            space.frame_drag = None;
             if space.pending.is_some() {
                 space.pending = None;
             }
@@ -762,6 +1098,8 @@ impl Ui {
         if in_rect && want_delete {
             if let Some(lid) = space.selected_link.take() {
                 space.remove_link(lid);
+            } else if let Some(fid) = space.selected_frame.take() {
+                space.ungroup_frame(&fid);
             } else if !space.selected_nodes.is_empty() {
                 let ids = space.selected_nodes.clone();
                 for nid in &ids {
@@ -776,11 +1114,72 @@ impl Ui {
             space.request_clone_nodes = space.selected_nodes.clone();
         }
 
+        // Copy / paste (Ctrl+C / Ctrl+V) — skip while a text field has focus
+        let typing = self.focus_id.is_some();
+        if in_rect && !typing && self.input.key_copy && !space.selected_nodes.is_empty() {
+            space.request_copy_nodes = space.selected_nodes.clone();
+        }
+        if in_rect && !typing && self.input.key_paste {
+            space.request_paste_at = Some(space.screen_to_world(mouse));
+        }
+
         self.node_space_ptr = prev_ptr;
         self.node_space_clip = prev_clip;
         self.node_space_id = prev_id;
         self.pop_clip();
         self.pop_id();
+    }
+
+    fn draw_node_frames(&mut self, space: &mut NodeSpace) {
+        let z = space.zoom;
+        let radius = self.s(theme::WIN_RADIUS);
+        let frames: Vec<(String, String, Rect, bool)> = space
+            .frames
+            .iter()
+            .filter_map(|frame| {
+                let wr = space.frame_world_rect(frame)?;
+                let rect = Rect {
+                    min: space.world_to_screen(wr.min),
+                    max: space.world_to_screen(wr.max),
+                };
+                let selected = space.selected_frame.as_deref() == Some(frame.id.as_str());
+                Some((frame.id.clone(), frame.label.clone(), rect, selected))
+            })
+            .collect();
+        for (id, label, rect, selected) in frames {
+            let px = (self.font_size() * 1.45 * z).max(FRAME_LABEL * z);
+            let lh = self.text_height_at(px);
+            let gap = 10.0 * z;
+            let hit = Rect {
+                min: Vec2::new(rect.min.x, rect.min.y - lh - gap),
+                max: rect.max,
+            };
+            space.frame_screen_rects.insert(id, hit);
+            let fill = if selected {
+                theme::NODE_FRAME_SEL
+            } else {
+                theme::NODE_FRAME
+            };
+            let border = if selected {
+                theme::NODE_FRAME_BORDER_SEL
+            } else {
+                theme::NODE_FRAME_BORDER
+            };
+            self.round_rect(rect, radius, fill);
+            let t = 1.0;
+            self.line(Vec2::new(rect.min.x, rect.min.y), Vec2::new(rect.max.x, rect.min.y), t, border);
+            self.line(Vec2::new(rect.min.x, rect.max.y), Vec2::new(rect.max.x, rect.max.y), t, border);
+            self.line(Vec2::new(rect.min.x, rect.min.y), Vec2::new(rect.min.x, rect.max.y), t, border);
+            self.line(Vec2::new(rect.max.x, rect.min.y), Vec2::new(rect.max.x, rect.max.y), t, border);
+            if !label.is_empty() {
+                self.text_sized(
+                    Vec2::new(rect.min.x, rect.min.y - lh - gap),
+                    &label,
+                    theme::TITLE_TEXT,
+                    px,
+                );
+            }
+        }
     }
 
     fn draw_node_grid(&mut self, rect: Rect, space: &NodeSpace) {
@@ -902,28 +1301,48 @@ impl Ui {
         }
 
         let selected = space.is_selected(id);
-        let border = if selected {
+        let bypassed = space.bypassed_nodes.contains(id);
+        let running = space.running_nodes.contains(id);
+        let border = if bypassed {
+            theme::NODE_BYPASS
+        } else if running {
+            theme::NODE_RUNNING
+        } else if selected {
             theme::ACCENT
         } else {
             theme::WIN_BORDER
         };
-        let radius = self.s(theme::WIN_RADIUS) * z.clamp(0.75, 1.25);
 
-        // Temporarily scale widgets with zoom
+        // Widgets layout in screen pixels; scale must track zoom (not a lower cap).
+        // A 3.0 cap made zoom > ~2.5/dpi desync: chrome grew, content froze,
+        // world size was rebuilt as used/z and nodes jumped. A 0.45 floor did
+        // the same in reverse: box followed z, ports/layout stuck larger.
         let old_scale = self.scale;
         let old_spacing = self.spacing;
-        self.scale = (old_scale * z).clamp(0.45, 3.0);
+        self.scale = node_content_scale(old_scale, z);
         self.spacing = self.base_spacing * self.scale;
+        let radius = self.s(theme::WIN_RADIUS);
 
         // Refresh geometry after drag write
         screen_pos = space.world_to_screen(*pos);
         rect = Rect::from_min_size(screen_pos, screen_size);
 
         self.round_rect(rect, radius, border);
-        self.round_rect(rect.inset(1.0), (radius - 1.0).max(0.0), theme::WIN_BODY);
+        let body = if bypassed {
+            theme::WIN_BODY_BYPASS
+        } else {
+            theme::WIN_BODY
+        };
+        self.round_rect(rect.inset(1.0), (radius - 1.0).max(0.0), body);
         space.node_screen_rects.insert(id.to_string(), rect);
 
-        let title_color = if self.active_id == Some(title_id) || dragging {
+        let title_color = if bypassed {
+            if title_hover || dragging {
+                theme::WIN_TITLE_BYPASS_HOVER
+            } else {
+                theme::WIN_TITLE_BYPASS
+            }
+        } else if self.active_id == Some(title_id) || dragging {
             theme::WIN_TITLE_PRESS
         } else if title_hover {
             theme::WIN_TITLE_HOVER
@@ -939,7 +1358,11 @@ impl Ui {
         self.text(
             rect.min + Vec2::new(self.s(10.0), (title_h * z - th) * 0.5),
             title,
-            theme::TITLE_TEXT,
+            if bypassed {
+                theme::TEXT_DISABLED
+            } else {
+                theme::TITLE_TEXT
+            },
         );
 
         let pad = NODE_PAD * z;
@@ -960,16 +1383,32 @@ impl Ui {
         ));
 
         self.current_node_id = Some(id.to_string());
+        self.current_node_caption = None;
+        self.node_port_in = 0;
+        self.node_port_out = 0;
+        self.node_port_rows.clear();
         add(self);
+        let caption = self.current_node_caption.take();
         self.current_node_id = None;
+        self.node_port_rows.clear();
 
         let used = self.layer().used;
+        let hug_x = self.layer().hug_x;
         self.layers.pop();
         self.pop_clip();
 
+        if let Some(text) = caption.as_deref().filter(|s| !s.is_empty()) {
+            let cap_px = (self.font_size() * 0.82).max(8.0);
+            let tw = self.text_width_at(text, cap_px);
+            let x = rect.min.x + ((rect.width() - tw) * 0.5).max(0.0);
+            let y = rect.max.y + 3.0 * z;
+            self.text_sized(Vec2::new(x, y), text, theme::TEXT_DISABLED, cap_px);
+        }
+
         let body_h = used.y + pad * 1.2;
-        let world_h = (title_h + body_h / z.max(1e-4)).max(title_h + 24.0);
-        let world_w = (used.x / z.max(1e-4) + NODE_PAD * 2.0).max(min_w);
+        let layout_z = (self.scale / old_scale.max(1e-4)).max(1e-4);
+        let world_h = (title_h + body_h / layout_z).max(title_h + 24.0);
+        let world_w = (hug_x / layout_z + NODE_PAD * 2.0).max(min_w);
         space
             .node_sizes
             .insert(id.to_string(), Vec2::new(world_w, world_h));
@@ -977,6 +1416,13 @@ impl Ui {
         self.scale = old_scale;
         self.spacing = old_spacing;
         self.pop_id();
+    }
+
+    /// Optional caption under the current node body (call inside [`Self::node`]).
+    pub fn node_caption(&mut self, text: &str) {
+        if self.current_node_id.is_some() {
+            self.current_node_caption = Some(text.to_string());
+        }
     }
 
     /// Declare a typed port on the current node (call inside [`Self::node`] content).
@@ -998,29 +1444,37 @@ impl Ui {
         let row_h = self.text_height().max(self.s(18.0));
         let label = port_id;
         let tw = self.text_width(label);
-        let pin_d = PIN_R * 2.0 * z.clamp(0.75, 1.5);
+        let pin_d = PIN_R * 2.0 * z;
         let gap = self.s(8.0);
         let width = self.layer().fill_w.max(tw + pin_d + gap + self.s(4.0));
-        let row = self.allocate(Vec2::new(width, row_h));
-
-        let pin_center = match side {
+        let slot = match side {
             NodePortSide::Input => {
-                Vec2::new(row.min.x + pin_d * 0.5, row.min.y + row_h * 0.5)
+                let i = self.node_port_in;
+                self.node_port_in += 1;
+                i
             }
             NodePortSide::Output => {
-                Vec2::new(row.max.x - pin_d * 0.5, row.min.y + row_h * 0.5)
+                let i = self.node_port_out;
+                self.node_port_out += 1;
+                i
             }
+        } as usize;
+        let row = if let Some(row) = self.node_port_rows.get(slot).copied() {
+            row
+        } else {
+            let row = self.allocate_fill_x(Vec2::new(width, row_h));
+            self.node_port_rows.push(row);
+            row
         };
-        // Pins sit on the node edge — nudge outward slightly relative to content pad
+
+        let node_rect = space
+            .node_screen_rects
+            .get(&node_id)
+            .copied()
+            .unwrap_or(row);
         let pin_center = match side {
-            NodePortSide::Input => Vec2::new(
-                pin_center.x - NODE_PAD * z * 0.35,
-                pin_center.y,
-            ),
-            NodePortSide::Output => Vec2::new(
-                pin_center.x + NODE_PAD * z * 0.35,
-                pin_center.y,
-            ),
+            NodePortSide::Input => Vec2::new(node_rect.min.x, row.min.y + row_h * 0.5),
+            NodePortSide::Output => Vec2::new(node_rect.max.x, row.min.y + row_h * 0.5),
         };
 
         let text_x = match side {
@@ -1033,19 +1487,16 @@ impl Ui {
             theme::TEXT,
         );
 
+        space.port_pos.insert(
+            (node_id.clone(), side, port_id.to_string()),
+            pin_center,
+        );
+
         let pin_rect = Rect::from_min_size(
             pin_center - Vec2::splat(pin_d * 0.5),
             Vec2::splat(pin_d),
         );
-        self.round_rect(pin_rect, pin_d * 0.5, color);
-        self.round_rect(pin_rect.inset(1.5), (pin_d * 0.5 - 1.5).max(0.5), theme::WIN_BODY);
-        self.round_rect(pin_rect.inset(3.0), (pin_d * 0.5 - 3.0).max(0.5), color);
-
-        space
-            .port_pos
-            .insert((node_id.clone(), port_id.to_string()), pin_center);
-
-        let hit_r = PIN_HIT * z.clamp(0.75, 1.5);
+        let hit_r = PIN_HIT * z;
         let hit = Rect::from_min_size(pin_center - Vec2::splat(hit_r), Vec2::splat(hit_r * 2.0));
         let mouse = self.input.mouse_pos;
         let hovered = !self.block_input
@@ -1053,18 +1504,38 @@ impl Ui {
             && clip.contains(mouse)
             && hit.contains(mouse);
 
+        // Content clip is the node interior — drop it so the outer half of the pin
+        // is visible, then restore so later widgets stay inside the body.
+        let content_clip = self.clip();
+        if content_clip.is_some() {
+            self.pop_clip();
+        }
+        let ring = (1.5 * z).max(0.4);
+        let core = (3.0 * z).max(0.8);
+        self.round_rect(pin_rect, pin_d * 0.5, color);
+        self.round_rect(pin_rect.inset(ring), (pin_d * 0.5 - ring).max(0.4), theme::WIN_BODY);
+        self.round_rect(pin_rect.inset(core), (pin_d * 0.5 - core).max(0.4), color);
         if hovered {
-            self.want_capture = true;
-            self.set_cursor(CursorIcon::Pointer);
-            // highlight
             self.round_rect(
                 Rect::from_min_size(pin_center - Vec2::splat(hit_r * 0.7), Vec2::splat(hit_r * 1.4)),
                 hit_r * 0.7,
                 [color[0], color[1], color[2], 0.25],
             );
         }
+        if let Some(c) = content_clip {
+            self.push_clip(c);
+        }
 
-        let port_wid = self.current_id(port_id);
+        if hovered {
+            space.pointer_over_node = true;
+            self.want_capture = true;
+            self.set_cursor(CursorIcon::Pointer);
+        }
+
+        let port_wid = match side {
+            NodePortSide::Input => self.current_id(&format!("in:{port_id}")),
+            NodePortSide::Output => self.current_id(&format!("out:{port_id}")),
+        };
 
         // Start wire
         if hovered && self.input.mouse_pressed {
@@ -1104,7 +1575,7 @@ impl Ui {
                         return;
                     }
                 };
-                if out_n != in_n && NodeSpace::compatible(out_ty, in_ty) {
+                if out_n != in_n && space.compatible(out_ty, in_ty) {
                     space
                         .links
                         .retain(|l| !(l.to_node == in_n && l.to_port == in_p));
@@ -1122,5 +1593,82 @@ impl Ui {
                 space.pending = None;
             }
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn group_needs_two_nodes() {
+        let mut space = NodeSpace::new();
+        assert!(space.group_nodes(&["a".into()]).is_none());
+        let id = space.group_nodes(&["a".into(), "b".into()]).unwrap();
+        assert_eq!(space.frames.len(), 1);
+        assert_eq!(space.selected_frame.as_deref(), Some(id.as_str()));
+        assert!(space.selected_nodes.is_empty());
+    }
+
+    #[test]
+    fn node_belongs_to_one_frame() {
+        let mut space = NodeSpace::new();
+        space.group_nodes(&["a".into(), "b".into()]);
+        space.group_nodes(&["b".into(), "c".into()]);
+        assert_eq!(space.frames.len(), 2);
+        assert_eq!(space.frames[0].node_ids, vec!["a".to_string()]);
+        assert_eq!(
+            space.frames[1].node_ids,
+            ["b".to_string(), "c".to_string()]
+        );
+    }
+
+    #[test]
+    fn detach_prunes_empty_frame() {
+        let mut space = NodeSpace::new();
+        space.group_nodes(&["a".into(), "b".into()]);
+        space.detach_node("a");
+        assert_eq!(space.frames[0].node_ids, vec!["b".to_string()]);
+        space.detach_node("b");
+        assert!(space.frames.is_empty());
+        assert!(space.selected_frame.is_none());
+    }
+
+    #[test]
+    fn node_content_scale_tracks_zoom_out() {
+        assert!((node_content_scale(1.0, 0.35) - 0.35).abs() < 1e-6);
+        assert!(node_content_scale(1.0, 0.35) < 0.45);
+        assert!((node_content_scale(1.25, 0.35) - 1.25 * 0.35).abs() < 1e-6);
+        assert!((node_content_scale(1.0, ZOOM_MIN) - ZOOM_MIN).abs() < 1e-6);
+    }
+
+    #[test]
+    fn link_handle_shrinks_when_zoomed_out() {
+        let a = Vec2::new(0.0, 0.0);
+        let b = Vec2::new(8.0, 0.0);
+        assert!((link_handle(a, b, 1.0) - 48.0).abs() < 1e-4);
+        assert!((link_handle(a, b, 0.35) - 48.0 * 0.35).abs() < 1e-4);
+        assert!((link_handle(a, b, ZOOM_MIN) - 48.0 * ZOOM_MIN).abs() < 1e-4);
+    }
+
+    #[test]
+    fn same_port_name_keeps_input_and_output() {
+        let mut space = NodeSpace::new();
+        space.port_pos.insert(
+            ("seq".into(), NodePortSide::Input, "clock".into()),
+            Vec2::new(0.0, 0.0),
+        );
+        space.port_pos.insert(
+            ("seq".into(), NodePortSide::Output, "clock".into()),
+            Vec2::new(10.0, 0.0),
+        );
+        assert_eq!(
+            space.port_pos.get(&("seq".into(), NodePortSide::Input, "clock".into())),
+            Some(&Vec2::new(0.0, 0.0))
+        );
+        assert_eq!(
+            space.port_pos.get(&("seq".into(), NodePortSide::Output, "clock".into())),
+            Some(&Vec2::new(10.0, 0.0))
+        );
     }
 }

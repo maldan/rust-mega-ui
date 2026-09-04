@@ -60,6 +60,14 @@ impl Ui {
         self.drag_float_grip(id, value, step, None)
     }
 
+    /// Integer field: drag and arrows step by `step` (minimum 1).
+    pub fn drag_int(&mut self, id: &str, value: &mut i32, step: i32) -> Response {
+        let mut v = *value as f32;
+        let r = self.drag_float(id, &mut v, step.max(1) as f32);
+        *value = v.round() as i32;
+        r
+    }
+
     /// Like [`Self::drag_float`], with an optional colored drag grip.
     ///
     /// `step` controls grip-drag and arrow nudges only — typed values are kept exact.
@@ -75,14 +83,19 @@ impl Ui {
         let grip_id = widget_id.child("__grip");
         let height = self.s(28.0);
         let fill_w = self.layer().fill_w;
-        let width = if fill_w > 0.0 && matches!(self.layer().dir, LayoutDir::Vertical) {
+        let filling = fill_w > 0.0 && matches!(self.layer().dir, LayoutDir::Vertical);
+        let width = if filling {
             fill_w
         } else if matches!(self.layer().dir, LayoutDir::Horizontal) {
             self.s(72.0)
         } else {
             self.s(120.0)
         };
-        let rect = self.allocate(Vec2::new(width, height));
+        let rect = if filling {
+            self.allocate_fill_x(Vec2::new(width, height))
+        } else {
+            self.allocate(Vec2::new(width, height))
+        };
         let grip_w = if grip_color.is_some() {
             self.s(8.0)
         } else {

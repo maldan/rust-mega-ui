@@ -24,13 +24,18 @@ impl Ui {
         let radius = self.s(theme::BTN_RADIUS);
         let pad = self.s(10.0);
         let fill_w = self.layer().fill_w;
-        let width = if fill_w > 0.0 && matches!(self.layer().dir, LayoutDir::Vertical) {
+        let filling = fill_w > 0.0 && matches!(self.layer().dir, LayoutDir::Vertical);
+        let width = if filling {
             fill_w
         } else {
             self.s(180.0)
         };
 
-        let header = self.allocate(Vec2::new(width, height));
+        let header = if filling {
+            self.allocate_fill_x(Vec2::new(width, height))
+        } else {
+            self.allocate(Vec2::new(width, height))
+        };
         let header_hovered = self.hovered_rect(header);
 
         if header_hovered {

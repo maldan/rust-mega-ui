@@ -141,6 +141,34 @@ impl Ui {
 
         self.scrolls.insert(widget_id, st);
     }
+
+    pub fn scroll_offset(&self, id: &str) -> Vec2 {
+        self.scrolls
+            .get(&self.current_id(id))
+            .map(|s| s.offset)
+            .unwrap_or(Vec2::ZERO)
+    }
+
+    pub fn take_scroll(&mut self) -> Vec2 {
+        let d = self.input.scroll_delta;
+        if d != Vec2::ZERO {
+            self.consume_scroll();
+        }
+        d
+    }
+
+    /// Jump a [`Self::scroll_area`] to `target` (same `id`, same parent ids).
+    pub fn set_scroll_target(&mut self, id: &str, target: Vec2) {
+        let widget_id = self.current_id(id);
+        let mut st = self.scrolls.get(&widget_id).copied().unwrap_or(ScrollState {
+            offset: Vec2::ZERO,
+            target: Vec2::ZERO,
+            content: Vec2::ZERO,
+        });
+        st.target = target;
+        st.offset = target;
+        self.scrolls.insert(widget_id, st);
+    }
 }
 
 fn thumb_len(view: f32, content: f32, min: f32) -> f32 {

@@ -50,15 +50,19 @@ impl Ui {
         view: &PlotView,
     ) -> Response {
         let fill_w = self.layer().fill_w;
-        let w = if size.x <= 0.0 && fill_w > 0.0 && matches!(self.layer().dir, LayoutDir::Vertical)
-        {
+        let filling = size.x <= 0.0 && fill_w > 0.0 && matches!(self.layer().dir, LayoutDir::Vertical);
+        let w = if filling {
             fill_w
         } else {
             self.s(size.x.max(40.0))
         };
         let h = self.s(size.y.max(40.0));
         let radius = self.s(theme::BTN_RADIUS);
-        let rect = self.allocate(Vec2::new(w, h));
+        let rect = if filling {
+            self.allocate_fill_x(Vec2::new(w, h))
+        } else {
+            self.allocate(Vec2::new(w, h))
+        };
         self.round_rect(rect, radius, theme::PLOT_BG);
         self.push_clip(rect);
         draw_plot_grid(self, rect, view);
@@ -66,6 +70,207 @@ impl Ui {
         self.pop_clip();
         self.interact_rect(self.current_id(id), rect)
     }
+
+    /// Vertical bars, values in `0..=1`, left = first bin.
+    /// `ticks` are `(0..=1, label)` along the X axis (left → right).
+    pub fn plot_bars(
+        &mut self,
+        id: &str,
+        size: Vec2,
+        values: &[f32],
+        ticks: &[(f32, &str)],
+    ) -> Response {
+        let (rect, radius) = plot_rect(self, size);
+        self.round_rect(rect, radius, theme::PLOT_BG);
+        let axis_h = self.s(13.0);
+        let plot = Rect {
+            min: rect.min,
+            max: Vec2::new(rect.max.x, (rect.max.y - axis_h).max(rect.min.y + 8.0)),
+        };
+        self.push_clip(plot);
+        if !values.is_empty() {
+            let n = values.len() as f32;
+            let gap = self.s(1.0).min(plot.width() / n * 0.25);
+            let bw = ((plot.width() - gap * (n - 1.0)) / n).max(1.0);
+            for (i, v) in values.iter().enumerate() {
+                let h = plot.height() * v.clamp(0.0, 1.0);
+                if h < 0.5 {
+                    continue;
+                }
+                let x = plot.min.x + i as f32 * (bw + gap);
+                let bar = Rect {
+                    min: Vec2::new(x, plot.max.y - h),
+                    max: Vec2::new(x + bw, plot.max.y),
+                };
+                self.fill_rect(bar, theme::PLOT_LINE);
+            }
+        }
+        draw_tick_grid_x(self, plot, ticks);
+        self.pop_clip();
+        draw_tick_labels_x(self, rect, plot, ticks);
+        self.interact_rect(self.current_id(id), rect)
+    }
+
+    /// Heatmap: `values.len() == cols * rows`, column-major, row 0 at the bottom.
+    /// `ticks` are `(0..=1, label)` along the Y axis (bottom → top).
+    pub fn plot_heatmap(
+        &mut self,
+        id: &str,
+        size: Vec2,
+        cols: usize,
+        rows: usize,
+        values: &[f32],
+        ticks: &[(f32, &str)],
+    ) -> Response {
+        let (rect, radius) = plot_rect(self, size);
+        self.round_rect(rect, radius, theme::PLOT_BG);
+        let axis_w = self.s(26.0);
+        let plot = Rect {
+            min: Vec2::new((rect.min.x + axis_w).min(rect.max.x - 8.0), rect.min.y),
+            max: rect.max,
+        };
+        self.push_clip(plot);
+        if cols > 0 && rows > 0 && values.len() >= cols * rows {
+            let cw = plot.width() / cols as f32;
+            let rh = plot.height() / rows as f32;
+            for c in 0..cols {
+                for r in 0..rows {
+                    let t = values[c * rows + r];
+                    if t <= 0.02 {
+                        continue;
+                    }
+                    let cell = Rect {
+                        min: Vec2::new(
+                            plot.min.x + c as f32 * cw,
+                            plot.max.y - (r as f32 + 1.0) * rh,
+                        ),
+                        max: Vec2::new(
+                            plot.min.x + (c as f32 + 1.0) * cw,
+                            plot.max.y - r as f32 * rh,
+                        ),
+                    };
+                    self.fill_rect(cell, heat_color(t));
+                }
+            }
+        }
+        draw_tick_grid_y(self, plot, ticks);
+        self.pop_clip();
+        draw_tick_labels_y(self, rect, plot, ticks);
+        self.interact_rect(self.current_id(id), rect)
+    }
+}
+
+pub(crate) fn draw_tick_grid_x(ui: &mut Ui, plot: Rect, ticks: &[(f32, &str)]) {
+    for &(t, _) in ticks {
+        let x = plot.min.x + plot.width() * t.clamp(0.0, 1.0);
+        ui.draw_line_segment(
+            Vec2::new(x, plot.min.y),
+            Vec2::new(x, plot.max.y),
+            1.0,
+            theme::PLOT_GRID,
+        );
+    }
+}
+
+fn draw_tick_grid_y(ui: &mut Ui, plot: Rect, ticks: &[(f32, &str)]) {
+    for &(t, _) in ticks {
+        let y = plot.max.y - plot.height() * t.clamp(0.0, 1.0);
+        ui.draw_line_segment(
+            Vec2::new(plot.min.x, y),
+            Vec2::new(plot.max.x, y),
+            1.0,
+            theme::PLOT_GRID,
+        );
+    }
+}
+
+pub(crate) fn draw_tick_labels_x(ui: &mut Ui, outer: Rect, plot: Rect, ticks: &[(f32, &str)]) {
+    let px = ui.s(10.0);
+    let mut last = outer.min.x - 8.0;
+    for &(t, label) in ticks {
+        let x = plot.min.x + plot.width() * t.clamp(0.0, 1.0);
+        let tw = ui.text_width_at(label, px);
+        let lx = (x - tw * 0.5).clamp(outer.min.x + 1.0, outer.max.x - tw - 1.0);
+        if lx < last {
+            continue;
+        }
+        ui.text_sized(
+            Vec2::new(lx, plot.max.y + ui.s(1.0)),
+            label,
+            theme::TEXT_DISABLED,
+            px,
+        );
+        last = lx + tw + ui.s(4.0);
+    }
+}
+
+fn draw_tick_labels_y(ui: &mut Ui, outer: Rect, plot: Rect, ticks: &[(f32, &str)]) {
+    let px = ui.s(10.0);
+    let th = ui.text_height_at(px);
+    let mut last_y = f32::INFINITY;
+    for &(t, label) in ticks {
+        let y = plot.max.y - plot.height() * t.clamp(0.0, 1.0);
+        let ty = (y - th * 0.5).clamp(outer.min.y + 1.0, outer.max.y - th - 1.0);
+        if (last_y - ty).abs() < th {
+            continue;
+        }
+        ui.text_sized(
+            Vec2::new(outer.min.x + ui.s(2.0), ty),
+            label,
+            theme::TEXT_DISABLED,
+            px,
+        );
+        last_y = ty;
+    }
+}
+
+fn plot_rect(ui: &mut Ui, size: Vec2) -> (Rect, f32) {
+    let fill_w = ui.layer().fill_w;
+    let filling = size.x <= 0.0 && fill_w > 0.0 && matches!(ui.layer().dir, LayoutDir::Vertical);
+    let w = if filling {
+        fill_w
+    } else {
+        ui.s(size.x.max(40.0))
+    };
+    let h = ui.s(size.y.max(40.0));
+    let radius = ui.s(theme::BTN_RADIUS);
+    let rect = if filling {
+        ui.allocate_fill_x(Vec2::new(w, h))
+    } else {
+        ui.allocate(Vec2::new(w, h))
+    };
+    (rect, radius)
+}
+
+fn heat_color(t: f32) -> [f32; 4] {
+    let t = t.clamp(0.0, 1.0);
+    let (a, b, u) = if t < 0.25 {
+        ([0.02, 0.04, 0.14, 1.0], [0.08, 0.18, 0.62, 1.0], t / 0.25)
+    } else if t < 0.5 {
+        (
+            [0.08, 0.18, 0.62, 1.0],
+            [0.05, 0.72, 0.78, 1.0],
+            (t - 0.25) / 0.25,
+        )
+    } else if t < 0.75 {
+        (
+            [0.05, 0.72, 0.78, 1.0],
+            [0.95, 0.82, 0.18, 1.0],
+            (t - 0.5) / 0.25,
+        )
+    } else {
+        (
+            [0.95, 0.82, 0.18, 1.0],
+            [1.0, 0.98, 0.92, 1.0],
+            (t - 0.75) / 0.25,
+        )
+    };
+    [
+        a[0] + (b[0] - a[0]) * u,
+        a[1] + (b[1] - a[1]) * u,
+        a[2] + (b[2] - a[2]) * u,
+        1.0,
+    ]
 }
 
 fn draw_plot_grid(ui: &mut Ui, rect: Rect, view: &PlotView) {

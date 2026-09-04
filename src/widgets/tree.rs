@@ -139,7 +139,7 @@ impl Ui {
     }
 
     pub fn tree_node(&mut self, id: &str, label: &str, add: impl FnOnce(&mut Self)) -> TreeResponse {
-        self.tree_node_ex(id, None, label, true, |_| {}, add)
+        self.tree_node_ex(id, None, label, true, false, |_| {}, add)
     }
 
     /// Expandable tree node with a leading type icon (e.g. folder).
@@ -150,7 +150,19 @@ impl Ui {
         label: &str,
         add: impl FnOnce(&mut Self),
     ) -> TreeResponse {
-        self.tree_node_ex(id, Some(icon), label, true, |_| {}, add)
+        self.tree_node_ex(id, Some(icon), label, true, false, |_| {}, add)
+    }
+
+    /// Like [`Self::tree_node_icon`], with an explicit first-open default.
+    pub fn tree_node_icon_open(
+        &mut self,
+        id: &str,
+        icon: &str,
+        label: &str,
+        default_open: bool,
+        add: impl FnOnce(&mut Self),
+    ) -> TreeResponse {
+        self.tree_node_ex(id, Some(icon), label, true, default_open, |_| {}, add)
     }
 
     /// Expandable node with mid/trailing icon slots.
@@ -161,7 +173,7 @@ impl Ui {
         extras: impl FnOnce(&mut TreeRow),
         add: impl FnOnce(&mut Self),
     ) -> TreeResponse {
-        self.tree_node_ex(id, None, label, true, extras, add)
+        self.tree_node_ex(id, None, label, true, false, extras, add)
     }
 
     /// Expandable node with leading icon and mid/trailing slots.
@@ -173,17 +185,17 @@ impl Ui {
         extras: impl FnOnce(&mut TreeRow),
         add: impl FnOnce(&mut Self),
     ) -> TreeResponse {
-        self.tree_node_ex(id, Some(icon), label, true, extras, add)
+        self.tree_node_ex(id, Some(icon), label, true, false, extras, add)
     }
 
     /// Non-expandable leaf.
     pub fn tree_leaf(&mut self, id: &str, label: &str) -> TreeResponse {
-        self.tree_node_ex(id, None, label, false, |_| {}, |_| {})
+        self.tree_node_ex(id, None, label, false, false, |_| {}, |_| {})
     }
 
     /// Non-expandable leaf with icon (e.g. file).
     pub fn tree_leaf_icon(&mut self, id: &str, icon: &str, label: &str) -> TreeResponse {
-        self.tree_node_ex(id, Some(icon), label, false, |_| {}, |_| {})
+        self.tree_node_ex(id, Some(icon), label, false, false, |_| {}, |_| {})
     }
 
     /// Leaf with mid/trailing icon slots.
@@ -193,7 +205,7 @@ impl Ui {
         label: &str,
         extras: impl FnOnce(&mut TreeRow),
     ) -> TreeResponse {
-        self.tree_node_ex(id, None, label, false, extras, |_| {})
+        self.tree_node_ex(id, None, label, false, false, extras, |_| {})
     }
 
     /// Leaf with leading icon and mid/trailing slots.
@@ -204,7 +216,7 @@ impl Ui {
         label: &str,
         extras: impl FnOnce(&mut TreeRow),
     ) -> TreeResponse {
-        self.tree_node_ex(id, Some(icon), label, false, extras, |_| {})
+        self.tree_node_ex(id, Some(icon), label, false, false, extras, |_| {})
     }
 
     fn tree_node_ex(
@@ -213,13 +225,14 @@ impl Ui {
         icon: Option<&str>,
         label: &str,
         expandable: bool,
+        default_open: bool,
         extras: impl FnOnce(&mut TreeRow),
         add: impl FnOnce(&mut Self),
     ) -> TreeResponse {
         let widget_id = self.current_id(id);
         let arrow_id = widget_id.child("#arrow");
         let sel_id = widget_id.child("#sel");
-        let mut open = expandable && self.trees.get(&widget_id).copied().unwrap_or(false);
+        let mut open = expandable && self.trees.get(&widget_id).copied().unwrap_or(default_open);
 
         let height = self.s(24.0);
         let indent = self.s(14.0);

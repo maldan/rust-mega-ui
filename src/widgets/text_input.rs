@@ -14,12 +14,17 @@ impl Ui {
         let widget_id = self.current_id(id);
         let height = self.s(28.0);
         let fill_w = self.layer().fill_w;
-        let width = if fill_w > 0.0 && matches!(self.layer().dir, LayoutDir::Vertical) {
+        let filling = fill_w > 0.0 && matches!(self.layer().dir, LayoutDir::Vertical);
+        let width = if filling {
             fill_w
         } else {
             self.s(180.0)
         };
-        let rect = self.allocate(Vec2::new(width, height));
+        let rect = if filling {
+            self.allocate_fill_x(Vec2::new(width, height))
+        } else {
+            self.allocate(Vec2::new(width, height))
+        };
 
         let hovered = enabled && self.hovered_rect(rect);
         if hovered {

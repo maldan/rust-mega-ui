@@ -16,6 +16,18 @@ pub const MODAL_DIM: [f32; 4] = [0.0, 0.0, 0.0, 0.62];
 
 /// Cool blue accent (interactive only — surfaces stay neutral).
 pub const ACCENT: [f32; 4] = [0.12, 0.32, 0.72, 1.0];
+/// Node graph: evaluating / running (overrides selection chrome).
+pub const NODE_RUNNING: [f32; 4] = [0.18, 0.68, 0.32, 1.0];
+/// Node graph: bypassed (overrides running / selection chrome).
+pub const NODE_BYPASS: [f32; 4] = [0.55, 0.42, 0.12, 1.0];
+pub const WIN_BODY_BYPASS: [f32; 4] = [0.11, 0.10, 0.08, 1.0];
+pub const WIN_TITLE_BYPASS: [f32; 4] = [0.20, 0.16, 0.08, 1.0];
+pub const WIN_TITLE_BYPASS_HOVER: [f32; 4] = [0.26, 0.20, 0.10, 1.0];
+/// Node graph frames (groups).
+pub const NODE_FRAME: [f32; 4] = [0.14, 0.22, 0.36, 0.10];
+pub const NODE_FRAME_SEL: [f32; 4] = [0.16, 0.32, 0.58, 0.10];
+pub const NODE_FRAME_BORDER: [f32; 4] = [0.32, 0.48, 0.72, 0.55];
+pub const NODE_FRAME_BORDER_SEL: [f32; 4] = [0.40, 0.62, 0.95, 0.85];
 pub const ACCENT_DIM: [f32; 4] = [0.10, 0.26, 0.58, 1.0];
 pub const ACCENT_SOFT: [f32; 4] = [0.06, 0.12, 0.24, 1.0];
 

@@ -1,4 +1,4 @@
-use std::f32::consts::{PI, TAU};
+use std::f32::consts::PI;
 
 use glam::Vec2;
 
@@ -10,31 +10,17 @@ use crate::Ui;
 /// Math angles: 0 = +x, CCW, y-up. Screen dir = (cos, -sin).
 const KNOB_START: f32 = 225.0 * PI / 180.0;
 const KNOB_SWEEP: f32 = 270.0 * PI / 180.0;
+/// Screen pixels (pre-scale) for a full sweep. Shift = 4× finer.
+const DRAG_PX: f32 = 400.0;
 
 fn dir_from_t(t: f32) -> Vec2 {
     let a = KNOB_START - t.clamp(0.0, 1.0) * KNOB_SWEEP;
     Vec2::new(a.cos(), -a.sin())
 }
 
-fn t_from_pos(center: Vec2, pos: Vec2) -> f32 {
-    let d = pos - center;
-    if d.length_squared() < 1.0 {
-        return 0.0;
-    }
-    // Math angle from screen delta.
-    let a = (-d.y).atan2(d.x);
-    let delta = (KNOB_START - a).rem_euclid(TAU);
-    if delta <= KNOB_SWEEP {
-        (delta / KNOB_SWEEP).clamp(0.0, 1.0)
-    } else {
-        // Bottom dead-zone: snap to nearer end.
-        let into_gap = delta - KNOB_SWEEP;
-        if into_gap < (TAU - KNOB_SWEEP) * 0.5 {
-            1.0
-        } else {
-            0.0
-        }
-    }
+/// `dy` is OS mouse delta (+y is down). Up increases value.
+fn t_from_delta(t0: f32, dy: f32, pixels: f32) -> f32 {
+    (t0 - dy / pixels.max(1.0)).clamp(0.0, 1.0)
 }
 
 impl Ui {
@@ -59,6 +45,7 @@ impl Ui {
         let enabled = self.enabled();
         let widget_id = self.current_id(id);
         let (min, max) = (*range.start(), *range.end());
+        let span = max - min;
 
         let dial = self.s(theme::KNOB_SIZE);
         let th = self.text_height();
@@ -81,38 +68,40 @@ impl Ui {
         }
         if hovered && self.input.mouse_pressed {
             self.active_id = Some(widget_id);
+            self.cursor_anchor = Some(self.input.mouse_pos);
         }
 
         let active = enabled && self.active_id == Some(widget_id);
         let mut changed = false;
 
         if active && self.input.mouse_down {
-            let t = t_from_pos(center, self.input.mouse_pos);
-            let new = min + t * (max - min);
-            if (new - *value).abs() > f32::EPSILON {
-                *value = new;
-                changed = true;
-            }
             self.want_capture = true;
-            self.set_cursor(CursorIcon::Pointer);
+            self.hide_cursor = true;
+            self.request_repaint();
+            if !self.input.mouse_pressed {
+                let t0 = if span.abs() < f32::EPSILON {
+                    0.0
+                } else {
+                    ((*value - min) / span).clamp(0.0, 1.0)
+                };
+                let pixels = self.s(if self.input.key_shift {
+                    DRAG_PX * 4.0
+                } else {
+                    DRAG_PX
+                });
+                let t = t_from_delta(t0, self.input.mouse_delta.y, pixels);
+                let new = min + t * span;
+                if (new - *value).abs() > f32::EPSILON {
+                    *value = new;
+                    changed = true;
+                }
+            }
         }
 
-        if hovered && self.input.scroll_delta.y.abs() > 0.0 {
-            let span = max - min;
-            let step = span * 0.02;
-            let new = (*value + self.input.scroll_delta.y.signum() * step).clamp(min, max);
-            if (new - *value).abs() > f32::EPSILON {
-                *value = new;
-                changed = true;
-            }
-            self.consume_scroll();
-            self.want_capture = true;
-        }
-
-        let t = if (max - min).abs() < f32::EPSILON {
+        let t = if span.abs() < f32::EPSILON {
             0.0
         } else {
-            ((*value - min) / (max - min)).clamp(0.0, 1.0)
+            ((*value - min) / span).clamp(0.0, 1.0)
         };
 
         let clip = if self.draw_to_overlay {
@@ -130,7 +119,6 @@ impl Ui {
                 &mut self.draw_list
             };
 
-            // Track + value arc
             push_arc_cw(
                 list,
                 center,
@@ -160,7 +148,6 @@ impl Ui {
                 );
             }
 
-            // Face: dark border + flat disc
             push_round_rect(
                 list,
                 Rect::from_min_size(
@@ -185,14 +172,12 @@ impl Ui {
                 clip,
             );
 
-            // Indicator
             let d = dir_from_t(t);
             let a = center + d * (face_r * 0.22);
             let b = center + d * (face_r * 0.82);
             push_line(list, a, b, needle_w, theme::KNOB_INDICATOR, uv, clip);
         }
 
-        // Label centered under dial
         let label_w = self.text_width(id);
         let label_x = rect.min.x + (dial - label_w) * 0.5;
         let label_y = rect.min.y + dial + gap;
@@ -208,5 +193,28 @@ impl Ui {
             clicked: false,
             changed,
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn drag_up_increases_value() {
+        let t = t_from_delta(0.5, -50.0, 400.0);
+        assert!((t - 0.625).abs() < 1e-5);
+    }
+
+    #[test]
+    fn drag_clamps() {
+        assert_eq!(t_from_delta(0.0, 500.0, 100.0), 0.0);
+        assert_eq!(t_from_delta(1.0, -500.0, 100.0), 1.0);
+    }
+
+    #[test]
+    fn press_does_not_jump() {
+        let t = t_from_delta(0.3, 0.0, 400.0);
+        assert!((t - 0.3).abs() < 1e-6);
     }
 }

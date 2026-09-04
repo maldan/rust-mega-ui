@@ -43,12 +43,17 @@ impl Ui {
         let total_h = th + gap + track_row_h;
 
         let fill_w = self.layer().fill_w;
-        let width = if fill_w > 0.0 && matches!(self.layer().dir, LayoutDir::Vertical) {
+        let filling = fill_w > 0.0 && matches!(self.layer().dir, LayoutDir::Vertical);
+        let width = if filling {
             fill_w
         } else {
             self.s(160.0)
         };
-        let rect = self.allocate(Vec2::new(width, total_h)).round_px();
+        let rect = if filling {
+            self.allocate_fill_x(Vec2::new(width, total_h)).round_px()
+        } else {
+            self.allocate(Vec2::new(width, total_h)).round_px()
+        };
 
         let labels_y = rect.min.y.round();
         let track_row = Rect::from_min_size(

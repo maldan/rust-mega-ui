@@ -10,6 +10,8 @@
 //! - Ctrl+click node — toggle multi-select
 //! - Wheel — zoom
 //! - Drag node title — move group (snap default 5)
+//! - Drag frame — move all member nodes
+//! - Inspector Group selected — wrap selection in a frame
 //! - Drag ports — connect
 //! - RMB on wire — delete link
 //! - Selected wire + Delete — also deletes
@@ -1074,11 +1076,31 @@ impl Scene for NodesDemo {
                         });
                         ui.separator();
 
+                        if let Some(fid) = space.selected_frame.clone() {
+                            if space.frames.iter().any(|f| f.id == fid) {
+                                ui.label("Group");
+                                ui.label(&format!("Id: {fid}"));
+                                ui.label("Label");
+                                if let Some(frame) =
+                                    space.frames.iter_mut().find(|f| f.id == fid)
+                                {
+                                    let _ = ui.text_input("frame_label", &mut frame.label);
+                                }
+                                if ui.button("Ungroup").clicked() {
+                                    space.ungroup_frame(&fid);
+                                }
+                                ui.separator();
+                            }
+                        }
+
                         if space.selected_nodes.len() > 1 {
                             ui.label(&format!(
                                 "Multi-select ({} nodes)",
                                 space.selected_nodes.len()
                             ));
+                            if ui.button("Group selected").clicked() {
+                                space.group_nodes(&space.selected_nodes.clone());
+                            }
                             if ui.button("Clone selected").clicked() {
                                 space.request_clone_nodes = space.selected_nodes.clone();
                             }
@@ -1161,6 +1183,7 @@ impl Scene for NodesDemo {
                         if let Some(id) = focus {
                             space.selected_nodes = vec![id];
                             space.selected_link = None;
+                            space.selected_frame = None;
                         }
                     });
                 }

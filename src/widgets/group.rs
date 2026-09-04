@@ -30,17 +30,24 @@ impl Ui {
             pad
         };
 
-        let prev = self
+        let sc = self.scale.max(1e-4);
+        let prev_pt = self
             .group_sizes
             .get(&widget_id)
             .copied()
-            .unwrap_or(Vec2::new(self.s(120.0), self.s(40.0)));
+            .unwrap_or(Vec2::new(120.0, 40.0));
+        let prev = prev_pt * sc;
 
         let fill_w = self.layer().fill_w;
-        let width = if fill_w > 0.0 && matches!(self.layer().dir, LayoutDir::Vertical) {
-            fill_w
+        let hug_w = (prev.x + pad * 2.0).max(self.s(80.0));
+        // Inside a node, hug content. Stretching to last-frame fill_w grows forever on zoom-out.
+        let width = if fill_w > 0.0
+            && matches!(self.layer().dir, LayoutDir::Vertical)
+            && self.current_node_id.is_none()
+        {
+            fill_w.max(hug_w)
         } else {
-            (prev.x + pad * 2.0).max(self.s(80.0))
+            hug_w
         };
         let height = prev.y + pad_top + pad + title_half;
         let rect = self.allocate(Vec2::new(width, height));
@@ -89,11 +96,15 @@ impl Ui {
             CrossAlign::Start,
         ));
         add(self);
-        let used = self.layers.pop().unwrap().used;
+        let child = self.layers.pop().unwrap();
+        let content = child.hug_x.max(child.used.x);
         self.group_sizes.insert(
             widget_id,
-            Vec2::new(used.x.max(1.0), used.y.max(1.0)),
+            Vec2::new((content / sc).max(1.0), (child.used.y / sc).max(1.0)),
         );
+        if content + pad * 2.0 > width + 1.0 {
+            self.request_repaint();
+        }
         self.pop_id();
     }
 }
