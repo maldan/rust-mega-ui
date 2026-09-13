@@ -3,7 +3,7 @@ mod draw;
 mod font;
 mod icon;
 mod layout;
-mod node_space;
+mod node_graph;
 mod plot_view;
 pub(crate) mod theme;
 mod types;
@@ -15,7 +15,7 @@ pub mod wgpu;
 
 pub use dock::{DockNode, DockState};
 pub use layout::{CrossAlign, LayoutOpts, MainAlign};
-pub use node_space::{NodeFrame, NodeLink, NodePortSide, NodeSpace, PortType, port_type};
+pub use node_graph::{NodeFrame, NodeLink, NodePortSide, NodeSpace, PortType, port_type};
 pub use plot_view::PlotView;
 pub use types::{
     Area, CursorIcon, DrawCommand, Id, Pointer, Rect, Response, UiInput, UiInputDebug, UiOutput,
@@ -174,7 +174,7 @@ pub struct Ui {
     /// When true, `text` / `round_rect` paint into the overlay list.
     pub(crate) draw_to_overlay: bool,
     /// Active [`NodeSpace`] during `node_space` closure (host stack borrow).
-    pub(crate) node_space_ptr: Option<NonNull<node_space::NodeSpace>>,
+    pub(crate) node_space_ptr: Option<NonNull<node_graph::NodeSpace>>,
     pub(crate) node_space_clip: Option<Rect>,
     pub(crate) node_space_id: Option<Id>,
     pub(crate) current_node_id: Option<String>,

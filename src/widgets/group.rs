@@ -40,17 +40,19 @@ impl Ui {
 
         let fill_w = self.layer().fill_w;
         let hug_w = (prev.x + pad * 2.0).max(self.s(80.0));
-        // Inside a node, hug content. Stretching to last-frame fill_w grows forever on zoom-out.
-        let width = if fill_w > 0.0
+        // Filled parent (dock leaf, scroll): match fill_w so the group shrinks with the pane.
+        // `fill_w.max(hug_w)` ratchets: stretch stores used.x as hug, then shrink never wins.
+        // Inside a node, hug content — stretching to fill_w grows forever on zoom-out.
+        let filling = fill_w > 0.0
             && matches!(self.layer().dir, LayoutDir::Vertical)
-            && self.current_node_id.is_none()
-        {
-            fill_w.max(hug_w)
-        } else {
-            hug_w
-        };
+            && self.current_node_id.is_none();
+        let width = if filling { fill_w } else { hug_w };
         let height = prev.y + pad_top + pad + title_half;
-        let rect = self.allocate(Vec2::new(width, height));
+        let rect = if filling {
+            self.allocate_fill_x(Vec2::new(width, height))
+        } else {
+            self.allocate(Vec2::new(width, height))
+        };
 
         // Frame sits so the top border runs through the title midline.
         let frame = Rect {
@@ -106,5 +108,48 @@ impl Ui {
             self.request_repaint();
         }
         self.pop_id();
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::types::UiInput;
+    use crate::{CrossAlign, LayoutDir, Ui, new_layer};
+
+    fn pane_used(ui: &mut Ui, fill_w: f32) -> f32 {
+        ui.layers.push(new_layer(
+            LayoutDir::Vertical,
+            Vec2::ZERO,
+            ui.spacing,
+            fill_w,
+            0.0,
+            CrossAlign::Start,
+        ));
+        let mut v = 0.5;
+        ui.group("Lens", |ui| {
+            ui.slider("focal", &mut v, 0.0..=1.0);
+        });
+        ui.layers.pop().unwrap().used.x
+    }
+
+    #[test]
+    fn group_in_filled_pane_shrinks_after_stretch() {
+        let mut ui = Ui::new();
+        let mut input = UiInput::default();
+        input.viewport = Vec2::new(800.0, 600.0);
+
+        ui.begin_frame(input.clone());
+        let wide = pane_used(&mut ui, 400.0);
+        ui.end_frame();
+        assert!((wide - 400.0).abs() < 1.0, "wide={wide}");
+
+        ui.begin_frame(input);
+        let narrow = pane_used(&mut ui, 180.0);
+        ui.end_frame();
+        assert!(
+            (narrow - 180.0).abs() < 1.0,
+            "group kept stretched width: {narrow}"
+        );
     }
 }
