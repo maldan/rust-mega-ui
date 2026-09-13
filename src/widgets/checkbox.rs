@@ -1,8 +1,8 @@
 use glam::Vec2;
 
+use crate::Ui;
 use crate::theme;
 use crate::types::{CursorIcon, Rect, Response};
-use crate::Ui;
 
 impl Ui {
     pub fn checkbox(&mut self, label: &str, checked: &mut bool) -> Response {

@@ -3,8 +3,8 @@ use glam::Vec2;
 use crate::theme;
 use crate::types::{CursorIcon, Response};
 use crate::widgets::edit::{
-    byte_at_x, clamp_edit, draw_sel_line, handle_clipboard, handle_typing, has_sel, move_end,
-    move_home, move_left, move_right, sel_range, EditState,
+    EditState, byte_at_x, clamp_edit, draw_sel_line, handle_clipboard, handle_typing, has_sel,
+    move_end, move_home, move_left, move_right, sel_range,
 };
 use crate::{LayoutDir, Ui};
 
@@ -15,11 +15,7 @@ impl Ui {
         let height = self.s(28.0);
         let fill_w = self.layer().fill_w;
         let filling = fill_w > 0.0 && matches!(self.layer().dir, LayoutDir::Vertical);
-        let width = if filling {
-            fill_w
-        } else {
-            self.s(180.0)
-        };
+        let width = if filling { fill_w } else { self.s(180.0) };
         let rect = if filling {
             self.allocate_fill_x(Vec2::new(width, height))
         } else {
@@ -38,14 +34,10 @@ impl Ui {
         }
 
         let focused = enabled && self.focus_id == Some(widget_id);
-        let mut st = self
-            .edits
-            .get(&widget_id)
-            .copied()
-            .unwrap_or(EditState {
-                caret: text.len(),
-                anchor: text.len(),
-            });
+        let mut st = self.edits.get(&widget_id).copied().unwrap_or(EditState {
+            caret: text.len(),
+            anchor: text.len(),
+        });
         clamp_edit(&mut st, text.len());
 
         let mut changed = false;

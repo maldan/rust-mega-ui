@@ -2,10 +2,10 @@ use std::f32::consts::PI;
 
 use glam::Vec2;
 
+use crate::Ui;
 use crate::draw::{push_arc_cw, push_line, push_round_rect};
 use crate::theme;
 use crate::types::{CursorIcon, Rect, Response};
-use crate::Ui;
 
 /// Math angles: 0 = +x, CCW, y-up. Screen dir = (cos, -sin).
 const KNOB_START: f32 = 225.0 * PI / 180.0;
@@ -160,17 +160,7 @@ impl Ui {
             );
             if t > 0.001 {
                 push_arc_cw(
-                    list,
-                    center,
-                    r_in,
-                    r_out,
-                    KNOB_START,
-                    KNOB_SWEEP,
-                    0.0,
-                    t,
-                    fill,
-                    uv,
-                    clip,
+                    list, center, r_in, r_out, KNOB_START, KNOB_SWEEP, 0.0, t, fill, uv, clip,
                 );
             }
 

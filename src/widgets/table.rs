@@ -2,7 +2,7 @@ use glam::Vec2;
 
 use crate::theme;
 use crate::types::{CursorIcon, Rect, Response};
-use crate::{CrossAlign, new_layer, LayoutDir, Ui};
+use crate::{CrossAlign, LayoutDir, Ui, new_layer};
 
 #[derive(Clone, Copy)]
 pub struct TableColumn<'a> {

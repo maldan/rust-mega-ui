@@ -1,9 +1,9 @@
-pub(crate) mod curve;
-mod button;
 pub(crate) mod browser;
+mod button;
 mod checkbox;
 mod collapsing_header;
 pub(crate) mod color_picker;
+pub(crate) mod curve;
 mod drag_float;
 pub(crate) mod edit;
 pub(crate) mod gradient;
@@ -27,13 +27,11 @@ mod toggle;
 mod tree;
 mod vector;
 
+pub use browser::{BrowserItem, BrowserResponse};
 pub use curve::{
     AnimationCurve, CurveEditorResponse, CurvePoint, CurvePreset, apply_preset, ease_in_out,
     flat_pass_curve, sample_curve,
 };
-pub use browser::{BrowserItem, BrowserResponse};
-pub use gradient::{
-    sample_gradient, GradientEditorResponse, GradientStop, OpacityStop,
-};
-pub use tree::{TreeResponse, TreeRow};
+pub use gradient::{GradientEditorResponse, GradientStop, OpacityStop, sample_gradient};
 pub use toast::ToastKind;
+pub use tree::{TreeResponse, TreeRow};

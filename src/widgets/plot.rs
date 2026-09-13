@@ -50,7 +50,8 @@ impl Ui {
         view: &PlotView,
     ) -> Response {
         let fill_w = self.layer().fill_w;
-        let filling = size.x <= 0.0 && fill_w > 0.0 && matches!(self.layer().dir, LayoutDir::Vertical);
+        let filling =
+            size.x <= 0.0 && fill_w > 0.0 && matches!(self.layer().dir, LayoutDir::Vertical);
         let w = if filling {
             fill_w
         } else {
@@ -152,9 +153,11 @@ impl Ui {
         if self.active_id == Some(widget_id) && self.input.mouse_down && !values.is_empty() {
             self.want_capture = true;
             let n = values.len() as f32;
-            let t = ((self.input.mouse_pos.x - plot.min.x) / plot.width().max(1.0)).clamp(0.0, 0.999);
+            let t =
+                ((self.input.mouse_pos.x - plot.min.x) / plot.width().max(1.0)).clamp(0.0, 0.999);
             let i = (t * n) as usize;
-            let v = ((plot.max.y - self.input.mouse_pos.y) / plot.height().max(1.0)).clamp(0.0, 1.0);
+            let v =
+                ((plot.max.y - self.input.mouse_pos.y) / plot.height().max(1.0)).clamp(0.0, 1.0);
             if (values[i] - v).abs() > 1e-4 {
                 values[i] = v;
                 resp.changed = true;
@@ -212,11 +215,7 @@ impl Ui {
     ) -> Response {
         let (rect, radius) = plot_rect(self, size);
         self.round_rect(rect, radius, theme::PLOT_BG);
-        let note_w = if notes.is_empty() {
-            0.0
-        } else {
-            self.s(22.0)
-        };
+        let note_w = if notes.is_empty() { 0.0 } else { self.s(22.0) };
         let axis_w = note_w + self.s(26.0);
         let plot = Rect {
             min: Vec2::new((rect.min.x + axis_w).min(rect.max.x - 8.0), rect.min.y),

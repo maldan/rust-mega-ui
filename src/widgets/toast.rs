@@ -2,9 +2,9 @@
 
 use glam::Vec2;
 
+use crate::Ui;
 use crate::theme;
 use crate::types::Rect;
-use crate::Ui;
 
 #[derive(Clone, Copy, PartialEq, Eq)]
 pub enum ToastKind {

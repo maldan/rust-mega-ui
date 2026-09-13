@@ -2,7 +2,7 @@ use glam::Vec2;
 
 use crate::theme;
 use crate::types::{CursorIcon, Response};
-use crate::{CrossAlign, new_layer, LayoutDir, Ui};
+use crate::{CrossAlign, LayoutDir, Ui, new_layer};
 
 impl Ui {
     /// Selectable card: click the background to select; children keep their own input.
@@ -90,8 +90,7 @@ impl Ui {
         );
         self.pop_id();
 
-        let clicked =
-            self.active_id == Some(widget_id) && hovered && self.input.mouse_released;
+        let clicked = self.active_id == Some(widget_id) && hovered && self.input.mouse_released;
         Response {
             hovered,
             clicked,

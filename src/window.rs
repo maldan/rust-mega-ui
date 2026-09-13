@@ -3,7 +3,7 @@ use glam::Vec2;
 use super::draw::push_round_rect;
 use super::theme;
 use super::types::{CursorIcon, Id, Rect};
-use super::{CrossAlign, new_layer, LayoutDir, Ui, WinState};
+use super::{CrossAlign, LayoutDir, Ui, WinState, new_layer};
 
 pub(crate) fn clamp_win(
     pos: &mut Vec2,
@@ -329,9 +329,23 @@ impl Ui {
 
         let min = Vec2::new(self.s(theme::WIN_MIN_W), self.s(theme::WIN_MIN_H));
         let vis_h = if collapsed { title_h } else { size.y };
-        clamp_win(&mut pos, &mut size, vis_h, self.input.viewport, min, title_h);
+        clamp_win(
+            &mut pos,
+            &mut size,
+            vis_h,
+            self.input.viewport,
+            min,
+            title_h,
+        );
         let vis_h = if collapsed { title_h } else { size.y };
-        clamp_win(&mut pos, &mut size, vis_h, self.input.viewport, min, title_h);
+        clamp_win(
+            &mut pos,
+            &mut size,
+            vis_h,
+            self.input.viewport,
+            min,
+            title_h,
+        );
 
         self.windows.insert(
             window_id,
@@ -358,7 +372,11 @@ impl Ui {
         };
 
         self.round_rect(rect, self.s(theme::WIN_RADIUS), theme::WIN_BORDER);
-        self.round_rect(rect.inset(1.0), self.s(theme::WIN_RADIUS) - 1.0, theme::WIN_BODY);
+        self.round_rect(
+            rect.inset(1.0),
+            self.s(theme::WIN_RADIUS) - 1.0,
+            theme::WIN_BODY,
+        );
         let uv = self.font.white_uv();
         let title_r = self.s(theme::WIN_RADIUS) - 1.0;
         push_round_rect(

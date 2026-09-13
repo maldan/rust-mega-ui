@@ -278,13 +278,7 @@ impl<S: Scene> Host<S> {
         let viewport = Vec2::new(size.width as f32, size.height as f32);
         let input = self.input.to_ui(viewport, dt);
         self.ui.begin_frame(input);
-        let keep = S::build(
-            &mut self.ui,
-            &mut self.state,
-            viewport,
-            dt,
-            self.draw_stats,
-        );
+        let keep = S::build(&mut self.ui, &mut self.state, viewport, dt, self.draw_stats);
         let out = self.ui.end_frame();
         let needs_repaint = out.needs_repaint || keep;
 
@@ -401,12 +395,7 @@ impl<S: Scene> ApplicationHandler for Host<S> {
         window.request_redraw();
     }
 
-    fn window_event(
-        &mut self,
-        event_loop: &ActiveEventLoop,
-        _id: WindowId,
-        event: WindowEvent,
-    ) {
+    fn window_event(&mut self, event_loop: &ActiveEventLoop, _id: WindowId, event: WindowEvent) {
         match event {
             WindowEvent::CloseRequested => event_loop.exit(),
             WindowEvent::Resized(size) => {

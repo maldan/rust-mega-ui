@@ -28,8 +28,8 @@ use std::collections::HashMap;
 use framework::{DrawStats, Host, Scene};
 use glam::{Mat4, Quat, Vec2, Vec3};
 use mega_ui::{
-    port_type, DockNode, DockState, GradientStop, NodePortSide, NodeSpace, OpacityStop,
-    ScrollAxes, TextStyle, Ui, sample_gradient,
+    DockNode, DockState, GradientStop, NodePortSide, NodeSpace, OpacityStop, ScrollAxes, TextStyle,
+    Ui, port_type, sample_gradient,
 };
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -264,10 +264,24 @@ impl Default for NodesDemo {
 
         link(&mut space, &n_a, "value", &n_add, "a", port_type::FLOAT);
         link(&mut space, &n_b, "value", &n_add, "b", port_type::FLOAT);
-        link(&mut space, &n_add, "sum", &n_print_f, "in", port_type::FLOAT);
+        link(
+            &mut space,
+            &n_add,
+            "sum",
+            &n_print_f,
+            "in",
+            port_type::FLOAT,
+        );
         link(&mut space, &n_v1, "v", &n_cross, "a", port_type::VEC3);
         link(&mut space, &n_v2, "v", &n_cross, "b", port_type::VEC3);
-        link(&mut space, &n_cross, "out", &n_print_v, "in", port_type::VEC3);
+        link(
+            &mut space,
+            &n_cross,
+            "out",
+            &n_print_v,
+            "in",
+            port_type::VEC3,
+        );
         link(&mut space, &n_e, "q", &n_rot_v, "q", port_type::QUAT);
         link(&mut space, &n_v1, "v", &n_rot_v, "v", port_type::VEC3);
         link(&mut space, &n_t, "m", &n_mv, "m", port_type::MAT4);
@@ -306,14 +320,8 @@ impl Default for NodesDemo {
                 },
             ],
             gradient_opacities: vec![
-                OpacityStop {
-                    t: 0.0,
-                    alpha: 1.0,
-                },
-                OpacityStop {
-                    t: 1.0,
-                    alpha: 1.0,
-                },
+                OpacityStop { t: 0.0, alpha: 1.0 },
+                OpacityStop { t: 1.0, alpha: 1.0 },
             ],
             gradient_sample: 0.5,
         }
@@ -961,7 +969,10 @@ impl Scene for NodesDemo {
         });
 
         let status_h = 24.0 * ui.scale();
-        let dock_size = Vec2::new(viewport.x, (viewport.y - 26.0 * ui.scale() - status_h).max(1.0));
+        let dock_size = Vec2::new(
+            viewport.x,
+            (viewport.y - 26.0 * ui.scale() - status_h).max(1.0),
+        );
 
         {
             let NodesDemo {
@@ -1052,10 +1063,7 @@ impl Scene for NodesDemo {
                         if space.snap < 0.0 {
                             space.snap = 0.0;
                         }
-                        ui.label(&format!(
-                            "Pan: ({:.0}, {:.0})",
-                            space.pan.x, space.pan.y
-                        ));
+                        ui.label(&format!("Pan: ({:.0}, {:.0})", space.pan.x, space.pan.y));
                         ui.label(&format!("Nodes: {}", nodes.len()));
                         ui.label(&format!("Links: {}", space.links.len()));
                         ui.label(&format!("Selected: {}", space.selected_nodes.len()));
@@ -1081,9 +1089,7 @@ impl Scene for NodesDemo {
                                 ui.label("Group");
                                 ui.label(&format!("Id: {fid}"));
                                 ui.label("Label");
-                                if let Some(frame) =
-                                    space.frames.iter_mut().find(|f| f.id == fid)
-                                {
+                                if let Some(frame) = space.frames.iter_mut().find(|f| f.id == fid) {
                                     let _ = ui.text_input("frame_label", &mut frame.label);
                                 }
                                 if ui.button("Ungroup").clicked() {

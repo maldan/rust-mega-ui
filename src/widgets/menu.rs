@@ -1,8 +1,8 @@
 use glam::Vec2;
 
+use crate::Ui;
 use crate::theme;
 use crate::types::{CursorIcon, Id, Rect, Response};
-use crate::Ui;
 
 pub(crate) struct MenuBarCtx {
     pub id: Id,
@@ -20,8 +20,6 @@ pub(crate) struct MenuPopupCtx {
     pub width: f32,
     pub cursor_y: f32,
     pub max_label_w: f32,
-    /// Submenu item currently expanded.
-    pub open_sub: Option<Id>,
     pub popup_rect: Rect,
     pub child_popup: Option<Rect>,
     pub pointer_inside: bool,
@@ -117,12 +115,7 @@ impl Ui {
         self.menu_item_icon_enabled(icon, label, self.enabled())
     }
 
-    pub fn menu_item_icon_enabled(
-        &mut self,
-        icon: &str,
-        label: &str,
-        enabled: bool,
-    ) -> Response {
+    pub fn menu_item_icon_enabled(&mut self, icon: &str, label: &str, enabled: bool) -> Response {
         self.menu_item_inner(label, Some(icon), enabled, true)
     }
 
@@ -177,10 +170,7 @@ impl Ui {
 
         let text_h = self.text_height();
         self.text_overlay(
-            Vec2::new(
-                rect.min.x + pad,
-                rect.min.y + (item_h - text_h) * 0.5,
-            ),
+            Vec2::new(rect.min.x + pad, rect.min.y + (item_h - text_h) * 0.5),
             label,
             theme::TEXT_DIM,
         );
@@ -217,8 +207,7 @@ impl Ui {
             b.cursor_x += btn_w;
         }
 
-        let hovered =
-            !self.block_input && (self.hovered_overlay(btn) || self.hovered_rect(btn));
+        let hovered = !self.block_input && (self.hovered_overlay(btn) || self.hovered_rect(btn));
         if hovered {
             self.want_capture = true;
             self.set_cursor(CursorIcon::Pointer);
@@ -256,13 +245,7 @@ impl Ui {
             self.menu_sub_open.clear();
         }
 
-        let active = open
-            || (hovered
-                && self
-                    .menu_bar_stack
-                    .last()
-                    .and_then(|b| b.open)
-                    .is_some());
+        let active = open || (hovered && self.menu_bar_stack.last().and_then(|b| b.open).is_some());
         if active || hovered {
             self.round_rect(
                 btn.inset(self.s(2.0)),
@@ -275,10 +258,7 @@ impl Ui {
             );
         }
         self.text(
-            Vec2::new(
-                btn.min.x + pad_x,
-                btn.min.y + (btn.height() - text_h) * 0.5,
-            ),
+            Vec2::new(btn.min.x + pad_x, btn.min.y + (btn.height() - text_h) * 0.5),
             label,
             theme::TEXT,
         );
@@ -403,14 +383,12 @@ impl Ui {
         }
         self.absorb_rect(popup);
 
-        let open_sub = self.menu_sub_open.get(&id).copied().flatten();
         self.menu_stack.push(MenuPopupCtx {
             id,
             origin: popup.min,
             width: prev.x,
             cursor_y: popup.min.y + pad,
             max_label_w: 0.0,
-            open_sub,
             popup_rect: popup,
             child_popup: None,
             pointer_inside,
@@ -434,10 +412,10 @@ impl Ui {
                 parent.pointer_inside = true;
             }
         }
-        if ctx.pointer_inside || tight.contains(self.input.mouse_pos) {
-            if let Some(b) = self.menu_bar_stack.last_mut() {
-                b.pointer_in_menu = true;
-            }
+        if (ctx.pointer_inside || tight.contains(self.input.mouse_pos))
+            && let Some(b) = self.menu_bar_stack.last_mut()
+        {
+            b.pointer_in_menu = true;
         }
     }
 
@@ -486,11 +464,9 @@ impl Ui {
             if let Some(ctx) = self.menu_stack.last_mut() {
                 ctx.pointer_inside = true;
             }
-            if !submenu {
-                if let Some(ctx) = self.menu_stack.last() {
-                    let parent = ctx.id;
-                    self.menu_sub_open.insert(parent, None);
-                }
+            if !submenu && let Some(ctx) = self.menu_stack.last() {
+                let parent = ctx.id;
+                self.menu_sub_open.insert(parent, None);
             }
         }
 
@@ -504,10 +480,7 @@ impl Ui {
         let mut text_x = rect.min.x + pad;
         if let Some(icon_id) = icon {
             let icon_rect = Rect::from_min_size(
-                Vec2::new(
-                    rect.min.x + pad,
-                    rect.min.y + (item_h - icon_s) * 0.5,
-                ),
+                Vec2::new(rect.min.x + pad, rect.min.y + (item_h - icon_s) * 0.5),
                 Vec2::splat(icon_s),
             );
             self.draw_icon_at(icon_id, icon_rect, color, true);

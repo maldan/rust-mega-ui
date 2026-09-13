@@ -102,9 +102,7 @@ impl Ui {
                     let is_dbl = self
                         .browser_clicks
                         .get(&widget_id)
-                        .map(|st| {
-                            st.last_id.as_deref() == Some(item.id) && st.age <= DBL_CLICK_SEC
-                        })
+                        .map(|st| st.last_id.as_deref() == Some(item.id) && st.age <= DBL_CLICK_SEC)
                         .unwrap_or(false);
 
                     if is_dbl {
@@ -141,10 +139,7 @@ impl Ui {
                 }
 
                 let icon_rect = Rect::from_min_size(
-                    Vec2::new(
-                        cell.min.x + (cell_w - icon_s) * 0.5,
-                        cell.min.y + cell_pad,
-                    ),
+                    Vec2::new(cell.min.x + (cell_w - icon_s) * 0.5, cell.min.y + cell_pad),
                     Vec2::splat(icon_s),
                 );
                 let icon_col = if item.is_folder {

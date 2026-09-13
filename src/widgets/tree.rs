@@ -138,7 +138,12 @@ impl Ui {
         self.tree_sel = prev;
     }
 
-    pub fn tree_node(&mut self, id: &str, label: &str, add: impl FnOnce(&mut Self)) -> TreeResponse {
+    pub fn tree_node(
+        &mut self,
+        id: &str,
+        label: &str,
+        add: impl FnOnce(&mut Self),
+    ) -> TreeResponse {
         self.tree_node_ex(id, None, label, true, false, |_| {}, add)
     }
 
@@ -290,7 +295,11 @@ impl Ui {
                 ),
                 Vec2::splat(arrow_draw),
             );
-            let arrow = if open { "chevron_down" } else { "chevron_right" };
+            let arrow = if open {
+                "chevron_down"
+            } else {
+                "chevron_right"
+            };
             self.draw_icon_at(arrow, draw_rect, theme::TEXT_DIM, false);
         }
 
@@ -343,12 +352,9 @@ impl Ui {
         if select_hovered && self.input.mouse_pressed {
             self.active_id = Some(sel_id);
         }
-        let clicked =
-            self.active_id == Some(sel_id) && select_hovered && self.input.mouse_released;
-        if clicked {
-            if let Some(sel) = self.tree_sel.as_mut() {
-                *sel = Some(id.to_string());
-            }
+        let clicked = self.active_id == Some(sel_id) && select_hovered && self.input.mouse_released;
+        if clicked && let Some(sel) = self.tree_sel.as_mut() {
+            *sel = Some(id.to_string());
         }
 
         if expandable && open {

@@ -3,8 +3,8 @@ use glam::Vec2;
 use crate::theme;
 use crate::types::{CursorIcon, Rect, Response};
 use crate::widgets::edit::{
-    byte_at_x, clamp_edit, draw_sel_line, handle_clipboard, handle_typing, has_sel, insert_str,
-    move_end, move_home, move_left, move_right, sel_range, EditState,
+    EditState, byte_at_x, clamp_edit, draw_sel_line, handle_clipboard, handle_typing, has_sel,
+    insert_str, move_end, move_home, move_left, move_right, sel_range,
 };
 use crate::widgets::scroll::{
     draw_vertical_scroll_bar, interact_vertical_scroll_bar, vertical_scroll_track,
@@ -149,25 +149,25 @@ impl Ui {
 
         let bar_id = widget_id.child("#bar");
 
-        let mut st = self
-            .edits
-            .get(&widget_id)
-            .copied()
-            .unwrap_or(EditState {
-                caret: text.len(),
-                anchor: text.len(),
-            });
+        let mut st = self.edits.get(&widget_id).copied().unwrap_or(EditState {
+            caret: text.len(),
+            anchor: text.len(),
+        });
         clamp_edit(&mut st, text.len());
 
         let (mut inner, mut lines, mut need_bar, mut content_h, view_h) =
             layout_text_area(self, text, rect, pad, bar_w, gap, line_h);
         let mut max_scroll = (content_h - view_h).max(0.0);
 
-        let mut scroll_st = self.scrolls.get(&widget_id).copied().unwrap_or(ScrollState {
-            offset: Vec2::ZERO,
-            target: Vec2::ZERO,
-            content: Vec2::ZERO,
-        });
+        let mut scroll_st = self
+            .scrolls
+            .get(&widget_id)
+            .copied()
+            .unwrap_or(ScrollState {
+                offset: Vec2::ZERO,
+                target: Vec2::ZERO,
+                content: Vec2::ZERO,
+            });
         scroll_st.offset.y = scroll_st.offset.y.clamp(0.0, max_scroll);
         scroll_st.target.y = scroll_st.target.y.clamp(0.0, max_scroll);
 
@@ -389,8 +389,8 @@ impl Ui {
         let last = last.min(lines.len());
 
         self.push_clip(inner);
-        for row in first..last {
-            let line = &lines[row];
+        for (i, line) in lines[first..last].iter().enumerate() {
+            let row = first + i;
             let y = inner.min.y + row as f32 * line_h - offset_y;
             let pos = Vec2::new(inner.min.x, y);
 

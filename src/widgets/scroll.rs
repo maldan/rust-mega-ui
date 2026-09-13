@@ -2,7 +2,7 @@ use glam::Vec2;
 
 use crate::theme;
 use crate::types::{CursorIcon, Id, Rect};
-use crate::{CrossAlign, new_layer, LayoutDir, ScrollState, Ui};
+use crate::{CrossAlign, LayoutDir, ScrollState, Ui, new_layer};
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum ScrollAxes {
@@ -58,7 +58,9 @@ impl Ui {
             return;
         }
 
-        let dragging = interact_bars(self, &mut st, view, axes, need_v, need_h, v_id, h_id, bar, gap);
+        let dragging = interact_bars(
+            self, &mut st, view, axes, need_v, need_h, v_id, h_id, bar, gap,
+        );
 
         let hovered = self.hovered_rect(view) || self.hovered_rect(outer);
         if hovered {
@@ -72,7 +74,7 @@ impl Ui {
         if dragging {
             st.offset = st.target;
         } else {
-            let dt = self.input.dt.max(0.0).min(0.1);
+            let dt = self.input.dt.clamp(0.0, 0.1);
             let t = 1.0 - (-theme::SCROLL_SMOOTH * dt).exp();
             st.offset = st.offset.lerp(st.target, t);
             if (st.offset - st.target).length_squared() > 0.25 {
@@ -86,8 +88,14 @@ impl Ui {
         self.push_id(id);
         self.push_clip(view);
         let origin = view.min - st.offset;
-        self.layers
-            .push(new_layer(LayoutDir::Vertical, origin, self.spacing, view.width(), 0.0, CrossAlign::Start));
+        self.layers.push(new_layer(
+            LayoutDir::Vertical,
+            origin,
+            self.spacing,
+            view.width(),
+            0.0,
+            CrossAlign::Start,
+        ));
         add(self);
         let used = self.layers.pop().unwrap().used;
         self.pop_clip();
@@ -105,11 +113,7 @@ impl Ui {
             if axes.horizontal() && d.x.abs() > 0.0 && st.content.x > view_w {
                 st.target.x -= d.x;
             }
-            if axes.horizontal()
-                && !axes.vertical()
-                && d.y.abs() > 0.0
-                && st.content.x > view_w
-            {
+            if axes.horizontal() && !axes.vertical() && d.y.abs() > 0.0 && st.content.x > view_w {
                 st.target.x -= d.y;
             }
             if d != Vec2::ZERO {
@@ -134,7 +138,9 @@ impl Ui {
         st.target = st.target.clamp(Vec2::ZERO, max_scroll);
         st.offset = st.offset.clamp(Vec2::ZERO, max_scroll);
 
-        draw_bars(self, view, outer, &st, axes, need_v, need_h, v_id, h_id, bar, gap);
+        draw_bars(
+            self, view, outer, &st, axes, need_v, need_h, v_id, h_id, bar, gap,
+        );
 
         self.scrolls.insert(widget_id, st);
     }
@@ -157,11 +163,15 @@ impl Ui {
     /// Jump a [`Self::scroll_area`] to `target` (same `id`, same parent ids).
     pub fn set_scroll_target(&mut self, id: &str, target: Vec2) {
         let widget_id = self.current_id(id);
-        let mut st = self.scrolls.get(&widget_id).copied().unwrap_or(ScrollState {
-            offset: Vec2::ZERO,
-            target: Vec2::ZERO,
-            content: Vec2::ZERO,
-        });
+        let mut st = self
+            .scrolls
+            .get(&widget_id)
+            .copied()
+            .unwrap_or(ScrollState {
+                offset: Vec2::ZERO,
+                target: Vec2::ZERO,
+                content: Vec2::ZERO,
+            });
         st.target = target;
         st.offset = target;
         self.scrolls.insert(widget_id, st);
@@ -291,19 +301,12 @@ fn interact_bars(
     gap: f32,
 ) -> bool {
     let mut dragging = false;
-    if need_v && axes.vertical() {
-        if interact_vertical_scroll_bar(
-            ui,
-            v_id,
-            view,
-            st.content.y,
-            &mut st.offset.y,
-            bar,
-            gap,
-        ) {
-            st.target.y = st.offset.y;
-            dragging = true;
-        }
+    if need_v
+        && axes.vertical()
+        && interact_vertical_scroll_bar(ui, v_id, view, st.content.y, &mut st.offset.y, bar, gap)
+    {
+        st.target.y = st.offset.y;
+        dragging = true;
     }
 
     if need_h && axes.horizontal() {
@@ -331,7 +334,8 @@ fn interact_bars(
             ui.drag_grab = Some(ui.input.mouse_pos - Vec2::new(tx, 0.0));
         }
         if ui.hovered_rect(track) && !ui.hovered_rect(thumb) && ui.input.mouse_pressed {
-            let t = ((ui.input.mouse_pos.x - view.min.x - tw * 0.5) / travel.max(1.0)).clamp(0.0, 1.0);
+            let t =
+                ((ui.input.mouse_pos.x - view.min.x - tw * 0.5) / travel.max(1.0)).clamp(0.0, 1.0);
             st.target.x = t * max_s;
             st.offset.x = st.target.x;
             ui.active_id = Some(h_id);
@@ -401,5 +405,51 @@ fn draw_bars(
             max: outer.max,
         };
         ui.round_rect(corner, 0.0, theme::SCROLL_BG);
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    // -- thumb_len --------------------------------------------------------------
+
+    #[test]
+    fn thumb_len_fills_view_when_content_fits() {
+        assert_eq!(thumb_len(300.0, 200.0, 20.0), 300.0);
+        assert_eq!(thumb_len(300.0, 300.0, 20.0), 300.0);
+    }
+
+    #[test]
+    fn thumb_len_shrinks_proportionally_to_content_overflow() {
+        // view=100, content=400 -> raw = 100*100/400 = 25
+        let t = thumb_len(100.0, 400.0, 5.0);
+        assert!((t - 25.0).abs() < 1e-4);
+    }
+
+    #[test]
+    fn thumb_len_never_shrinks_below_the_minimum() {
+        // view=100, content=100000 -> raw thumb would be ~0.1px, must clamp to `min`.
+        let t = thumb_len(100.0, 100_000.0, 12.0);
+        assert_eq!(t, 12.0);
+    }
+
+    #[test]
+    fn thumb_len_never_exceeds_view_size() {
+        // Degenerate min larger than the view itself must not blow past `view`.
+        let t = thumb_len(50.0, 1000.0, 999.0);
+        assert_eq!(t, 50.0);
+    }
+
+    // -- vertical_scroll_track --------------------------------------------------
+
+    #[test]
+    fn vertical_scroll_track_sits_right_of_view_with_gap() {
+        let view = Rect::from_min_size(Vec2::ZERO, Vec2::new(200.0, 100.0));
+        let track = vertical_scroll_track(view, 10.0, 4.0);
+        assert_eq!(track.min, Vec2::new(204.0, 0.0));
+        assert_eq!(track.max, Vec2::new(214.0, 100.0));
+        assert_eq!(track.width(), 10.0);
+        assert_eq!(track.height(), view.height());
     }
 }

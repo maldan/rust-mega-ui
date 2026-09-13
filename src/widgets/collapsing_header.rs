@@ -58,13 +58,14 @@ impl Ui {
 
         let arrow_s = self.s(12.0);
         let arrow_rect = Rect::from_min_size(
-            Vec2::new(
-                rect.min.x + indent,
-                rect.min.y + (height - arrow_s) * 0.5,
-            ),
+            Vec2::new(rect.min.x + indent, rect.min.y + (height - arrow_s) * 0.5),
             Vec2::splat(arrow_s),
         );
-        let arrow = if open { "chevron_down" } else { "chevron_right" };
+        let arrow = if open {
+            "chevron_down"
+        } else {
+            "chevron_right"
+        };
         self.draw_icon_at(arrow, arrow_rect, theme::TEXT_DIM, false);
 
         let th = self.text_height();

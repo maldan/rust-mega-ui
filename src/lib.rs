@@ -15,22 +15,20 @@ pub mod wgpu;
 
 pub use dock::{DockNode, DockState};
 pub use layout::{CrossAlign, LayoutOpts, MainAlign};
-pub use node_space::{
-    port_type, NodeFrame, NodeLink, NodePortSide, NodeSpace, PortType,
-};
+pub use node_space::{NodeFrame, NodeLink, NodePortSide, NodeSpace, PortType, port_type};
 pub use plot_view::PlotView;
 pub use types::{
     Area, CursorIcon, DrawCommand, Id, Pointer, Rect, Response, UiInput, UiInputDebug, UiOutput,
-};
-pub use widgets::{
-    AnimationCurve, BrowserItem, BrowserResponse, CurveEditorResponse, CurvePoint, CurvePreset,
-    GradientEditorResponse, GradientStop, OpacityStop, ToastKind, TreeResponse, TreeRow,
-    apply_preset, ease_in_out, flat_pass_curve, sample_curve, sample_gradient,
 };
 pub use widgets::color_picker::TEX_SLOT_COLOR_SV;
 pub use widgets::label::TextStyle;
 pub use widgets::scroll::ScrollAxes;
 pub use widgets::table::TableColumn;
+pub use widgets::{
+    AnimationCurve, BrowserItem, BrowserResponse, CurveEditorResponse, CurvePoint, CurvePreset,
+    GradientEditorResponse, GradientStop, OpacityStop, ToastKind, TreeResponse, TreeRow,
+    apply_preset, ease_in_out, flat_pass_curve, sample_curve, sample_gradient,
+};
 pub use window::Window;
 
 use std::collections::{HashMap, HashSet};
@@ -42,8 +40,8 @@ use glam::Vec2;
 use draw::{push_line_segment, push_polyline, push_round_rect};
 use font::Font;
 use icon::Icons;
-use layout::{GridCtx, cross_y};
 pub(crate) use layout::new_layer;
+use layout::{GridCtx, cross_y};
 use widgets::curve::CurveEditState;
 use widgets::gradient::GradientEditState;
 use widgets::table::TableCtx;
@@ -551,10 +549,8 @@ impl Ui {
                 self.focus_window = self
                     .hover_window
                     .filter(|id| self.windows_built_last_frame.contains(id));
-                if !modal_blocking {
-                    if let Some(id) = self.focus_window {
-                        self.bring_to_front(id);
-                    }
+                if !modal_blocking && let Some(id) = self.focus_window {
+                    self.bring_to_front(id);
                 }
             }
         }
@@ -565,8 +561,14 @@ impl Ui {
         self.block_input =
             modal_blocking || self.hover_window.is_some() || self.focus_window.is_some();
 
-        self.layers
-            .push(new_layer(LayoutDir::Vertical, Vec2::ZERO, self.spacing, 0.0, 0.0, CrossAlign::Start));
+        self.layers.push(new_layer(
+            LayoutDir::Vertical,
+            Vec2::ZERO,
+            self.spacing,
+            0.0,
+            0.0,
+            CrossAlign::Start,
+        ));
 
         self.tick_toasts();
 
@@ -616,10 +618,10 @@ impl Ui {
         }
         composed.append(&mut self.modal_layer);
         // Modal window draw cmds live in window_layers too — append after dim.
-        if let Some(mid) = modal_id {
-            if let Some((_, cmds)) = self.window_layers.iter().find(|(i, _)| *i == mid) {
-                composed.extend_from_slice(cmds);
-            }
+        if let Some(mid) = modal_id
+            && let Some((_, cmds)) = self.window_layers.iter().find(|(i, _)| *i == mid)
+        {
+            composed.extend_from_slice(cmds);
         }
         // Toasts draw into overlay.
         self.draw_toasts();
@@ -750,7 +752,7 @@ impl Ui {
 
     fn allocate_ex(&mut self, size: Vec2, hug_x: bool) -> Rect {
         let layer = self.layer();
-        let rect = match layer.dir {
+        match layer.dir {
             LayoutDir::Vertical => {
                 let rect = Rect::from_min_size(layer.cursor, size);
                 layer.cursor.y += size.y + layer.spacing;
@@ -781,8 +783,7 @@ impl Ui {
                 layer.used.y = layer.row_height;
                 rect
             }
-        };
-        rect
+        }
     }
 
     pub fn vertical(&mut self, add: impl FnOnce(&mut Self)) {
@@ -882,10 +883,10 @@ impl Ui {
         if !rect.contains(self.input.mouse_pos) {
             return false;
         }
-        if let Some(c) = self.clip() {
-            if !c.contains(self.input.mouse_pos) {
-                return false;
-            }
+        if let Some(c) = self.clip()
+            && !c.contains(self.input.mouse_pos)
+        {
+            return false;
         }
         true
     }

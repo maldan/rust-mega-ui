@@ -13,10 +13,10 @@ use std::time::Instant;
 
 use framework::{DrawStats, Host, Scene};
 use glam::{Vec2, Vec3};
-use mega_ui::{BrowserItem, ScrollAxes, TableColumn, TextStyle, Ui, Window};
 use mega_ui::{
     AnimationCurve, GradientStop, OpacityStop, ease_in_out, sample_curve, sample_gradient,
 };
+use mega_ui::{BrowserItem, ScrollAxes, TableColumn, TextStyle, Ui, Window};
 
 struct FsEntry {
     name: String,
@@ -252,14 +252,8 @@ impl Default for Demo {
                 },
             ],
             gradient_opacities: vec![
-                OpacityStop {
-                    t: 0.0,
-                    alpha: 1.0,
-                },
-                OpacityStop {
-                    t: 1.0,
-                    alpha: 1.0,
-                },
+                OpacityStop { t: 0.0, alpha: 1.0 },
+                OpacityStop { t: 1.0, alpha: 1.0 },
             ],
             gradient_sample: 0.5,
             show_calc: true,
@@ -290,7 +284,13 @@ fn calc_apply(acc: f64, rhs: f64, op: char) -> f64 {
         '+' => acc + rhs,
         '-' => acc - rhs,
         '*' => acc * rhs,
-        '/' => if rhs.abs() < 1e-12 { f64::NAN } else { acc / rhs },
+        '/' => {
+            if rhs.abs() < 1e-12 {
+                f64::NAN
+            } else {
+                acc / rhs
+            }
+        }
         _ => rhs,
     }
 }
@@ -875,22 +875,22 @@ impl Scene for Demo {
             |ui| {
                 let size = ui.available_size();
                 ui.scroll_area("inputs_scroll", size, ScrollAxes::Vertical, |ui| {
-                ui.property("Speed", 0.35, |ui| {
-                    ui.drag_float("speed", &mut state.speed, 0.05);
-                });
-                ui.property("Speed slider", 0.35, |ui| {
-                    ui.slider("speed_s", &mut state.speed, 0.0..=5.0);
-                });
-                ui.separator();
-                ui.label("Position (vec2)");
-                ui.vec2("pos", &mut state.position, 0.5, Vec2::ZERO);
-                ui.label("Rotation (vec3)");
-                ui.vec3("rot", &mut state.rotation, 1.0, Vec3::ZERO);
-                ui.label("Scale (vec3, default 1)");
-                ui.vec3("scale", &mut state.scale_v, 0.01, Vec3::ONE);
-                ui.separator();
-                ui.label("Notes (text_area)");
-                ui.text_area("notes", &mut state.notes, Vec2::new(0.0, 120.0));
+                    ui.property("Speed", 0.35, |ui| {
+                        ui.drag_float("speed", &mut state.speed, 0.05);
+                    });
+                    ui.property("Speed slider", 0.35, |ui| {
+                        ui.slider("speed_s", &mut state.speed, 0.0..=5.0);
+                    });
+                    ui.separator();
+                    ui.label("Position (vec2)");
+                    ui.vec2("pos", &mut state.position, 0.5, Vec2::ZERO);
+                    ui.label("Rotation (vec3)");
+                    ui.vec3("rot", &mut state.rotation, 1.0, Vec3::ZERO);
+                    ui.label("Scale (vec3, default 1)");
+                    ui.vec3("scale", &mut state.scale_v, 0.01, Vec3::ONE);
+                    ui.separator();
+                    ui.label("Notes (text_area)");
+                    ui.text_area("notes", &mut state.notes, Vec2::new(0.0, 120.0));
                 });
             },
         );
@@ -903,33 +903,33 @@ impl Scene for Demo {
             |ui| {
                 let size = ui.available_size();
                 ui.scroll_area("help_scroll", size, ScrollAxes::Vertical, |ui| {
-                ui.label("Drag window titles to move.");
-                ui.label("Widgets tab: basics / layout / plot.");
-                ui.label("Inputs: drag_float, vec2/3, text_area.");
-                ui.label("File Manager: tree or table.");
-                ui.label("Explorer / Assets: browser meta-widget.");
-                ui.separator();
-                ui.label(&format!("UI scale = {:.0}%", state.ui_scale * 100.0));
-                ui.slider("UI Scale", &mut state.ui_scale, 0.75..=2.0);
-                ui.horizontal(|ui| {
-                    if ui.button("75%").clicked() {
-                        state.ui_scale = 0.75;
-                    }
-                    if ui.button("100%").clicked() {
-                        state.ui_scale = 1.0;
-                    }
-                    if ui.button("150%").clicked() {
-                        state.ui_scale = 1.5;
-                    }
-                    if ui.button("175%").clicked() {
-                        state.ui_scale = 1.75;
-                    }
-                    if ui.button("200%").clicked() {
-                        state.ui_scale = 2.0;
-                    }
-                });
-                ui.separator();
-                ui.label(&format!("FPS ~ {:.0}", (1.0 / dt.max(1e-4)).min(999.0)));
+                    ui.label("Drag window titles to move.");
+                    ui.label("Widgets tab: basics / layout / plot.");
+                    ui.label("Inputs: drag_float, vec2/3, text_area.");
+                    ui.label("File Manager: tree or table.");
+                    ui.label("Explorer / Assets: browser meta-widget.");
+                    ui.separator();
+                    ui.label(&format!("UI scale = {:.0}%", state.ui_scale * 100.0));
+                    ui.slider("UI Scale", &mut state.ui_scale, 0.75..=2.0);
+                    ui.horizontal(|ui| {
+                        if ui.button("75%").clicked() {
+                            state.ui_scale = 0.75;
+                        }
+                        if ui.button("100%").clicked() {
+                            state.ui_scale = 1.0;
+                        }
+                        if ui.button("150%").clicked() {
+                            state.ui_scale = 1.5;
+                        }
+                        if ui.button("175%").clicked() {
+                            state.ui_scale = 1.75;
+                        }
+                        if ui.button("200%").clicked() {
+                            state.ui_scale = 2.0;
+                        }
+                    });
+                    ui.separator();
+                    ui.label(&format!("FPS ~ {:.0}", (1.0 / dt.max(1e-4)).min(999.0)));
                 });
             },
         );
@@ -1071,11 +1071,7 @@ impl Scene for Demo {
                     items.push(("..".into(), "..".into(), true));
                 }
                 for e in list_dir(&state.explorer_path) {
-                    items.push((
-                        e.path.to_string_lossy().into_owned(),
-                        e.name,
-                        e.is_dir,
-                    ));
+                    items.push((e.path.to_string_lossy().into_owned(), e.name, e.is_dir));
                 }
                 let browser_items: Vec<BrowserItem<'_>> = items
                     .iter()
@@ -1095,11 +1091,8 @@ impl Scene for Demo {
                     Vec2::new(avail.x.max(80.0), (avail.y - 4.0).max(60.0)),
                     ScrollAxes::Vertical,
                     |ui| {
-                        let resp = ui.browser(
-                            "explorer",
-                            &browser_items,
-                            &mut state.explorer_selected,
-                        );
+                        let resp =
+                            ui.browser("explorer", &browser_items, &mut state.explorer_selected);
                         if let Some(id) = resp.opened() {
                             if id == ".." {
                                 open_nav = state.explorer_path.parent().map(|p| p.to_path_buf());
@@ -1161,8 +1154,7 @@ impl Scene for Demo {
                     Vec2::new(avail.x.max(80.0), (avail.y - 4.0).max(60.0)),
                     ScrollAxes::Vertical,
                     |ui| {
-                        let resp =
-                            ui.browser("assets", &browser_items, &mut state.asset_selected);
+                        let resp = ui.browser("assets", &browser_items, &mut state.asset_selected);
                         if let Some(id) = resp.opened() {
                             if let Some((_, _, _, is_folder)) =
                                 entries.iter().find(|(eid, _, _, _)| *eid == id)

@@ -83,7 +83,11 @@ pub(crate) fn rgb_to_hsv(r: f32, g: f32, b: f32) -> (f32, f32, f32) {
     } else {
         ((r - g) / d + 4.0) / 6.0
     };
-    (h.fract().rem_euclid(1.0), s.clamp(0.0, 1.0), v.clamp(0.0, 1.0))
+    (
+        h.fract().rem_euclid(1.0),
+        s.clamp(0.0, 1.0),
+        v.clamp(0.0, 1.0),
+    )
 }
 
 pub(crate) fn hsv_to_rgb(h: f32, s: f32, v: f32) -> (f32, f32, f32) {
@@ -122,15 +126,19 @@ impl Ui {
         let rect = self.allocate(Vec2::new(width, swatch_h));
         let swatch = Rect::from_min_size(rect.min, Vec2::new(swatch_w.min(width), swatch_h));
 
-        let mut st = self.color_edits.get(&widget_id).copied().unwrap_or_else(|| {
-            let (h, s, v) = rgb_to_hsv(color[0], color[1], color[2]);
-            ColorEditState {
-                open: false,
-                h,
-                s,
-                v,
-            }
-        });
+        let mut st = self
+            .color_edits
+            .get(&widget_id)
+            .copied()
+            .unwrap_or_else(|| {
+                let (h, s, v) = rgb_to_hsv(color[0], color[1], color[2]);
+                ColorEditState {
+                    open: false,
+                    h,
+                    s,
+                    v,
+                }
+            });
 
         let hovered = self.hovered_rect(swatch);
         if hovered {
@@ -268,8 +276,8 @@ impl Ui {
 
         if self.active_id == Some(sv_id) && self.input.mouse_down {
             st.s = ((self.input.mouse_pos.x - sv_rect.min.x) / sv_rect.width()).clamp(0.0, 1.0);
-            st.v = (1.0 - (self.input.mouse_pos.y - sv_rect.min.y) / sv_rect.height())
-                .clamp(0.0, 1.0);
+            st.v =
+                (1.0 - (self.input.mouse_pos.y - sv_rect.min.y) / sv_rect.height()).clamp(0.0, 1.0);
             changed = true;
             self.want_capture = true;
             self.needs_repaint = true;
@@ -339,7 +347,15 @@ impl Ui {
 
     /// Hue strip: 6 gradient segments (linear RGB is correct within each 60° sector).
     fn draw_hue_bar(&mut self, rect: Rect) {
-        const STOPS: [f32; 7] = [0.0, 1.0 / 6.0, 2.0 / 6.0, 3.0 / 6.0, 4.0 / 6.0, 5.0 / 6.0, 1.0];
+        const STOPS: [f32; 7] = [
+            0.0,
+            1.0 / 6.0,
+            2.0 / 6.0,
+            3.0 / 6.0,
+            4.0 / 6.0,
+            5.0 / 6.0,
+            1.0,
+        ];
         let h = rect.height().max(1.0);
         for i in 0..6 {
             let y0 = rect.min.y + STOPS[i] * h;

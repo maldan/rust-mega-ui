@@ -20,9 +20,6 @@ struct Glyph {
 
 pub struct Font {
     font: fontdue::Font,
-    px: f32,
-    ascent: f32,
-    line_height: f32,
     atlas: Vec<u8>,
     atlas_w: u32,
     atlas_h: u32,
@@ -85,18 +82,11 @@ impl Font {
     }
 
     fn from_fontdue(font: fontdue::Font, px: f32) -> Self {
-        let (ascent, line_height) = match font.horizontal_line_metrics(px) {
-            Some(m) => (m.ascent, m.new_line_size),
-            None => (px * 0.8, px * 1.2),
-        };
         let mut atlas = vec![0u8; (ATLAS_SIZE * ATLAS_SIZE) as usize];
         atlas[0] = 255;
         let white_uv = [0.5 / ATLAS_SIZE as f32, 0.5 / ATLAS_SIZE as f32];
         let mut f = Self {
             font,
-            px,
-            ascent,
-            line_height,
             atlas,
             atlas_w: ATLAS_SIZE,
             atlas_h: ATLAS_SIZE,
@@ -139,23 +129,11 @@ impl Font {
         o
     }
 
-    pub fn px(&self) -> f32 {
-        self.px
-    }
-
-    pub fn line_height(&self) -> f32 {
-        self.line_height
-    }
-
     pub fn line_height_at(&self, px: f32) -> f32 {
         match self.font.horizontal_line_metrics(px) {
             Some(m) => m.new_line_size,
             None => px * 1.2,
         }
-    }
-
-    pub fn text_width(&self, text: &str) -> f32 {
-        self.text_width_at(text, self.px)
     }
 
     pub fn text_width_at(&self, text: &str, px: f32) -> f32 {
@@ -183,7 +161,12 @@ impl Font {
     }
 
     /// Pack an R8 alpha bitmap into the atlas. Returns UVs or `None` if full.
-    pub(crate) fn pack_alpha(&mut self, pixels: &[u8], gw: u32, gh: u32) -> Option<([f32; 2], [f32; 2])> {
+    pub(crate) fn pack_alpha(
+        &mut self,
+        pixels: &[u8],
+        gw: u32,
+        gh: u32,
+    ) -> Option<([f32; 2], [f32; 2])> {
         if gw == 0 || gh == 0 || pixels.len() < (gw * gh) as usize {
             return Some((self.white_uv, self.white_uv));
         }
@@ -202,8 +185,7 @@ impl Font {
         for row in 0..gh {
             let src = (row * gw) as usize;
             let dst = ((y + row) * self.atlas_w + x) as usize;
-            self.atlas[dst..dst + gw as usize]
-                .copy_from_slice(&pixels[src..src + gw as usize]);
+            self.atlas[dst..dst + gw as usize].copy_from_slice(&pixels[src..src + gw as usize]);
         }
         self.pack_x += gw + pad;
         self.row_h = self.row_h.max(gh);
@@ -260,8 +242,7 @@ impl Font {
             for row in 0..gh {
                 let src = row as usize * metrics.width;
                 let dst = ((y + row) * self.atlas_w + x) as usize;
-                self.atlas[dst..dst + gw as usize]
-                    .copy_from_slice(&bitmap[src..src + gw as usize]);
+                self.atlas[dst..dst + gw as usize].copy_from_slice(&bitmap[src..src + gw as usize]);
             }
             self.pack_x += gw + pad;
             self.row_h = self.row_h.max(gh);

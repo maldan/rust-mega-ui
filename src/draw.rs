@@ -64,17 +64,9 @@ pub fn push_round_rect(
             let content_u1 = -pad / w + u1 * (w + pad * 2.0) / w;
             let content_v0 = -pad / h + v0 * (h + pad * 2.0) / h;
             let content_v1 = -pad / h + v1 * (h + pad * 2.0) / h;
-            (
-                clipped,
-                [content_u0, content_v0],
-                [content_u1, content_v1],
-            )
+            (clipped, [content_u0, content_v0], [content_u1, content_v1])
         }
-        None => (
-            outer,
-            [-pad / w, -pad / h],
-            [1.0 + pad / w, 1.0 + pad / h],
-        ),
+        None => (outer, [-pad / w, -pad / h], [1.0 + pad / w, 1.0 + pad / h]),
     };
 
     out.push(DrawCommand {

@@ -1,8 +1,5 @@
 //! Deep dark theme — near-black surfaces, dark borders, cool blue accent.
 
-/// App / desktop clear color (match host framebuffer clear).
-pub const DESKTOP: [f32; 4] = [0.04, 0.04, 0.04, 1.0];
-
 pub const WIN_BODY: [f32; 4] = [0.09, 0.09, 0.09, 1.0];
 pub const WIN_TITLE: [f32; 4] = [0.06, 0.06, 0.06, 1.0];
 pub const WIN_TITLE_HOVER: [f32; 4] = [0.10, 0.10, 0.10, 1.0];
@@ -29,7 +26,6 @@ pub const NODE_FRAME_SEL: [f32; 4] = [0.16, 0.32, 0.58, 0.10];
 pub const NODE_FRAME_BORDER: [f32; 4] = [0.32, 0.48, 0.72, 0.55];
 pub const NODE_FRAME_BORDER_SEL: [f32; 4] = [0.40, 0.62, 0.95, 0.85];
 pub const ACCENT_DIM: [f32; 4] = [0.10, 0.26, 0.58, 1.0];
-pub const ACCENT_SOFT: [f32; 4] = [0.06, 0.12, 0.24, 1.0];
 
 pub const BTN: [f32; 4] = [0.16, 0.16, 0.16, 1.0];
 pub const BTN_HOVER: [f32; 4] = [0.22, 0.22, 0.22, 1.0];
@@ -119,9 +115,6 @@ pub const DOCK_TAB_ACTIVE: [f32; 4] = WIN_BODY;
 pub const DOCK_TAB_HOVER: [f32; 4] = [0.07, 0.07, 0.07, 1.0];
 pub const DOCK_TAB_TEXT: [f32; 4] = [0.50, 0.50, 0.50, 1.0];
 pub const DOCK_TAB_TEXT_ACTIVE: [f32; 4] = [0.90, 0.90, 0.90, 1.0];
-/// In-window tabs share dock colors (active light / inactive dark).
-pub const TAB: [f32; 4] = DOCK_TAB;
-pub const TAB_ACTIVE: [f32; 4] = DOCK_TAB_ACTIVE;
 /// Selected row in file / asset browser lists.
 pub const BROWSER_SELECTED: [f32; 4] = [0.14, 0.24, 0.42, 1.0];
 /// Focus accent on the active tab only.

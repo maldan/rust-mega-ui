@@ -4,10 +4,10 @@ use std::collections::HashMap;
 
 use glam::Vec2;
 
-use crate::font::{push_textured, Font};
+use crate::Ui;
+use crate::font::{Font, push_textured};
 use crate::theme;
 use crate::types::{CursorIcon, Rect};
-use crate::Ui;
 
 #[derive(Clone, Copy)]
 pub(crate) struct PackedIcon {
@@ -15,18 +15,10 @@ pub(crate) struct PackedIcon {
     pub uv_max: [f32; 2],
 }
 
+#[derive(Default)]
 pub(crate) struct Icons {
     svg: HashMap<String, Vec<u8>>,
     packed: HashMap<(String, u32), PackedIcon>,
-}
-
-impl Default for Icons {
-    fn default() -> Self {
-        Self {
-            svg: HashMap::new(),
-            packed: HashMap::new(),
-        }
-    }
 }
 
 fn px_key(px: f32) -> u32 {
@@ -132,10 +124,16 @@ impl Ui {
             ("unlock", include_bytes!("../icons/unlock.svg").as_slice()),
             ("reset", include_bytes!("../icons/reset.svg").as_slice()),
             ("refresh", include_bytes!("../icons/refresh.svg").as_slice()),
-            ("more_vert", include_bytes!("../icons/more_vert.svg").as_slice()),
+            (
+                "more_vert",
+                include_bytes!("../icons/more_vert.svg").as_slice(),
+            ),
             ("save", include_bytes!("../icons/save.svg").as_slice()),
             ("search", include_bytes!("../icons/search.svg").as_slice()),
-            ("settings", include_bytes!("../icons/settings.svg").as_slice()),
+            (
+                "settings",
+                include_bytes!("../icons/settings.svg").as_slice(),
+            ),
             ("undo", include_bytes!("../icons/undo.svg").as_slice()),
             ("redo", include_bytes!("../icons/redo.svg").as_slice()),
             ("edit", include_bytes!("../icons/edit.svg").as_slice()),
@@ -174,10 +172,8 @@ impl Ui {
             self.active_id = Some(widget_id);
         }
         let pressed = self.active_id == Some(widget_id) && self.input.mouse_down;
-        let clicked = enabled
-            && self.active_id == Some(widget_id)
-            && hovered
-            && self.input.mouse_released;
+        let clicked =
+            enabled && self.active_id == Some(widget_id) && hovered && self.input.mouse_released;
 
         let color = if !enabled {
             theme::TEXT_DISABLED

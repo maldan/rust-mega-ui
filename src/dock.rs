@@ -2,7 +2,7 @@ use glam::Vec2;
 
 use crate::theme;
 use crate::types::{CursorIcon, Rect};
-use crate::{CrossAlign, new_layer, LayoutDir, Ui};
+use crate::{CrossAlign, LayoutDir, Ui, new_layer};
 
 const MIN_PANE: f32 = 64.0;
 
@@ -117,8 +117,9 @@ fn layout_node(
 
             // Hit-test against last frame's split strip (approx from current ratio).
             let preview = split_rects(rect, *axis, *ratio, gap, min);
-            let hovered =
-                !ui.block_input && !ui.mouse_over_absorb() && preview.1.contains(ui.input.mouse_pos);
+            let hovered = !ui.block_input
+                && !ui.mouse_over_absorb()
+                && preview.1.contains(ui.input.mouse_pos);
             if hovered {
                 ui.want_capture = true;
                 ui.set_cursor(match *axis {
@@ -163,10 +164,13 @@ fn split_rects(rect: Rect, axis: DockAxis, ratio: f32, gap: f32, min: f32) -> (R
     match axis {
         DockAxis::Horizontal => {
             let avail = (rect.width() - gap).max(0.0);
-            let mut w1 = (avail * ratio).clamp(min.min(avail * 0.5), (avail - min).max(0.0));
-            if avail < min * 2.0 {
-                w1 = avail * 0.5;
-            }
+            // Not enough room for two `min`-sized panes — split evenly instead of
+            // clamping (clamp's lower bound would exceed its upper bound and panic).
+            let w1 = if avail < min * 2.0 {
+                avail * 0.5
+            } else {
+                (avail * ratio).clamp(min, avail - min)
+            };
             let a = Rect::from_min_size(rect.min, Vec2::new(w1, rect.height()));
             let s = Rect::from_min_size(
                 Vec2::new(rect.min.x + w1, rect.min.y),
@@ -180,10 +184,11 @@ fn split_rects(rect: Rect, axis: DockAxis, ratio: f32, gap: f32, min: f32) -> (R
         }
         DockAxis::Vertical => {
             let avail = (rect.height() - gap).max(0.0);
-            let mut h1 = (avail * ratio).clamp(min.min(avail * 0.5), (avail - min).max(0.0));
-            if avail < min * 2.0 {
-                h1 = avail * 0.5;
-            }
+            let h1 = if avail < min * 2.0 {
+                avail * 0.5
+            } else {
+                (avail * ratio).clamp(min, avail - min)
+            };
             let a = Rect::from_min_size(rect.min, Vec2::new(rect.width(), h1));
             let s = Rect::from_min_size(
                 Vec2::new(rect.min.x, rect.min.y + h1),
@@ -272,6 +277,16 @@ fn draw_leaf(
         };
         ui.round_rect_corners(tr, radius, color, true, false);
 
+        // Thin accent on the active tab of the pane that last received a click —
+        // helps orient which pane will receive keyboard shortcuts / paste.
+        if is_active && ui.dock_focus == Some(path) {
+            let accent = Rect {
+                min: tr.min,
+                max: Vec2::new(tr.max.x, tr.min.y + ui.s(2.0)),
+            };
+            ui.round_rect(accent, 0.0, theme::DOCK_FOCUS);
+        }
+
         let th = ui.text_height();
         let text_col = if is_active {
             theme::DOCK_TAB_TEXT_ACTIVE
@@ -279,10 +294,7 @@ fn draw_leaf(
             theme::DOCK_TAB_TEXT
         };
         ui.text(
-            Vec2::new(
-                tr.min.x + tab_pad_x,
-                tr.min.y + (tr.height() - th) * 0.5,
-            ),
+            Vec2::new(tr.min.x + tab_pad_x, tr.min.y + (tr.height() - th) * 0.5),
             title,
             text_col,
         );
@@ -301,10 +313,7 @@ fn draw_leaf(
         ui.set_cursor(CursorIcon::Pointer);
         ui.round_rect(more_rect, ui.s(3.0), theme::DOCK_TAB_HOVER);
     }
-    let icon_r = Rect::from_min_size(
-        more_rect.min + Vec2::splat(ui.s(2.0)),
-        Vec2::splat(more_s),
-    );
+    let icon_r = Rect::from_min_size(more_rect.min + Vec2::splat(ui.s(2.0)), Vec2::splat(more_s));
     ui.draw_icon_at(
         "more_vert",
         icon_r,
@@ -316,11 +325,9 @@ fn draw_leaf(
         false,
     );
     ui.context_menu(&format!("#dock_more{path}"), more_hov, |ui| {
-        if tabs.len() > 1 {
-            if ui.menu_item("Close Tab").clicked() {
-                // Caller owns tab list; just signal via notify for now.
-                ui.notify("Close tab");
-            }
+        if tabs.len() > 1 && ui.menu_item("Close Tab").clicked() {
+            // Caller owns tab list; just signal via notify for now.
+            ui.notify("Close tab");
         }
         if ui.menu_item("Close Others").clicked() {
             ui.notify("Close others");
@@ -355,4 +362,125 @@ fn draw_leaf(
     ui.layers.pop();
     ui.pop_id();
     ui.pop_clip();
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    // -- DockNode constructors ------------------------------------------------
+
+    #[test]
+    fn split_h_clamps_extreme_ratios_into_safe_range() {
+        let n = DockNode::split_h(1.5, DockNode::leaf(&["a"]), DockNode::leaf(&["b"]));
+        let DockNode::Split { ratio, axis, .. } = n else {
+            panic!("expected Split");
+        };
+        assert_eq!(axis, DockAxis::Horizontal);
+        assert!((0.05..=0.95).contains(&ratio));
+        assert_eq!(ratio, 0.95);
+    }
+
+    #[test]
+    fn split_v_clamps_negative_ratio_to_minimum() {
+        let n = DockNode::split_v(-1.0, DockNode::leaf(&["a"]), DockNode::leaf(&["b"]));
+        let DockNode::Split { ratio, axis, .. } = n else {
+            panic!("expected Split");
+        };
+        assert_eq!(axis, DockAxis::Vertical);
+        assert_eq!(ratio, 0.05);
+    }
+
+    #[test]
+    fn leaf_starts_on_first_tab() {
+        let n = DockNode::leaf(&["a", "b", "c"]);
+        let DockNode::Leaf { tabs, active } = n else {
+            panic!("expected Leaf");
+        };
+        assert_eq!(tabs, vec!["a", "b", "c"]);
+        assert_eq!(active, 0);
+    }
+
+    // -- split_rects ------------------------------------------------------------
+
+    fn full_rect(w: f32, h: f32) -> Rect {
+        Rect::from_min_size(Vec2::ZERO, Vec2::new(w, h))
+    }
+
+    #[test]
+    fn split_rects_horizontal_covers_rect_with_no_gaps_or_overlap() {
+        let rect = full_rect(400.0, 200.0);
+        let (a, s, b) = split_rects(rect, DockAxis::Horizontal, 0.5, 4.0, 64.0);
+        // Panes + splitter tile the rect exactly, left to right.
+        assert_eq!(a.min.x, rect.min.x);
+        assert_eq!(a.max.x, s.min.x);
+        assert_eq!(s.max.x, b.min.x);
+        assert_eq!(b.max.x, rect.max.x);
+        // Full height everywhere.
+        for r in [a, s, b] {
+            assert_eq!(r.min.y, rect.min.y);
+            assert_eq!(r.max.y, rect.max.y);
+        }
+    }
+
+    #[test]
+    fn split_rects_vertical_covers_rect_with_no_gaps_or_overlap() {
+        let rect = full_rect(200.0, 400.0);
+        let (a, s, b) = split_rects(rect, DockAxis::Vertical, 0.5, 4.0, 64.0);
+        assert_eq!(a.min.y, rect.min.y);
+        assert_eq!(a.max.y, s.min.y);
+        assert_eq!(s.max.y, b.min.y);
+        assert_eq!(b.max.y, rect.max.y);
+        for r in [a, s, b] {
+            assert_eq!(r.min.x, rect.min.x);
+            assert_eq!(r.max.x, rect.max.x);
+        }
+    }
+
+    #[test]
+    fn split_rects_respects_min_pane_width_at_extreme_ratio() {
+        let rect = full_rect(400.0, 200.0);
+        let min = 64.0;
+        // Ratio pushed to the edge — first pane must not shrink below `min`.
+        let (a, _s, b) = split_rects(rect, DockAxis::Horizontal, 0.0, 4.0, min);
+        assert!(
+            a.width() >= min - 1e-3,
+            "pane a shrank below min: {}",
+            a.width()
+        );
+        assert!(
+            b.width() >= min - 1e-3,
+            "pane b shrank below min: {}",
+            b.width()
+        );
+    }
+
+    #[test]
+    fn split_rects_degenerates_to_half_when_too_small_for_two_min_panes() {
+        // Available space smaller than 2×min — falls back to an even 50/50 split
+        // instead of leaving one pane negative-width or overlapping.
+        let rect = full_rect(100.0, 200.0);
+        let min = 64.0;
+        let (a, s, b) = split_rects(rect, DockAxis::Horizontal, 0.9, 4.0, min);
+        let avail = (rect.width() - 4.0).max(0.0);
+        assert!((a.width() - avail * 0.5).abs() < 1e-3);
+        assert!(a.width() > 0.0);
+        assert!(b.width() > 0.0);
+        assert!(s.width() >= 0.0);
+    }
+
+    #[test]
+    fn split_rects_never_produces_negative_width_panes() {
+        for ratio in [-5.0, 0.0, 0.5, 1.0, 5.0] {
+            let (a, _s, b) = split_rects(
+                full_rect(300.0, 150.0),
+                DockAxis::Horizontal,
+                ratio,
+                4.0,
+                64.0,
+            );
+            assert!(a.width() >= 0.0, "ratio {ratio}: a width {}", a.width());
+            assert!(b.width() >= 0.0, "ratio {ratio}: b width {}", b.width());
+        }
+    }
 }

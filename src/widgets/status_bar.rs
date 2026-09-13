@@ -4,7 +4,7 @@ use glam::Vec2;
 
 use crate::theme;
 use crate::types::Rect;
-use crate::{CrossAlign, new_layer, LayoutDir, Ui};
+use crate::{CrossAlign, LayoutDir, Ui, new_layer};
 
 impl Ui {
     /// Full-width status bar pinned to the bottom of the viewport.

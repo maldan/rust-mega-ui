@@ -2,7 +2,7 @@ use glam::Vec2;
 
 use crate::theme;
 use crate::types::Rect;
-use crate::{CrossAlign, new_layer, LayoutDir, Ui};
+use crate::{CrossAlign, LayoutDir, Ui, new_layer};
 
 impl Ui {
     /// Group box: border around content with an optional title on the top edge.

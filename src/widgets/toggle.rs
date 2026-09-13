@@ -52,9 +52,8 @@ impl Ui {
             if hovered && self.input.mouse_pressed {
                 self.active_id = Some(widget_id.child(i));
             }
-            let clicked = self.active_id == Some(widget_id.child(i))
-                && hovered
-                && self.input.mouse_released;
+            let clicked =
+                self.active_id == Some(widget_id.child(i)) && hovered && self.input.mouse_released;
             if clicked && *selected != i {
                 *selected = i;
                 changed = true;
@@ -119,7 +118,10 @@ impl Ui {
         let th = self.text_height();
         if tw + self.s(4.0) < width {
             self.text(
-                Vec2::new(rect.min.x + (width - tw) * 0.5, rect.min.y + (height - th) * 0.5),
+                Vec2::new(
+                    rect.min.x + (width - tw) * 0.5,
+                    rect.min.y + (height - th) * 0.5,
+                ),
                 &label,
                 theme::TEXT,
             );

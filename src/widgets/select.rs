@@ -13,11 +13,7 @@ pub(crate) struct SelectState {
 impl Ui {
     pub fn select(&mut self, id: &str, selected: &mut usize, options: &[&str]) -> Response {
         let widget_id = self.current_id(id);
-        let mut st = self
-            .selects
-            .get(&widget_id)
-            .copied()
-            .unwrap_or_default();
+        let mut st = self.selects.get(&widget_id).copied().unwrap_or_default();
 
         let height = self.s(28.0);
         let item_h = self.s(26.0);
@@ -25,11 +21,7 @@ impl Ui {
         let pad = self.s(10.0);
         let fill_w = self.layer().fill_w;
         let filling = fill_w > 0.0 && matches!(self.layer().dir, LayoutDir::Vertical);
-        let width = if filling {
-            fill_w
-        } else {
-            self.s(180.0)
-        };
+        let width = if filling { fill_w } else { self.s(180.0) };
 
         let header = if filling {
             self.allocate_fill_x(Vec2::new(width, height))
@@ -136,59 +128,59 @@ impl Ui {
         };
         self.draw_icon_at(arrow, arrow_rect, theme::TEXT_DIM, false);
 
-        if st.open {
-            if let Some(list) = list {
-                self.absorb_rect(list);
-                if list_hovered {
+        if st.open
+            && let Some(list) = list
+        {
+            self.absorb_rect(list);
+            if list_hovered {
+                self.want_capture = true;
+                self.set_cursor(CursorIcon::Pointer);
+            }
+
+            self.round_rect_overlay(list, radius, theme::BTN_BORDER);
+            self.round_rect_overlay(list.inset(1.0), (radius - 1.0).max(0.0), theme::POPUP_BG);
+
+            for (i, opt) in options.iter().enumerate() {
+                let item = Self::select_item_rect(list, width, item_h, i, st.scroll);
+                if !rects_overlap(item, list) {
+                    continue;
+                }
+                let hot = self.hovered_overlay(item);
+                if hot {
                     self.want_capture = true;
                     self.set_cursor(CursorIcon::Pointer);
+                    self.round_rect_overlay(item, self.s(3.0), theme::POPUP_HOVER);
+                } else if i == *selected {
+                    self.round_rect_overlay(item, self.s(3.0), theme::HEADER);
                 }
 
-                self.round_rect_overlay(list, radius, theme::BTN_BORDER);
-                self.round_rect_overlay(list.inset(1.0), (radius - 1.0).max(0.0), theme::POPUP_BG);
+                self.text_overlay(
+                    Vec2::new(item.min.x + pad, item.min.y + (item_h - th) * 0.5),
+                    opt,
+                    theme::TEXT,
+                );
+            }
 
-                for (i, opt) in options.iter().enumerate() {
-                    let item = Self::select_item_rect(list, width, item_h, i, st.scroll);
-                    if !rects_overlap(item, list) {
-                        continue;
-                    }
-                    let hot = self.hovered_overlay(item);
-                    if hot {
-                        self.want_capture = true;
-                        self.set_cursor(CursorIcon::Pointer);
-                        self.round_rect_overlay(item, self.s(3.0), theme::POPUP_HOVER);
-                    } else if i == *selected {
-                        self.round_rect_overlay(item, self.s(3.0), theme::HEADER);
-                    }
-
-                    self.text_overlay(
-                        Vec2::new(item.min.x + pad, item.min.y + (item_h - th) * 0.5),
-                        opt,
-                        theme::TEXT,
-                    );
-                }
-
-                // Thin scroll thumb when content overflows.
-                let content_h = item_h * options.len() as f32;
-                if content_h > list.height() + 0.5 {
-                    let track = Rect {
-                        min: Vec2::new(list.max.x - self.s(5.0), list.min.y + self.s(3.0)),
-                        max: Vec2::new(list.max.x - self.s(2.0), list.max.y - self.s(3.0)),
-                    };
-                    let thumb_h =
-                        (track.height() * (list.height() / content_h)).clamp(self.s(12.0), track.height());
-                    let t = if content_h > list.height() {
-                        st.scroll / (content_h - list.height())
-                    } else {
-                        0.0
-                    };
-                    let thumb_y = track.min.y + (track.height() - thumb_h) * t;
-                    let thumb = Rect::from_min_size(
-                        Vec2::new(track.min.x, thumb_y),
-                        Vec2::new(track.width(), thumb_h),
-                    );
-                    self.round_rect_overlay(thumb, self.s(2.0), [0.45, 0.45, 0.48, 0.85]);
-                }
+            // Thin scroll thumb when content overflows.
+            let content_h = item_h * options.len() as f32;
+            if content_h > list.height() + 0.5 {
+                let track = Rect {
+                    min: Vec2::new(list.max.x - self.s(5.0), list.min.y + self.s(3.0)),
+                    max: Vec2::new(list.max.x - self.s(2.0), list.max.y - self.s(3.0)),
+                };
+                let thumb_h = (track.height() * (list.height() / content_h))
+                    .clamp(self.s(12.0), track.height());
+                let t = if content_h > list.height() {
+                    st.scroll / (content_h - list.height())
+                } else {
+                    0.0
+                };
+                let thumb_y = track.min.y + (track.height() - thumb_h) * t;
+                let thumb = Rect::from_min_size(
+                    Vec2::new(track.min.x, thumb_y),
+                    Vec2::new(track.width(), thumb_h),
+                );
+                self.round_rect_overlay(thumb, self.s(2.0), [0.45, 0.45, 0.48, 0.85]);
             }
         }
 
@@ -217,9 +209,13 @@ impl Ui {
 
         let open_down = capped <= space_below || space_below >= space_above;
         let list_h = if open_down {
-            capped.min(space_below).max(item_h.min(space_below.max(item_h)))
+            capped
+                .min(space_below)
+                .max(item_h.min(space_below.max(item_h)))
         } else {
-            capped.min(space_above).max(item_h.min(space_above.max(item_h)))
+            capped
+                .min(space_above)
+                .max(item_h.min(space_above.max(item_h)))
         };
 
         if open_down {
@@ -237,7 +233,10 @@ impl Ui {
 
     fn select_item_rect(list: Rect, width: f32, item_h: f32, index: usize, scroll: f32) -> Rect {
         Rect::from_min_size(
-            Vec2::new(list.min.x + 1.0, list.min.y + 1.0 + index as f32 * item_h - scroll),
+            Vec2::new(
+                list.min.x + 1.0,
+                list.min.y + 1.0 + index as f32 * item_h - scroll,
+            ),
             Vec2::new(width - 2.0, item_h),
         )
     }

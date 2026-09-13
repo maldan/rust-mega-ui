@@ -336,7 +336,11 @@ impl NodeSpace {
             self.selected_frame = None;
         }
         self.frame_screen_rects.remove(frame_id);
-        if self.frame_drag.as_ref().is_some_and(|d| d.frame_id == frame_id) {
+        if self
+            .frame_drag
+            .as_ref()
+            .is_some_and(|d| d.frame_id == frame_id)
+        {
             self.frame_drag = None;
         }
     }
@@ -380,10 +384,10 @@ impl NodeSpace {
         }
         self.frames.retain(|f| !f.node_ids.is_empty());
         let fid = self.selected_frame.clone();
-        if let Some(id) = fid {
-            if !self.frames.iter().any(|f| f.id == id) {
-                self.selected_frame = None;
-            }
+        if let Some(id) = fid
+            && !self.frames.iter().any(|f| f.id == id)
+        {
+            self.selected_frame = None;
         }
     }
 
@@ -725,7 +729,13 @@ fn snap_vec(p: Vec2, snap: f32) -> Vec2 {
 
 impl Ui {
     /// Fill `size` (or remaining layout space if zero) with a node graph canvas.
-    pub fn node_space(&mut self, id: &str, size: Vec2, space: &mut NodeSpace, add: impl FnOnce(&mut Self)) {
+    pub fn node_space(
+        &mut self,
+        id: &str,
+        size: Vec2,
+        space: &mut NodeSpace,
+        add: impl FnOnce(&mut Self),
+    ) {
         let alloc = if size.x > 0.0 && size.y > 0.0 {
             size
         } else {
@@ -896,14 +906,14 @@ impl Ui {
             space.pending_node_press = None;
         }
         // Frontmost node under cursor handles the press (later draws overwrite pending).
-        if let Some(press) = space.pending_node_press.take() {
-            if let Some(&pos) = space.node_world_pos.get(&press.id) {
-                if press.on_title {
-                    space.begin_node_drag(&press.id, pos, press.mouse_world, press.ctrl);
-                } else {
-                    space.select_for_click(&press.id, press.ctrl);
-                    space.bring_front(&press.id);
-                }
+        if let Some(press) = space.pending_node_press.take()
+            && let Some(&pos) = space.node_world_pos.get(&press.id)
+        {
+            if press.on_title {
+                space.begin_node_drag(&press.id, pos, press.mouse_world, press.ctrl);
+            } else {
+                space.select_for_click(&press.id, press.ctrl);
+                space.bring_front(&press.id);
             }
         }
 
@@ -992,17 +1002,16 @@ impl Ui {
         }
 
         // Link LMB → select only (never when over a node / already dragging)
-        if space.link_hit.is_some()
-            && self.input.mouse_pressed
-            && space.pending.is_none()
-            && space.node_drag.is_none()
-            && !space.pointer_over_node
-            && !space.pointer_over_frame
-            && space.frame_drag.is_none()
-            && !self.input.mouse_middle_down
-            && space.box_select.is_none()
-        {
-            let lid = space.link_hit.unwrap();
+        if let Some(lid) = space.link_hit.filter(|_| {
+            self.input.mouse_pressed
+                && space.pending.is_none()
+                && space.node_drag.is_none()
+                && !space.pointer_over_node
+                && !space.pointer_over_frame
+                && space.frame_drag.is_none()
+                && !self.input.mouse_middle_down
+                && space.box_select.is_none()
+        }) {
             space.selected_link = Some(lid);
             space.selected_nodes.clear();
             space.selected_frame = None;
@@ -1028,22 +1037,40 @@ impl Ui {
             self.round_rect(r, 0.0, fill);
             // border as thin lines
             let t = 1.0;
-            self.line(Vec2::new(r.min.x, r.min.y), Vec2::new(r.max.x, r.min.y), t, border);
-            self.line(Vec2::new(r.min.x, r.max.y), Vec2::new(r.max.x, r.max.y), t, border);
-            self.line(Vec2::new(r.min.x, r.min.y), Vec2::new(r.min.x, r.max.y), t, border);
-            self.line(Vec2::new(r.max.x, r.min.y), Vec2::new(r.max.x, r.max.y), t, border);
+            self.line(
+                Vec2::new(r.min.x, r.min.y),
+                Vec2::new(r.max.x, r.min.y),
+                t,
+                border,
+            );
+            self.line(
+                Vec2::new(r.min.x, r.max.y),
+                Vec2::new(r.max.x, r.max.y),
+                t,
+                border,
+            );
+            self.line(
+                Vec2::new(r.min.x, r.min.y),
+                Vec2::new(r.min.x, r.max.y),
+                t,
+                border,
+            );
+            self.line(
+                Vec2::new(r.max.x, r.min.y),
+                Vec2::new(r.max.x, r.max.y),
+                t,
+                border,
+            );
             self.want_capture = true;
             self.request_repaint();
         }
 
         let panning = self.active_id == Some(pan_id) && self.input.mouse_middle_down;
-        if panning {
-            if let Some(grab) = space.pan_grab {
-                space.pan = mouse - grab;
-                self.set_cursor(CursorIcon::Move);
-                self.want_capture = true;
-                self.request_repaint();
-            }
+        if panning && let Some(grab) = space.pan_grab {
+            space.pan = mouse - grab;
+            self.set_cursor(CursorIcon::Move);
+            self.want_capture = true;
+            self.request_repaint();
         }
 
         if self.input.mouse_released {
@@ -1083,18 +1110,14 @@ impl Ui {
         }
 
         // RMB on empty → context spawn pos (not when deleting a link)
-        if in_rect
-            && self.input.mouse_right_pressed
-            && hovered_bg
-            && space.link_hit.is_none()
-        {
+        if in_rect && self.input.mouse_right_pressed && hovered_bg && space.link_hit.is_none() {
             space.context_world = Some(space.screen_to_world(mouse));
             space.context_menu_request = true;
         }
 
         // Delete selection: Delete always; Backspace when not typing
-        let want_delete = self.input.key_delete
-            || (self.input.key_backspace && self.focus_id.is_none());
+        let want_delete =
+            self.input.key_delete || (self.input.key_backspace && self.focus_id.is_none());
         if in_rect && want_delete {
             if let Some(lid) = space.selected_link.take() {
                 space.remove_link(lid);
@@ -1167,10 +1190,30 @@ impl Ui {
             };
             self.round_rect(rect, radius, fill);
             let t = 1.0;
-            self.line(Vec2::new(rect.min.x, rect.min.y), Vec2::new(rect.max.x, rect.min.y), t, border);
-            self.line(Vec2::new(rect.min.x, rect.max.y), Vec2::new(rect.max.x, rect.max.y), t, border);
-            self.line(Vec2::new(rect.min.x, rect.min.y), Vec2::new(rect.min.x, rect.max.y), t, border);
-            self.line(Vec2::new(rect.max.x, rect.min.y), Vec2::new(rect.max.x, rect.max.y), t, border);
+            self.line(
+                Vec2::new(rect.min.x, rect.min.y),
+                Vec2::new(rect.max.x, rect.min.y),
+                t,
+                border,
+            );
+            self.line(
+                Vec2::new(rect.min.x, rect.max.y),
+                Vec2::new(rect.max.x, rect.max.y),
+                t,
+                border,
+            );
+            self.line(
+                Vec2::new(rect.min.x, rect.min.y),
+                Vec2::new(rect.min.x, rect.max.y),
+                t,
+                border,
+            );
+            self.line(
+                Vec2::new(rect.max.x, rect.min.y),
+                Vec2::new(rect.max.x, rect.max.y),
+                t,
+                border,
+            );
             if !label.is_empty() {
                 self.text_sized(
                     Vec2::new(rect.min.x, rect.min.y - lh - gap),
@@ -1353,7 +1396,13 @@ impl Ui {
             min: rect.min + Vec2::new(1.0, 1.0),
             max: Vec2::new(rect.max.x - 1.0, rect.min.y + title_h * z),
         };
-        self.round_rect_corners(title_draw, (radius - 1.0).max(0.0), title_color, true, false);
+        self.round_rect_corners(
+            title_draw,
+            (radius - 1.0).max(0.0),
+            title_color,
+            true,
+            false,
+        );
         let th = self.text_height();
         self.text(
             rect.min + Vec2::new(self.s(10.0), (title_h * z - th) * 0.5),
@@ -1487,15 +1536,12 @@ impl Ui {
             theme::TEXT,
         );
 
-        space.port_pos.insert(
-            (node_id.clone(), side, port_id.to_string()),
-            pin_center,
-        );
+        space
+            .port_pos
+            .insert((node_id.clone(), side, port_id.to_string()), pin_center);
 
-        let pin_rect = Rect::from_min_size(
-            pin_center - Vec2::splat(pin_d * 0.5),
-            Vec2::splat(pin_d),
-        );
+        let pin_rect =
+            Rect::from_min_size(pin_center - Vec2::splat(pin_d * 0.5), Vec2::splat(pin_d));
         let hit_r = PIN_HIT * z;
         let hit = Rect::from_min_size(pin_center - Vec2::splat(hit_r), Vec2::splat(hit_r * 2.0));
         let mouse = self.input.mouse_pos;
@@ -1513,11 +1559,18 @@ impl Ui {
         let ring = (1.5 * z).max(0.4);
         let core = (3.0 * z).max(0.8);
         self.round_rect(pin_rect, pin_d * 0.5, color);
-        self.round_rect(pin_rect.inset(ring), (pin_d * 0.5 - ring).max(0.4), theme::WIN_BODY);
+        self.round_rect(
+            pin_rect.inset(ring),
+            (pin_d * 0.5 - ring).max(0.4),
+            theme::WIN_BODY,
+        );
         self.round_rect(pin_rect.inset(core), (pin_d * 0.5 - core).max(0.4), color);
         if hovered {
             self.round_rect(
-                Rect::from_min_size(pin_center - Vec2::splat(hit_r * 0.7), Vec2::splat(hit_r * 1.4)),
+                Rect::from_min_size(
+                    pin_center - Vec2::splat(hit_r * 0.7),
+                    Vec2::splat(hit_r * 1.4),
+                ),
                 hit_r * 0.7,
                 [color[0], color[1], color[2], 0.25],
             );
@@ -1551,47 +1604,48 @@ impl Ui {
         }
 
         // Complete wire on hover + release
-        if hovered && self.input.mouse_released {
-            if let Some(pending) = space.pending.clone() {
-                let (out_n, out_p, in_n, in_p, out_ty, in_ty) = match (pending.side, side) {
-                    (NodePortSide::Output, NodePortSide::Input) => (
-                        pending.from_node,
-                        pending.from_port,
-                        node_id.clone(),
-                        port_id.to_string(),
-                        pending.ty,
-                        ty,
-                    ),
-                    (NodePortSide::Input, NodePortSide::Output) => (
-                        node_id.clone(),
-                        port_id.to_string(),
-                        pending.from_node,
-                        pending.from_port,
-                        ty,
-                        pending.ty,
-                    ),
-                    _ => {
-                        space.pending = None;
-                        return;
-                    }
-                };
-                if out_n != in_n && space.compatible(out_ty, in_ty) {
-                    space
-                        .links
-                        .retain(|l| !(l.to_node == in_n && l.to_port == in_p));
-                    let id = space.next_link_id;
-                    space.next_link_id += 1;
-                    space.links.push(NodeLink {
-                        id,
-                        from_node: out_n,
-                        from_port: out_p,
-                        to_node: in_n,
-                        to_port: in_p,
-                        ty: out_ty,
-                    });
+        if hovered
+            && self.input.mouse_released
+            && let Some(pending) = space.pending.clone()
+        {
+            let (out_n, out_p, in_n, in_p, out_ty, in_ty) = match (pending.side, side) {
+                (NodePortSide::Output, NodePortSide::Input) => (
+                    pending.from_node,
+                    pending.from_port,
+                    node_id.clone(),
+                    port_id.to_string(),
+                    pending.ty,
+                    ty,
+                ),
+                (NodePortSide::Input, NodePortSide::Output) => (
+                    node_id.clone(),
+                    port_id.to_string(),
+                    pending.from_node,
+                    pending.from_port,
+                    ty,
+                    pending.ty,
+                ),
+                _ => {
+                    space.pending = None;
+                    return;
                 }
-                space.pending = None;
+            };
+            if out_n != in_n && space.compatible(out_ty, in_ty) {
+                space
+                    .links
+                    .retain(|l| !(l.to_node == in_n && l.to_port == in_p));
+                let id = space.next_link_id;
+                space.next_link_id += 1;
+                space.links.push(NodeLink {
+                    id,
+                    from_node: out_n,
+                    from_port: out_p,
+                    to_node: in_n,
+                    to_port: in_p,
+                    ty: out_ty,
+                });
             }
+            space.pending = None;
         }
     }
 }
@@ -1617,10 +1671,7 @@ mod tests {
         space.group_nodes(&["b".into(), "c".into()]);
         assert_eq!(space.frames.len(), 2);
         assert_eq!(space.frames[0].node_ids, vec!["a".to_string()]);
-        assert_eq!(
-            space.frames[1].node_ids,
-            ["b".to_string(), "c".to_string()]
-        );
+        assert_eq!(space.frames[1].node_ids, ["b".to_string(), "c".to_string()]);
     }
 
     #[test]
@@ -1663,12 +1714,226 @@ mod tests {
             Vec2::new(10.0, 0.0),
         );
         assert_eq!(
-            space.port_pos.get(&("seq".into(), NodePortSide::Input, "clock".into())),
+            space
+                .port_pos
+                .get(&("seq".into(), NodePortSide::Input, "clock".into())),
             Some(&Vec2::new(0.0, 0.0))
         );
         assert_eq!(
-            space.port_pos.get(&("seq".into(), NodePortSide::Output, "clock".into())),
+            space
+                .port_pos
+                .get(&("seq".into(), NodePortSide::Output, "clock".into())),
             Some(&Vec2::new(10.0, 0.0))
         );
+    }
+
+    // -- coordinate transforms ---------------------------------------------------
+
+    #[test]
+    fn screen_to_world_inverts_world_to_screen() {
+        let mut space = NodeSpace::new();
+        space.pan = Vec2::new(37.0, -12.0);
+        space.zoom = 1.6;
+        let world = Vec2::new(123.0, -45.0);
+        let screen = space.world_to_screen(world);
+        let back = space.screen_to_world(screen);
+        assert!((back - world).length() < 1e-3);
+    }
+
+    #[test]
+    fn screen_to_world_does_not_divide_by_zero_zoom() {
+        let mut space = NodeSpace::new();
+        space.zoom = 0.0;
+        let w = space.screen_to_world(Vec2::new(10.0, 10.0));
+        assert!(w.x.is_finite() && w.y.is_finite());
+    }
+
+    // -- is_selected --------------------------------------------------------------
+
+    #[test]
+    fn is_selected_reflects_selected_nodes_list() {
+        let mut space = NodeSpace::new();
+        space.selected_nodes.push("a".into());
+        assert!(space.is_selected("a"));
+        assert!(!space.is_selected("b"));
+    }
+
+    // -- link management ----------------------------------------------------------
+
+    #[test]
+    fn remove_link_by_id_only_removes_matching_link() {
+        let mut space = NodeSpace::new();
+        space.links.push(NodeLink {
+            id: 1,
+            from_node: "a".into(),
+            from_port: "out".into(),
+            to_node: "b".into(),
+            to_port: "in".into(),
+            ty: port_type::ANY,
+        });
+        space.links.push(NodeLink {
+            id: 2,
+            from_node: "b".into(),
+            from_port: "out".into(),
+            to_node: "c".into(),
+            to_port: "in".into(),
+            ty: port_type::ANY,
+        });
+        space.selected_link = Some(1);
+        space.remove_link(1);
+        assert_eq!(space.links.len(), 1);
+        assert_eq!(space.links[0].id, 2);
+        assert!(
+            space.selected_link.is_none(),
+            "removing the selected link must clear selection"
+        );
+    }
+
+    #[test]
+    fn remove_link_missing_id_is_noop() {
+        let mut space = NodeSpace::new();
+        space.links.push(NodeLink {
+            id: 1,
+            from_node: "a".into(),
+            from_port: "out".into(),
+            to_node: "b".into(),
+            to_port: "in".into(),
+            ty: port_type::ANY,
+        });
+        space.remove_link(999);
+        assert_eq!(space.links.len(), 1);
+    }
+
+    #[test]
+    fn duplicate_links_only_copies_links_fully_covered_by_id_map() {
+        let mut space = NodeSpace::new();
+        space.links.push(NodeLink {
+            id: 1,
+            from_node: "a".into(),
+            from_port: "out".into(),
+            to_node: "b".into(),
+            to_port: "in".into(),
+            ty: port_type::ANY,
+        });
+        // Link to an external node "x" not present in the duplication set.
+        space.links.push(NodeLink {
+            id: 2,
+            from_node: "b".into(),
+            from_port: "out".into(),
+            to_node: "x".into(),
+            to_port: "in".into(),
+            ty: port_type::ANY,
+        });
+        let mut id_map = HashMap::new();
+        id_map.insert("a".to_string(), "a2".to_string());
+        id_map.insert("b".to_string(), "b2".to_string());
+
+        // Mirror what the real API does: manually-pushed links must advance the
+        // id counter themselves, otherwise duplication can mint a colliding id.
+        space.next_link_id = 3;
+        space.duplicate_links(&id_map);
+
+        assert_eq!(
+            space.links.len(),
+            3,
+            "only the fully-mapped link should be duplicated"
+        );
+        let dup = space.links.last().unwrap();
+        assert_eq!(dup.from_node, "a2");
+        assert_eq!(dup.to_node, "b2");
+        assert_ne!(dup.id, 1);
+        assert_ne!(dup.id, 2);
+    }
+
+    #[test]
+    fn detach_node_removes_its_links_but_keeps_others() {
+        let mut space = NodeSpace::new();
+        space.links.push(NodeLink {
+            id: 1,
+            from_node: "a".into(),
+            from_port: "out".into(),
+            to_node: "b".into(),
+            to_port: "in".into(),
+            ty: port_type::ANY,
+        });
+        space.links.push(NodeLink {
+            id: 2,
+            from_node: "c".into(),
+            from_port: "out".into(),
+            to_node: "d".into(),
+            to_port: "in".into(),
+            ty: port_type::ANY,
+        });
+        space.detach_node("a");
+        assert_eq!(space.links.len(), 1);
+        assert_eq!(space.links[0].id, 2);
+    }
+
+    // -- geometry helpers -----------------------------------------------------
+
+    #[test]
+    fn dist_point_segment_zero_on_segment() {
+        let d = dist_point_segment(Vec2::new(5.0, 0.0), Vec2::ZERO, Vec2::new(10.0, 0.0));
+        assert!(d < 1e-4);
+    }
+
+    #[test]
+    fn dist_point_segment_perpendicular_distance() {
+        let d = dist_point_segment(Vec2::new(5.0, 3.0), Vec2::ZERO, Vec2::new(10.0, 0.0));
+        assert!((d - 3.0).abs() < 1e-4);
+    }
+
+    #[test]
+    fn dist_point_segment_clamps_to_nearest_endpoint() {
+        // Point beyond segment end — nearest point is the endpoint, not the infinite line.
+        let d = dist_point_segment(Vec2::new(20.0, 0.0), Vec2::ZERO, Vec2::new(10.0, 0.0));
+        assert!((d - 10.0).abs() < 1e-4);
+    }
+
+    #[test]
+    fn dist_point_segment_degenerate_zero_length_segment() {
+        let d = dist_point_segment(Vec2::new(3.0, 4.0), Vec2::ZERO, Vec2::ZERO);
+        assert!((d - 5.0).abs() < 1e-4);
+    }
+
+    #[test]
+    fn dist_point_polyline_picks_closest_segment() {
+        let pts = [
+            Vec2::new(0.0, 0.0),
+            Vec2::new(10.0, 0.0),
+            Vec2::new(10.0, 10.0),
+        ];
+        let d = dist_point_polyline(Vec2::new(10.0, 5.0), &pts);
+        assert!(d < 1e-4);
+    }
+
+    #[test]
+    fn rect_from_points_normalizes_min_max_regardless_of_order() {
+        let r = rect_from_points(Vec2::new(10.0, 10.0), Vec2::new(2.0, 8.0));
+        assert_eq!(r.min, Vec2::new(2.0, 8.0));
+        assert_eq!(r.max, Vec2::new(10.0, 10.0));
+    }
+
+    #[test]
+    fn rects_overlap_detects_intersection_and_touching_is_not_overlap() {
+        let a = Rect::from_min_size(Vec2::ZERO, Vec2::splat(10.0));
+        let overlapping = Rect::from_min_size(Vec2::new(5.0, 5.0), Vec2::splat(10.0));
+        let touching = Rect::from_min_size(Vec2::new(10.0, 0.0), Vec2::splat(10.0));
+        let disjoint = Rect::from_min_size(Vec2::new(20.0, 20.0), Vec2::splat(5.0));
+        assert!(rects_overlap(a, overlapping));
+        assert!(!rects_overlap(a, touching));
+        assert!(!rects_overlap(a, disjoint));
+    }
+
+    #[test]
+    fn snap_vec_rounds_to_grid() {
+        let p = snap_vec(Vec2::new(13.0, 27.0), 5.0);
+        assert_eq!(p, Vec2::new(15.0, 25.0));
+    }
+
+    #[test]
+    fn snap_vec_disabled_when_snap_is_near_zero() {
+        let p = Vec2::new(13.37, -8.21);
+        assert_eq!(snap_vec(p, 0.0), p);
     }
 }

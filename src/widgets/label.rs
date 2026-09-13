@@ -1,7 +1,7 @@
 use glam::Vec2;
 
-use crate::theme;
 use crate::Ui;
+use crate::theme;
 
 #[derive(Clone, Copy)]
 pub struct TextStyle {
@@ -63,12 +63,7 @@ impl Ui {
         };
         let rect = self.allocate(Vec2::new(self.s(width.max(1.0)), h));
         self.push_clip(rect);
-        self.text_sized(
-            rect.min + Vec2::new(self.s(2.0), y_off),
-            text,
-            color,
-            px,
-        );
+        self.text_sized(rect.min + Vec2::new(self.s(2.0), y_off), text, color, px);
         self.pop_clip();
     }
 }

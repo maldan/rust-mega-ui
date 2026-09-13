@@ -2,7 +2,7 @@ use glam::Vec2;
 
 use crate::theme;
 use crate::types::{CursorIcon, Rect, Response};
-use crate::{new_layer, CrossAlign, LayoutDir, Ui};
+use crate::{CrossAlign, LayoutDir, Ui, new_layer};
 
 impl Ui {
     pub fn button(&mut self, label: &str) -> Response {
@@ -108,10 +108,8 @@ impl Ui {
         self.layers.push(layer);
         add(self);
         let used = self.layers.pop().unwrap().used;
-        self.button_sizes.insert(
-            widget_id,
-            Vec2::new(used.x.max(1.0), used.y.max(1.0)),
-        );
+        self.button_sizes
+            .insert(widget_id, Vec2::new(used.x.max(1.0), used.y.max(1.0)));
         self.pop_id();
 
         Response {

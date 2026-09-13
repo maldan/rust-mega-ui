@@ -89,14 +89,8 @@ fn ensure_color_stops(stops: &mut Vec<GradientStop>) {
 
 fn ensure_opacity_stops(stops: &mut Vec<OpacityStop>) {
     if stops.is_empty() {
-        stops.push(OpacityStop {
-            t: 0.0,
-            alpha: 1.0,
-        });
-        stops.push(OpacityStop {
-            t: 1.0,
-            alpha: 1.0,
-        });
+        stops.push(OpacityStop { t: 0.0, alpha: 1.0 });
+        stops.push(OpacityStop { t: 1.0, alpha: 1.0 });
     } else if stops.len() == 1 {
         let a = stops[0].alpha;
         stops[0].t = 0.0;
@@ -104,25 +98,29 @@ fn ensure_opacity_stops(stops: &mut Vec<OpacityStop>) {
     }
 }
 
-fn sort_color_stops(stops: &mut Vec<GradientStop>, selected: &mut Option<usize>) {
+fn sort_color_stops(stops: &mut [GradientStop], selected: &mut Option<usize>) {
     let key = selected.and_then(|i| stops.get(i).copied());
     stops.sort_by(|a, b| a.t.partial_cmp(&b.t).unwrap_or(std::cmp::Ordering::Equal));
     if let Some(k) = key {
         *selected = stops
             .iter()
             .position(|s| s.t == k.t && s.color == k.color)
-            .or(Some(selected.unwrap_or(0).min(stops.len().saturating_sub(1))));
+            .or(Some(
+                selected.unwrap_or(0).min(stops.len().saturating_sub(1)),
+            ));
     }
 }
 
-fn sort_opacity_stops(stops: &mut Vec<OpacityStop>, selected: &mut Option<usize>) {
+fn sort_opacity_stops(stops: &mut [OpacityStop], selected: &mut Option<usize>) {
     let key = selected.and_then(|i| stops.get(i).copied());
     stops.sort_by(|a, b| a.t.partial_cmp(&b.t).unwrap_or(std::cmp::Ordering::Equal));
     if let Some(k) = key {
         *selected = stops
             .iter()
             .position(|s| s.t == k.t && (s.alpha - k.alpha).abs() < 1e-6)
-            .or(Some(selected.unwrap_or(0).min(stops.len().saturating_sub(1))));
+            .or(Some(
+                selected.unwrap_or(0).min(stops.len().saturating_sub(1)),
+            ));
     }
 }
 
@@ -191,11 +189,7 @@ fn sample_alpha(stops: &[OpacityStop], t: f32) -> f32 {
 }
 
 /// Sample RGB from color stops and alpha from opacity stops.
-pub fn sample_gradient(
-    colors: &[GradientStop],
-    opacities: &[OpacityStop],
-    t: f32,
-) -> [f32; 4] {
+pub fn sample_gradient(colors: &[GradientStop], opacities: &[OpacityStop], t: f32) -> [f32; 4] {
     let rgb = sample_rgb(colors, t);
     let a = sample_alpha(opacities, t);
     [rgb[0], rgb[1], rgb[2], a]
@@ -298,17 +292,17 @@ impl Ui {
         let hit_color = nearest_color(colors, bar, mp, self.scale);
         let hit_opacity = nearest_opacity(opacities, bar, mp, self.scale);
 
-        for i in 0..opacities.len() {
-            let x = bar.min.x + opacities[i].t.clamp(0.0, 1.0) * bar.width();
-            let a = opacities[i].alpha.clamp(0.0, 1.0);
+        for (i, stop) in opacities.iter().enumerate() {
+            let x = bar.min.x + stop.t.clamp(0.0, 1.0) * bar.width();
+            let a = stop.alpha.clamp(0.0, 1.0);
             let fill = [a, a, a, 1.0];
             let sel = st.sel_kind == Some(GradKind::Opacity) && st.sel_idx == Some(i);
             let hot = hit_opacity == Some(i);
             draw_house_marker(self, x, bar.min.y, false, fill, sel, hot);
         }
-        for i in 0..colors.len() {
-            let x = bar.min.x + colors[i].t.clamp(0.0, 1.0) * bar.width();
-            let c = colors[i].color;
+        for (i, stop) in colors.iter().enumerate() {
+            let x = bar.min.x + stop.t.clamp(0.0, 1.0) * bar.width();
+            let c = stop.color;
             let fill = [c[0], c[1], c[2], 1.0];
             let sel = st.sel_kind == Some(GradKind::Color) && st.sel_idx == Some(i);
             let hot = hit_color == Some(i);
@@ -316,33 +310,31 @@ impl Ui {
         }
 
         // Footer controls (continue in parent layout below the bar)
-        self.horizontal(|ui| {
-            match (st.sel_kind, st.sel_idx) {
-                (Some(GradKind::Color), Some(i)) if i < colors.len() => {
-                    ui.label("Color");
-                    ui.space(4.0);
-                    if ui
-                        .color_edit(&format!("{id}_color"), &mut colors[i].color)
-                        .changed()
-                    {
-                        colors[i].color[3] = 1.0;
-                        out.changed = true;
-                    }
+        self.horizontal(|ui| match (st.sel_kind, st.sel_idx) {
+            (Some(GradKind::Color), Some(i)) if i < colors.len() => {
+                ui.label("Color");
+                ui.space(4.0);
+                if ui
+                    .color_edit(&format!("{id}_color"), &mut colors[i].color)
+                    .changed()
+                {
+                    colors[i].color[3] = 1.0;
+                    out.changed = true;
                 }
-                (Some(GradKind::Opacity), Some(i)) if i < opacities.len() => {
-                    ui.label("Opacity");
-                    ui.space(4.0);
-                    if ui
-                        .slider(&format!("{id}_op"), &mut opacities[i].alpha, 0.0..=1.0)
-                        .changed()
-                    {
-                        opacities[i].alpha = opacities[i].alpha.clamp(0.0, 1.0);
-                        out.changed = true;
-                    }
+            }
+            (Some(GradKind::Opacity), Some(i)) if i < opacities.len() => {
+                ui.label("Opacity");
+                ui.space(4.0);
+                if ui
+                    .slider(&format!("{id}_op"), &mut opacities[i].alpha, 0.0..=1.0)
+                    .changed()
+                {
+                    opacities[i].alpha = opacities[i].alpha.clamp(0.0, 1.0);
+                    out.changed = true;
                 }
-                _ => {
-                    ui.label("Select a stop");
-                }
+            }
+            _ => {
+                ui.label("Select a stop");
             }
         });
 
@@ -381,10 +373,11 @@ impl Ui {
         st.since_press = (st.since_press + self.input.dt).min(10.0);
 
         let can_delete = hovered || self.focus_id == Some(widget_id);
-        if can_delete && (self.input.key_delete || self.input.key_backspace) {
-            if delete_selected(colors, opacities, &mut st) {
-                out.changed = true;
-            }
+        if can_delete
+            && (self.input.key_delete || self.input.key_backspace)
+            && delete_selected(colors, opacities, &mut st)
+        {
+            out.changed = true;
         }
 
         if hovered && self.input.mouse_right_pressed {
@@ -426,8 +419,7 @@ impl Ui {
                 let bar_mid_y = (bar.min.y + bar.max.y) * 0.5;
                 let on_opacity =
                     opacity_rail.contains(mp) || (bar.contains(mp) && mp.y < bar_mid_y);
-                let on_color =
-                    color_rail.contains(mp) || (bar.contains(mp) && mp.y >= bar_mid_y);
+                let on_color = color_rail.contains(mp) || (bar.contains(mp) && mp.y >= bar_mid_y);
                 if want_add && bar.width() > 1.0 && (on_opacity || on_color) {
                     let t = ((mp.x - bar.min.x) / bar.width()).clamp(0.0, 1.0);
                     if on_opacity {
@@ -703,5 +695,150 @@ fn draw_checker(ui: &mut Ui, rect: Rect) {
         }
         y = y1;
         row += 1;
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn cstop(t: f32, r: f32, g: f32, b: f32) -> GradientStop {
+        GradientStop {
+            t,
+            color: [r, g, b, 1.0],
+        }
+    }
+
+    fn ostop(t: f32, alpha: f32) -> OpacityStop {
+        OpacityStop { t, alpha }
+    }
+
+    #[test]
+    fn sample_gradient_empty_stops_returns_opaque_white() {
+        let c = sample_gradient(&[], &[], 0.5);
+        assert_eq!(c, [1.0, 1.0, 1.0, 1.0]);
+    }
+
+    #[test]
+    fn sample_gradient_single_stop_is_constant_everywhere() {
+        let colors = vec![cstop(0.5, 0.2, 0.4, 0.6)];
+        let opacities = vec![ostop(0.5, 0.3)];
+        assert_eq!(
+            sample_gradient(&colors, &opacities, 0.0)[..3],
+            [0.2, 0.4, 0.6]
+        );
+        assert_eq!(
+            sample_gradient(&colors, &opacities, 1.0)[..3],
+            [0.2, 0.4, 0.6]
+        );
+        assert_eq!(sample_gradient(&colors, &opacities, 1.0)[3], 0.3);
+    }
+
+    #[test]
+    fn sample_gradient_hits_endpoints_exactly() {
+        let colors = vec![cstop(0.0, 1.0, 0.0, 0.0), cstop(1.0, 0.0, 0.0, 1.0)];
+        let opacities = vec![ostop(0.0, 1.0), ostop(1.0, 0.0)];
+        assert_eq!(
+            sample_gradient(&colors, &opacities, 0.0),
+            [1.0, 0.0, 0.0, 1.0]
+        );
+        assert_eq!(
+            sample_gradient(&colors, &opacities, 1.0),
+            [0.0, 0.0, 1.0, 0.0]
+        );
+    }
+
+    #[test]
+    fn sample_gradient_interpolates_linearly_at_midpoint() {
+        let colors = vec![cstop(0.0, 0.0, 0.0, 0.0), cstop(1.0, 1.0, 1.0, 1.0)];
+        let opacities = vec![ostop(0.0, 0.0), ostop(1.0, 1.0)];
+        let mid = sample_gradient(&colors, &opacities, 0.5);
+        for v in mid {
+            assert!((v - 0.5).abs() < 1e-4, "expected ~0.5, got {v}");
+        }
+    }
+
+    #[test]
+    fn sample_gradient_clamps_t_outside_0_1() {
+        let colors = vec![cstop(0.0, 1.0, 0.0, 0.0), cstop(1.0, 0.0, 0.0, 1.0)];
+        assert_eq!(sample_gradient(&colors, &[], -5.0)[..3], [1.0, 0.0, 0.0]);
+        assert_eq!(sample_gradient(&colors, &[], 5.0)[..3], [0.0, 0.0, 1.0]);
+    }
+
+    #[test]
+    fn sample_gradient_stops_out_of_order_are_sorted_before_sampling() {
+        // Stops inserted out of `t` order must not break interpolation.
+        let colors = vec![cstop(1.0, 0.0, 0.0, 1.0), cstop(0.0, 1.0, 0.0, 0.0)];
+        let c = sample_gradient(&colors, &[], 0.25);
+        assert!(c[0] > c[2], "expected closer to red at t=0.25, got {c:?}");
+    }
+
+    #[test]
+    fn sample_alpha_defaults_to_opaque_without_opacity_stops() {
+        assert_eq!(
+            sample_gradient(&[cstop(0.0, 0.0, 0.0, 0.0)], &[], 0.5)[3],
+            1.0
+        );
+    }
+
+    #[test]
+    fn sample_gradient_three_color_stops_middle_value_exact() {
+        let colors = vec![
+            cstop(0.0, 1.0, 0.0, 0.0),
+            cstop(0.5, 0.0, 1.0, 0.0),
+            cstop(1.0, 0.0, 0.0, 1.0),
+        ];
+        let c = sample_gradient(&colors, &[], 0.5);
+        assert_eq!(c[..3], [0.0, 1.0, 0.0]);
+    }
+
+    #[test]
+    fn ensure_color_stops_seeds_default_pair_when_empty() {
+        let mut stops = Vec::new();
+        ensure_color_stops(&mut stops);
+        assert_eq!(stops.len(), 2);
+        assert_eq!(stops[0].t, 0.0);
+        assert_eq!(stops[1].t, 1.0);
+    }
+
+    #[test]
+    fn ensure_color_stops_duplicates_single_stop_to_pair() {
+        let mut stops = vec![cstop(0.7, 0.1, 0.2, 0.3)];
+        ensure_color_stops(&mut stops);
+        assert_eq!(stops.len(), 2);
+        assert_eq!(stops[0].t, 0.0);
+        assert_eq!(stops[1].t, 1.0);
+        assert_eq!(stops[0].color, stops[1].color);
+    }
+
+    #[test]
+    fn ensure_color_stops_leaves_existing_pair_untouched() {
+        let mut stops = vec![cstop(0.2, 1.0, 1.0, 1.0), cstop(0.8, 0.0, 0.0, 0.0)];
+        let before = stops.clone();
+        ensure_color_stops(&mut stops);
+        assert_eq!(stops, before);
+    }
+
+    #[test]
+    fn ensure_opacity_stops_seeds_default_pair_when_empty() {
+        let mut stops = Vec::new();
+        ensure_opacity_stops(&mut stops);
+        assert_eq!(stops.len(), 2);
+        assert_eq!(stops[0].alpha, 1.0);
+        assert_eq!(stops[1].alpha, 1.0);
+    }
+
+    #[test]
+    fn sort_color_stops_reorders_and_keeps_selection_on_same_stop() {
+        let mut stops = vec![cstop(1.0, 0.0, 0.0, 1.0), cstop(0.0, 1.0, 0.0, 0.0)];
+        let mut selected = Some(0); // points at the t=1.0 stop before sort
+        sort_color_stops(&mut stops, &mut selected);
+        assert_eq!(stops[0].t, 0.0);
+        assert_eq!(stops[1].t, 1.0);
+        assert_eq!(
+            selected,
+            Some(1),
+            "selection should follow the stop, not the index"
+        );
     }
 }

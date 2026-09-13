@@ -16,12 +16,12 @@
 
 use std::collections::HashMap;
 
-use bytemuck::{Pod, Zeroable};
 use ::wgpu::util::DeviceExt;
+use bytemuck::{Pod, Zeroable};
 
+use crate::Ui;
 use crate::types::DrawCommand;
 use crate::widgets::color_picker::TEX_SLOT_COLOR_SV;
-use crate::Ui;
 
 /// Soft cap on quads uploaded per frame (matches historical demo host).
 pub const MAX_QUADS: usize = 50_000;
@@ -285,31 +285,30 @@ impl UiRenderer {
     ) {
         let w = w.max(1);
         let h = h.max(1);
-        if let Some(existing) = self.tex_slots.get_mut(&slot) {
-            if existing.size == Some((w, h)) {
-                if let Some(texture) = existing._texture.as_ref() {
-                    queue.write_texture(
-                        ::wgpu::TexelCopyTextureInfo {
-                            texture,
-                            mip_level: 0,
-                            origin: ::wgpu::Origin3d::ZERO,
-                            aspect: ::wgpu::TextureAspect::All,
-                        },
-                        pixels,
-                        ::wgpu::TexelCopyBufferLayout {
-                            offset: 0,
-                            bytes_per_row: Some(w * 4),
-                            rows_per_image: Some(h),
-                        },
-                        ::wgpu::Extent3d {
-                            width: w,
-                            height: h,
-                            depth_or_array_layers: 1,
-                        },
-                    );
-                    return;
-                }
-            }
+        if let Some(existing) = self.tex_slots.get_mut(&slot)
+            && existing.size == Some((w, h))
+            && let Some(texture) = existing._texture.as_ref()
+        {
+            queue.write_texture(
+                ::wgpu::TexelCopyTextureInfo {
+                    texture,
+                    mip_level: 0,
+                    origin: ::wgpu::Origin3d::ZERO,
+                    aspect: ::wgpu::TextureAspect::All,
+                },
+                pixels,
+                ::wgpu::TexelCopyBufferLayout {
+                    offset: 0,
+                    bytes_per_row: Some(w * 4),
+                    rows_per_image: Some(h),
+                },
+                ::wgpu::Extent3d {
+                    width: w,
+                    height: h,
+                    depth_or_array_layers: 1,
+                },
+            );
+            return;
         }
 
         let (texture, view) = create_rgba_texture(device, queue, pixels, w, h, label);

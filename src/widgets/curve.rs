@@ -152,29 +152,29 @@ fn auto_smooth_tangents(curve: &AnimationCurve) -> Vec<f32> {
     if n < 2 {
         return tangents;
     }
-    for i in 0..n {
-        if i == 0 {
+    for (i, tangent) in tangents.iter_mut().enumerate() {
+        *tangent = if i == 0 {
             let dt = curve.points[1].t - curve.points[0].t;
-            tangents[i] = if dt > 1e-5 {
+            if dt > 1e-5 {
                 (curve.points[1].v - curve.points[0].v) / dt
             } else {
                 0.0
-            };
+            }
         } else if i == n - 1 {
             let dt = curve.points[i].t - curve.points[i - 1].t;
-            tangents[i] = if dt > 1e-5 {
+            if dt > 1e-5 {
                 (curve.points[i].v - curve.points[i - 1].v) / dt
             } else {
                 0.0
-            };
+            }
         } else {
             let dt = curve.points[i + 1].t - curve.points[i - 1].t;
-            tangents[i] = if dt > 1e-5 {
+            if dt > 1e-5 {
                 (curve.points[i + 1].v - curve.points[i - 1].v) / dt
             } else {
                 0.0
-            };
-        }
+            }
+        };
     }
     tangents
 }
@@ -227,7 +227,9 @@ fn hermite(p0: f32, p1: f32, m0: f32, m1: f32, u: f32) -> f32 {
 }
 
 fn sort_points(curve: &mut AnimationCurve) {
-    curve.points.sort_by(|a, b| a.t.partial_cmp(&b.t).unwrap_or(std::cmp::Ordering::Equal));
+    curve
+        .points
+        .sort_by(|a, b| a.t.partial_cmp(&b.t).unwrap_or(std::cmp::Ordering::Equal));
 }
 
 #[derive(Clone, Copy, Debug, Default)]
@@ -437,10 +439,11 @@ impl Ui {
         st.since_press = (st.since_press + self.input.dt).min(10.0);
 
         let can_delete = hovered || self.focus_id == Some(widget_id);
-        if can_delete && (self.input.key_delete || self.input.key_backspace) {
-            if delete_middle(curve, &mut st.selected) {
-                out.changed = true;
-            }
+        if can_delete
+            && (self.input.key_delete || self.input.key_backspace)
+            && delete_middle(curve, &mut st.selected)
+        {
+            out.changed = true;
         }
 
         if hovered && self.input.mouse_right_pressed {
@@ -469,7 +472,8 @@ impl Ui {
             let want_add = hit.is_none() && (self.input.key_ctrl || is_double);
             if want_add {
                 let plot = view.screen_to_plot(plot_rect, mp);
-                if let Some(idx) = insert_key(curve, plot.x.clamp(0.02, 0.98), plot.y.clamp(0.0, 1.0))
+                if let Some(idx) =
+                    insert_key(curve, plot.x.clamp(0.02, 0.98), plot.y.clamp(0.0, 1.0))
                 {
                     st.selected = Some(idx);
                     st.drag = CurveDrag::Point(idx);
@@ -603,5 +607,135 @@ fn draw_grid(ui: &mut Ui, rect: Rect, view: &PlotView) {
         let a = Vec2::new(rect.min.x, y);
         let b = Vec2::new(rect.max.x, y);
         ui.draw_line_segment(a, b, 1.0, theme::PLOT_GRID);
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn pt(t: f32, v: f32, tangent_out: f32) -> CurvePoint {
+        CurvePoint { t, v, tangent_out }
+    }
+
+    #[test]
+    fn sample_curve_empty_returns_zero_not_panic() {
+        let c = AnimationCurve {
+            points: vec![],
+            preset: CurvePreset::Custom,
+        };
+        assert_eq!(sample_curve(&c, 0.5), 0.0);
+    }
+
+    #[test]
+    fn sample_curve_single_point_is_constant() {
+        let c = AnimationCurve {
+            points: vec![pt(0.5, 0.7, 0.0)],
+            preset: CurvePreset::Custom,
+        };
+        assert_eq!(sample_curve(&c, -1.0), 0.7);
+        assert_eq!(sample_curve(&c, 0.0), 0.7);
+        assert_eq!(sample_curve(&c, 5.0), 0.7);
+    }
+
+    #[test]
+    fn sample_curve_clamps_before_first_and_after_last_point() {
+        let c = flat_pass_curve(); // v=1.0 at t=0 and t=1
+        assert_eq!(sample_curve(&c, -10.0), 1.0);
+        assert_eq!(sample_curve(&c, 10.0), 1.0);
+    }
+
+    #[test]
+    fn sample_curve_hits_endpoints_exactly() {
+        let c = ease_in_out();
+        assert_eq!(sample_curve(&c, 0.0), 0.0);
+        assert_eq!(sample_curve(&c, 1.0), 1.0);
+    }
+
+    #[test]
+    fn sample_curve_midpoint_is_between_endpoint_values() {
+        let c = ease_in_out();
+        let mid = sample_curve(&c, 0.5);
+        assert!(mid > 0.0 && mid < 1.0, "midpoint {mid} out of (0,1) range");
+    }
+
+    #[test]
+    fn sample_curve_linear_preset_is_monotonic() {
+        let mut c = AnimationCurve {
+            points: vec![],
+            preset: CurvePreset::Custom,
+        };
+        apply_preset(&mut c, CurvePreset::Linear);
+        let mut prev = sample_curve(&c, 0.0);
+        for i in 1..=10 {
+            let t = i as f32 / 10.0;
+            let v = sample_curve(&c, t);
+            assert!(v >= prev - 1e-5, "curve not monotonic at t={t}");
+            prev = v;
+        }
+    }
+
+    #[test]
+    fn sample_curve_handles_three_point_middle_segment() {
+        let c = AnimationCurve {
+            points: vec![pt(0.0, 0.0, 0.0), pt(0.5, 1.0, 0.0), pt(1.0, 0.0, 0.0)],
+            preset: CurvePreset::EaseInOut,
+        };
+        assert_eq!(sample_curve(&c, 0.0), 0.0);
+        assert_eq!(sample_curve(&c, 0.5), 1.0);
+        assert_eq!(sample_curve(&c, 1.0), 0.0);
+    }
+
+    #[test]
+    fn sample_curve_zero_width_segment_does_not_panic_or_nan() {
+        // Two points sharing the same `t` — dt is clamped to 1e-5 internally.
+        let c = AnimationCurve {
+            points: vec![pt(0.0, 0.0, 0.0), pt(0.0, 1.0, 0.0), pt(1.0, 1.0, 0.0)],
+            preset: CurvePreset::Custom,
+        };
+        let v = sample_curve(&c, 0.0);
+        assert!(v.is_finite());
+    }
+
+    #[test]
+    fn apply_preset_linear_sets_two_points_with_unit_tangents() {
+        let mut c = AnimationCurve {
+            points: vec![],
+            preset: CurvePreset::Custom,
+        };
+        apply_preset(&mut c, CurvePreset::Linear);
+        assert_eq!(c.points.len(), 2);
+        assert_eq!(c.preset, CurvePreset::Linear);
+        assert_eq!(c.points[0].t, 0.0);
+        assert_eq!(c.points[1].t, 1.0);
+    }
+
+    #[test]
+    fn apply_preset_custom_preserves_existing_points_when_at_least_two() {
+        let mut c = AnimationCurve {
+            points: vec![pt(0.0, 0.2, 0.0), pt(0.5, 0.8, 0.0), pt(1.0, 0.3, 0.0)],
+            preset: CurvePreset::Linear,
+        };
+        apply_preset(&mut c, CurvePreset::Custom);
+        assert_eq!(c.points.len(), 3);
+        assert_eq!(c.preset, CurvePreset::Custom);
+    }
+
+    #[test]
+    fn apply_preset_custom_fills_default_points_when_fewer_than_two() {
+        let mut c = AnimationCurve {
+            points: vec![pt(0.3, 0.9, 0.0)],
+            preset: CurvePreset::Linear,
+        };
+        apply_preset(&mut c, CurvePreset::Custom);
+        assert_eq!(c.points.len(), 2);
+    }
+
+    #[test]
+    fn flat_pass_curve_is_constant_one() {
+        let c = flat_pass_curve();
+        assert_eq!(sample_curve(&c, 0.0), 1.0);
+        assert_eq!(sample_curve(&c, 0.5), 1.0);
+        assert_eq!(sample_curve(&c, 1.0), 1.0);
     }
 }

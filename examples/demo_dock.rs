@@ -9,7 +9,10 @@ mod framework;
 
 use framework::{DrawStats, Host, Scene};
 use glam::{Vec2, Vec3};
-use mega_ui::{BrowserItem, DockNode, DockState, GradientStop, OpacityStop, ScrollAxes, TableColumn, TextStyle, Ui, Window, sample_gradient};
+use mega_ui::{
+    BrowserItem, DockNode, DockState, GradientStop, OpacityStop, ScrollAxes, TableColumn,
+    TextStyle, Ui, Window, sample_gradient,
+};
 
 struct DockDemo {
     dock: DockState,
@@ -120,14 +123,8 @@ impl Default for DockDemo {
                 },
             ],
             gradient_opacities: vec![
-                OpacityStop {
-                    t: 0.0,
-                    alpha: 1.0,
-                },
-                OpacityStop {
-                    t: 1.0,
-                    alpha: 1.0,
-                },
+                OpacityStop { t: 0.0, alpha: 1.0 },
+                OpacityStop { t: 1.0, alpha: 1.0 },
             ],
             gradient_sample: 0.5,
         }
@@ -232,11 +229,15 @@ impl Scene for DockDemo {
                 }
                 if ui.menu_item("Toggle Wireframe").clicked() {
                     state.wireframe = !state.wireframe;
-                    state.log.push_str(&format!("wireframe = {}\n", state.wireframe));
+                    state
+                        .log
+                        .push_str(&format!("wireframe = {}\n", state.wireframe));
                 }
                 if ui.menu_item("Toggle Shadows").clicked() {
                     state.shadows = !state.shadows;
-                    state.log.push_str(&format!("shadows = {}\n", state.shadows));
+                    state
+                        .log
+                        .push_str(&format!("shadows = {}\n", state.shadows));
                 }
             });
             ui.menu("Help", |ui| {
@@ -369,8 +370,7 @@ impl Scene for DockDemo {
         } = state;
 
         let status_h = 24.0 * *scale;
-        let dock_size =
-            Vec2::new(viewport.x, (viewport.y - 26.0 * *scale - status_h).max(1.0));
+        let dock_size = Vec2::new(viewport.x, (viewport.y - 26.0 * *scale - status_h).max(1.0));
         ui.dock_space("main", dock_size, dock, |ui, tab| match tab {
             "Viewport" => {
                 ui.label_styled(
@@ -510,12 +510,7 @@ impl Scene for DockDemo {
                         ui.group("Mix", |ui| {
                             ui.horizontal(|ui| {
                                 ui.knob("Output", output, 0.0..=1.0);
-                                ui.knob_colored(
-                                    "Drive",
-                                    drive,
-                                    0.0..=1.0,
-                                    [0.35, 0.72, 0.85, 1.0],
-                                );
+                                ui.knob_colored("Drive", drive, 0.0..=1.0, [0.35, 0.72, 0.85, 1.0]);
                             });
                             ui.slider("Volume", volume, 0.0..=1.0);
                             ui.drag_float("Speed", speed, 0.05);

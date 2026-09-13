@@ -19,7 +19,12 @@ fn format_val(v: f32, min: f32, max: f32, step: f32) -> String {
 }
 
 impl Ui {
-    pub fn slider(&mut self, id: &str, value: &mut f32, range: std::ops::RangeInclusive<f32>) -> Response {
+    pub fn slider(
+        &mut self,
+        id: &str,
+        value: &mut f32,
+        range: std::ops::RangeInclusive<f32>,
+    ) -> Response {
         self.slider_stepped(id, value, range, 0.0)
     }
 
@@ -44,11 +49,7 @@ impl Ui {
 
         let fill_w = self.layer().fill_w;
         let filling = fill_w > 0.0 && matches!(self.layer().dir, LayoutDir::Vertical);
-        let width = if filling {
-            fill_w
-        } else {
-            self.s(160.0)
-        };
+        let width = if filling { fill_w } else { self.s(160.0) };
         let rect = if filling {
             self.allocate_fill_x(Vec2::new(width, total_h)).round_px()
         } else {
@@ -74,7 +75,8 @@ impl Ui {
         let active = self.active_id == Some(widget_id);
         let mut changed = false;
         if active && self.input.mouse_down {
-            let t = ((self.input.mouse_pos.x - track_row.min.x) / track_row.width()).clamp(0.0, 1.0);
+            let t =
+                ((self.input.mouse_pos.x - track_row.min.x) / track_row.width()).clamp(0.0, 1.0);
             let mut new = min + t * (max - min);
             if step > 0.0 {
                 new = ((new / step).round() * step).clamp(min.min(max), min.max(max));
@@ -106,7 +108,10 @@ impl Ui {
             theme::TEXT_DIM,
         );
         self.text(
-            Vec2::new((rect.min.x + (rect.width() - val_w) * 0.5).round(), labels_y),
+            Vec2::new(
+                (rect.min.x + (rect.width() - val_w) * 0.5).round(),
+                labels_y,
+            ),
             &val_s,
             theme::TEXT_BRIGHT,
         );

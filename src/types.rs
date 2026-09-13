@@ -280,3 +280,123 @@ pub struct Pointer {
     pub paste: bool,
     pub select_all: bool,
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    // -- Rect -----------------------------------------------------------------
+
+    #[test]
+    fn rect_from_min_size_computes_max() {
+        let r = Rect::from_min_size(Vec2::new(1.0, 2.0), Vec2::new(3.0, 4.0));
+        assert_eq!(r.min, Vec2::new(1.0, 2.0));
+        assert_eq!(r.max, Vec2::new(4.0, 6.0));
+        assert_eq!(r.width(), 3.0);
+        assert_eq!(r.height(), 4.0);
+    }
+
+    #[test]
+    fn rect_contains_is_half_open_at_max_edge() {
+        let r = Rect::from_min_size(Vec2::ZERO, Vec2::splat(10.0));
+        assert!(r.contains(Vec2::new(0.0, 0.0)));
+        assert!(r.contains(Vec2::new(9.99, 9.99)));
+        assert!(!r.contains(Vec2::new(10.0, 5.0)));
+        assert!(!r.contains(Vec2::new(5.0, 10.0)));
+    }
+
+    #[test]
+    fn rect_contains_rejects_points_before_min() {
+        let r = Rect::from_min_size(Vec2::new(5.0, 5.0), Vec2::splat(10.0));
+        assert!(!r.contains(Vec2::new(4.99, 6.0)));
+        assert!(!r.contains(Vec2::new(6.0, 4.99)));
+    }
+
+    #[test]
+    fn rect_intersect_overlapping_returns_common_area() {
+        let a = Rect::from_min_size(Vec2::ZERO, Vec2::splat(10.0));
+        let b = Rect::from_min_size(Vec2::new(5.0, 5.0), Vec2::splat(10.0));
+        let i = a.intersect(b).expect("rects overlap");
+        assert_eq!(i.min, Vec2::new(5.0, 5.0));
+        assert_eq!(i.max, Vec2::new(10.0, 10.0));
+    }
+
+    #[test]
+    fn rect_intersect_disjoint_is_none() {
+        let a = Rect::from_min_size(Vec2::ZERO, Vec2::splat(5.0));
+        let b = Rect::from_min_size(Vec2::new(10.0, 10.0), Vec2::splat(5.0));
+        assert!(a.intersect(b).is_none());
+    }
+
+    #[test]
+    fn rect_intersect_touching_edges_is_none() {
+        // Adjacent (non-overlapping) rects must not produce a zero-area "phantom" clip.
+        let a = Rect::from_min_size(Vec2::ZERO, Vec2::splat(5.0));
+        let b = Rect::from_min_size(Vec2::new(5.0, 0.0), Vec2::splat(5.0));
+        assert!(a.intersect(b).is_none());
+    }
+
+    #[test]
+    fn rect_inset_shrinks_symmetrically() {
+        let r = Rect::from_min_size(Vec2::ZERO, Vec2::splat(10.0));
+        let inset = r.inset(2.0);
+        assert_eq!(inset.min, Vec2::splat(2.0));
+        assert_eq!(inset.max, Vec2::splat(8.0));
+    }
+
+    #[test]
+    fn rect_round_px_rounds_both_corners() {
+        let r = Rect {
+            min: Vec2::new(1.2, 1.6),
+            max: Vec2::new(4.4, 4.5),
+        };
+        let rounded = r.round_px();
+        assert_eq!(rounded.min, Vec2::new(1.0, 2.0));
+        assert_eq!(rounded.max, Vec2::new(4.0, 5.0));
+    }
+
+    // -- Id ---------------------------------------------------------------------
+
+    #[test]
+    fn id_same_input_is_stable() {
+        assert_eq!(Id::new("button_1"), Id::new("button_1"));
+    }
+
+    #[test]
+    fn id_different_input_differs() {
+        assert_ne!(Id::new("button_1"), Id::new("button_2"));
+    }
+
+    #[test]
+    fn id_child_differs_from_parent_and_from_siblings() {
+        let root = Id::new("window");
+        let a = root.child("tab_a");
+        let b = root.child("tab_b");
+        assert_ne!(a, root);
+        assert_ne!(b, root);
+        assert_ne!(a, b);
+    }
+
+    #[test]
+    fn id_child_is_deterministic() {
+        let root = Id::new("window");
+        assert_eq!(root.child("tab"), root.child("tab"));
+    }
+
+    #[test]
+    fn id_nested_scopes_disambiguate_same_local_label() {
+        // Mirrors `Ui::id_scope`: two siblings using the same local id ("label")
+        // under different parent scopes must not collide.
+        let row0 = Id::new("row_0").child("label");
+        let row1 = Id::new("row_1").child("label");
+        assert_ne!(row0, row1);
+    }
+
+    // -- CursorIcon priority ------------------------------------------------
+
+    #[test]
+    fn cursor_icon_priority_resize_beats_pointer_and_default() {
+        assert!(CursorIcon::ResizeEw.priority() > CursorIcon::Pointer.priority());
+        assert!(CursorIcon::Pointer.priority() > CursorIcon::Default.priority());
+    }
+}

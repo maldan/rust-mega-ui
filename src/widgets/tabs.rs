@@ -41,11 +41,7 @@ impl Ui {
 
         // Outer frame.
         self.round_rect(outer, radius, theme::WIN_BORDER);
-        self.round_rect(
-            outer.inset(1.0),
-            (radius - 1.0).max(0.0),
-            theme::WIN_BODY,
-        );
+        self.round_rect(outer.inset(1.0), (radius - 1.0).max(0.0), theme::WIN_BODY);
 
         let bar = Rect {
             min: outer.min + Vec2::splat(1.0),
@@ -103,10 +99,7 @@ impl Ui {
                 theme::DOCK_TAB_TEXT
             };
             self.text(
-                Vec2::new(
-                    tr.min.x + tab_pad_x,
-                    tr.min.y + (tr.height() - th) * 0.5,
-                ),
+                Vec2::new(tr.min.x + tab_pad_x, tr.min.y + (tr.height() - th) * 0.5),
                 title,
                 text_col,
             );

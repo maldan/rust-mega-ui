@@ -1,7 +1,7 @@
 use glam::Vec2;
 
 use crate::types::Rect;
-use crate::{LayoutDir, Layer, Ui};
+use crate::{Layer, LayoutDir, Ui};
 
 /// Row/column layout options.
 #[derive(Clone, Copy, Debug)]
@@ -21,27 +21,17 @@ impl Default for LayoutOpts {
     }
 }
 
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
 pub enum CrossAlign {
+    #[default]
     Start,
     Center,
     End,
 }
 
-impl Default for CrossAlign {
-    fn default() -> Self {
-        Self::Start
-    }
-}
-
-impl Default for MainAlign {
-    fn default() -> Self {
-        Self::Start
-    }
-}
-
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
 pub enum MainAlign {
+    #[default]
     Start,
     Center,
     End,
@@ -129,8 +119,7 @@ impl Ui {
 
         match layer.dir {
             LayoutDir::Horizontal => {
-                let remaining_w =
-                    (layer.fill_w - (layer.cursor.x - layer.origin.x)).max(0.0);
+                let remaining_w = (layer.fill_w - (layer.cursor.x - layer.origin.x)).max(0.0);
                 let w = remaining_w * fraction;
                 let origin = layer.cursor;
                 let spacing = layer.spacing;
@@ -151,8 +140,7 @@ impl Ui {
                 self.finish_flex_child(parent, Vec2::new(w.max(child.used.x), h));
             }
             LayoutDir::Vertical => {
-                let remaining_h =
-                    (layer.fill_h - (layer.cursor.y - layer.origin.y)).max(0.0);
+                let remaining_h = (layer.fill_h - (layer.cursor.y - layer.origin.y)).max(0.0);
                 let h = remaining_h * fraction;
                 let origin = layer.cursor;
                 let spacing = layer.spacing;
@@ -249,12 +237,7 @@ impl Ui {
         self.grid_with(cols, None, add);
     }
 
-    pub fn grid_with(
-        &mut self,
-        cols: usize,
-        gap: Option<f32>,
-        add: impl FnOnce(&mut Self),
-    ) {
+    pub fn grid_with(&mut self, cols: usize, gap: Option<f32>, add: impl FnOnce(&mut Self)) {
         let cols = cols.max(1);
         let gap = gap.map(|g| self.s(g)).unwrap_or(self.spacing);
         let avail = self.available_size();
@@ -280,7 +263,7 @@ impl Ui {
         let ctx = self.grid_stack.pop().unwrap();
         if ctx.row_h > 0.0 || ctx.col > 0 {
             let rows = if ctx.col > 0 {
-                (ctx.col + cols - 1) / cols
+                ctx.col.div_ceil(cols)
             } else {
                 0
             };
@@ -344,16 +327,6 @@ impl Ui {
         ctx.col += 1;
     }
 
-    /// Width available for fill widgets in a vertical parent layer.
-    pub(crate) fn child_fill_width(&self) -> f32 {
-        let layer = self.layers.last().unwrap();
-        if matches!(layer.dir, LayoutDir::Vertical) && layer.fill_w > 0.0 {
-            layer.fill_w
-        } else {
-            0.0
-        }
-    }
-
     pub(crate) fn layout_impl(
         &mut self,
         dir: LayoutDir,
@@ -395,9 +368,7 @@ impl Ui {
 pub(crate) fn cross_y(layer: &Layer, size_y: f32) -> f32 {
     match layer.cross_align {
         CrossAlign::Start => layer.cursor.y,
-        CrossAlign::Center if layer.fill_h > 0.0 => {
-            layer.origin.y + (layer.fill_h - size_y) * 0.5
-        }
+        CrossAlign::Center if layer.fill_h > 0.0 => layer.origin.y + (layer.fill_h - size_y) * 0.5,
         CrossAlign::End if layer.fill_h > 0.0 => layer.origin.y + layer.fill_h - size_y,
         _ => layer.cursor.y,
     }
@@ -424,5 +395,111 @@ pub(crate) fn new_layer(
         cross_align,
         spacer_at: None,
         trailing_w: 0.0,
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn new_layer_starts_with_cursor_at_origin_and_zero_used() {
+        let l = new_layer(
+            LayoutDir::Vertical,
+            Vec2::new(10.0, 20.0),
+            6.0,
+            100.0,
+            0.0,
+            CrossAlign::Start,
+        );
+        assert_eq!(l.cursor, Vec2::new(10.0, 20.0));
+        assert_eq!(l.origin, Vec2::new(10.0, 20.0));
+        assert_eq!(l.used, Vec2::ZERO);
+        assert_eq!(l.spacer_at, None);
+        assert_eq!(l.trailing_w, 0.0);
+    }
+
+    // -- cross_y ------------------------------------------------------------------
+
+    #[test]
+    fn cross_y_start_uses_cursor_directly() {
+        let mut l = new_layer(
+            LayoutDir::Horizontal,
+            Vec2::new(0.0, 5.0),
+            4.0,
+            200.0,
+            100.0,
+            CrossAlign::Start,
+        );
+        l.cursor.y = 5.0;
+        assert_eq!(cross_y(&l, 20.0), 5.0);
+    }
+
+    #[test]
+    fn cross_y_center_positions_item_in_middle_of_fill_h() {
+        let l = new_layer(
+            LayoutDir::Horizontal,
+            Vec2::new(0.0, 0.0),
+            4.0,
+            200.0,
+            100.0,
+            CrossAlign::Center,
+        );
+        // fill_h = 100, item height = 20 -> centered at (100 - 20) / 2 = 40 from origin.
+        assert_eq!(cross_y(&l, 20.0), 40.0);
+    }
+
+    #[test]
+    fn cross_y_end_positions_item_flush_with_bottom_of_fill_h() {
+        let l = new_layer(
+            LayoutDir::Horizontal,
+            Vec2::new(0.0, 0.0),
+            4.0,
+            200.0,
+            100.0,
+            CrossAlign::End,
+        );
+        assert_eq!(cross_y(&l, 20.0), 80.0);
+    }
+
+    #[test]
+    fn cross_y_center_falls_back_to_cursor_when_fill_h_unbound() {
+        // fill_h == 0 means "unbounded" — Center/End have no box to align within,
+        // so they must fall back to the cursor position (not divide/anchor against 0).
+        let l = new_layer(
+            LayoutDir::Horizontal,
+            Vec2::new(0.0, 5.0),
+            4.0,
+            200.0,
+            0.0,
+            CrossAlign::Center,
+        );
+        assert_eq!(cross_y(&l, 20.0), 5.0);
+    }
+
+    #[test]
+    fn cross_y_end_falls_back_to_cursor_when_fill_h_unbound() {
+        let l = new_layer(
+            LayoutDir::Horizontal,
+            Vec2::new(0.0, 5.0),
+            4.0,
+            200.0,
+            0.0,
+            CrossAlign::End,
+        );
+        assert_eq!(cross_y(&l, 20.0), 5.0);
+    }
+
+    #[test]
+    fn cross_y_center_with_origin_offset() {
+        let l = new_layer(
+            LayoutDir::Horizontal,
+            Vec2::new(0.0, 10.0),
+            4.0,
+            200.0,
+            100.0,
+            CrossAlign::Center,
+        );
+        assert_eq!(cross_y(&l, 20.0), 10.0 + 40.0);
     }
 }

@@ -3,14 +3,14 @@ use glam::Vec2;
 use crate::theme;
 use crate::types::{CursorIcon, Rect, Response};
 use crate::widgets::edit::{
-    byte_at_x, clamp_edit, draw_sel_line, handle_clipboard, has_sel, insert_str, move_end,
-    move_home, move_left, move_right, sel_range, EditState,
+    EditState, byte_at_x, clamp_edit, draw_sel_line, handle_clipboard, has_sel, insert_str,
+    move_end, move_home, move_left, move_right, sel_range,
 };
 use crate::{LayoutDir, Ui};
 
 pub(crate) fn format_float(v: f32, step: f32) -> String {
     // Step only hints minimum fraction digits for drag UX — never snap for display.
-    let d = step_decimals(step).max(6).min(9);
+    let d = step_decimals(step).clamp(6, 9);
     let s = format!("{v:.prec$}", prec = d);
     // Trim only fractional trailing zeros ("20.00" → "20"), never the integer part
     // ("20".trim_end_matches('0') would wrongly become "2").
@@ -129,10 +129,10 @@ impl Ui {
             // x = last mouse, y = leftover pixels toward next step
             self.drag_grab = Some(Vec2::new(self.input.mouse_pos.x, 0.0));
             // commit any open edit buffer (typed value stays exact — no step snap)
-            if let Some(buf) = self.num_bufs.remove(&widget_id) {
-                if let Ok(v) = buf.parse::<f32>() {
-                    *value = v;
-                }
+            if let Some(buf) = self.num_bufs.remove(&widget_id)
+                && let Ok(v) = buf.parse::<f32>()
+            {
+                *value = v;
             }
         }
         if enabled && text_hov && self.input.mouse_pressed {
@@ -168,13 +168,12 @@ impl Ui {
 
         if !focused && !dragging {
             // Commit typed buffer as-is. Step is only for drag / arrow nudges.
-            if let Some(buf) = self.num_bufs.remove(&widget_id) {
-                if let Ok(v) = buf.parse::<f32>() {
-                    if *value != v {
-                        *value = v;
-                        changed = true;
-                    }
-                }
+            if let Some(buf) = self.num_bufs.remove(&widget_id)
+                && let Ok(v) = buf.parse::<f32>()
+                && *value != v
+            {
+                *value = v;
+                changed = true;
             }
         } else if focused && !self.num_bufs.contains_key(&widget_id) {
             let s = format_float(*value, step);

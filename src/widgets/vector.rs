@@ -1,9 +1,9 @@
 use glam::{Vec2, Vec3};
 
+use crate::Ui;
 use crate::theme;
 use crate::types::Response;
 use crate::widgets::drag_float::format_float;
-use crate::Ui;
 
 impl Ui {
     /// Editable `Vec2` with RGB grips (X/Y), lock (uniform edit), and reset to `default`.
