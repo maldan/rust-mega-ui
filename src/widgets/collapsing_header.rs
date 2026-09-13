@@ -5,17 +5,19 @@ use crate::types::{CursorIcon, Rect};
 use crate::{CrossAlign, LayoutDir, Ui};
 
 impl Ui {
-    pub fn collapsing_header(&mut self, label: &str, add: impl FnOnce(&mut Self)) {
-        self.collapsing_header_with(label, false, add);
+    pub fn collapsing_header(&mut self, id: &str, label: &str, add: impl FnOnce(&mut Self)) {
+        self.collapsing_header_with(id, label, false, add);
     }
 
     pub fn collapsing_header_with(
         &mut self,
+        id: &str,
         label: &str,
         default_open: bool,
         add: impl FnOnce(&mut Self),
     ) {
-        let id = self.current_id(label);
+        let id_key = id;
+        let id = self.current_id(id_key);
         let mut open = self.headers.get(&id).copied().unwrap_or(default_open);
 
         let height = self.s(26.0);
@@ -76,7 +78,7 @@ impl Ui {
         );
 
         if open {
-            self.push_id(label);
+            self.push_id(id_key);
             let origin = self.layer().cursor + Vec2::new(indent, 0.0);
             let fill_w = (self.layer().fill_w - indent).max(0.0);
             let fill_h = self.available_size().y;

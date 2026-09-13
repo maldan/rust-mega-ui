@@ -832,77 +832,77 @@ fn draw_node_body(
 
 fn spawn_menu_items(ui: &mut Ui) -> Option<DemoKind> {
     let mut kind = None;
-    if ui.menu_item("Float").clicked() {
+    if ui.menu_item("float", "Float").clicked() {
         kind = Some(DemoKind::Float);
     }
-    if ui.menu_item("Add").clicked() {
+    if ui.menu_item("add", "Add").clicked() {
         kind = Some(DemoKind::Add);
     }
-    if ui.menu_item("Mul").clicked() {
+    if ui.menu_item("mul", "Mul").clicked() {
         kind = Some(DemoKind::Mul);
     }
     ui.separator();
-    if ui.menu_item("Vec3").clicked() {
+    if ui.menu_item("vec3", "Vec3").clicked() {
         kind = Some(DemoKind::Vec3);
     }
-    if ui.menu_item("Vec3 Add").clicked() {
+    if ui.menu_item("vec3_add", "Vec3 Add").clicked() {
         kind = Some(DemoKind::Vec3Add);
     }
-    if ui.menu_item("Vec3 Scale").clicked() {
+    if ui.menu_item("vec3_scale", "Vec3 Scale").clicked() {
         kind = Some(DemoKind::Vec3Scale);
     }
-    if ui.menu_item("Dot").clicked() {
+    if ui.menu_item("dot", "Dot").clicked() {
         kind = Some(DemoKind::Vec3Dot);
     }
-    if ui.menu_item("Cross").clicked() {
+    if ui.menu_item("cross", "Cross").clicked() {
         kind = Some(DemoKind::Vec3Cross);
     }
-    if ui.menu_item("Length").clicked() {
+    if ui.menu_item("length", "Length").clicked() {
         kind = Some(DemoKind::Vec3Length);
     }
-    if ui.menu_item("Normalize").clicked() {
+    if ui.menu_item("normalize", "Normalize").clicked() {
         kind = Some(DemoKind::Vec3Normalize);
     }
     ui.separator();
-    if ui.menu_item("Mat4 Identity").clicked() {
+    if ui.menu_item("mat4_identity", "Mat4 Identity").clicked() {
         kind = Some(DemoKind::Mat4Identity);
     }
-    if ui.menu_item("Mat4 Translate").clicked() {
+    if ui.menu_item("mat4_translate", "Mat4 Translate").clicked() {
         kind = Some(DemoKind::Mat4Translate);
     }
-    if ui.menu_item("Mat4 Euler").clicked() {
+    if ui.menu_item("mat4_euler", "Mat4 Euler").clicked() {
         kind = Some(DemoKind::Mat4Euler);
     }
-    if ui.menu_item("Mat4 Scale").clicked() {
+    if ui.menu_item("mat4_scale", "Mat4 Scale").clicked() {
         kind = Some(DemoKind::Mat4Scale);
     }
-    if ui.menu_item("Mat4 Mul").clicked() {
+    if ui.menu_item("mat4_mul", "Mat4 Mul").clicked() {
         kind = Some(DemoKind::Mat4Mul);
     }
-    if ui.menu_item("Mat4 × Vec").clicked() {
+    if ui.menu_item("mat4_x_vec", "Mat4 × Vec").clicked() {
         kind = Some(DemoKind::Mat4MulVec);
     }
     ui.separator();
-    if ui.menu_item("Quat Identity").clicked() {
+    if ui.menu_item("quat_identity", "Quat Identity").clicked() {
         kind = Some(DemoKind::QuatIdentity);
     }
-    if ui.menu_item("Quat Euler").clicked() {
+    if ui.menu_item("quat_euler", "Quat Euler").clicked() {
         kind = Some(DemoKind::QuatEuler);
     }
-    if ui.menu_item("Quat Mul").clicked() {
+    if ui.menu_item("quat_mul", "Quat Mul").clicked() {
         kind = Some(DemoKind::QuatMul);
     }
-    if ui.menu_item("Quat × Vec").clicked() {
+    if ui.menu_item("quat_x_vec", "Quat × Vec").clicked() {
         kind = Some(DemoKind::QuatRotateVec);
     }
     ui.separator();
-    if ui.menu_item("String").clicked() {
+    if ui.menu_item("string", "String").clicked() {
         kind = Some(DemoKind::String);
     }
-    if ui.menu_item("Concat").clicked() {
+    if ui.menu_item("concat", "Concat").clicked() {
         kind = Some(DemoKind::StringConcat);
     }
-    if ui.menu_item("Print").clicked() {
+    if ui.menu_item("print", "Print").clicked() {
         kind = Some(DemoKind::Print);
     }
     kind
@@ -929,30 +929,30 @@ impl Scene for NodesDemo {
         ui.set_scale(state.scale);
 
         ui.menu_bar(|ui| {
-            ui.menu("Graph", |ui| {
-                if ui.menu_item("Fit origin").clicked() {
+            ui.menu("graph", "Graph", |ui| {
+                if ui.menu_item("fit_origin", "Fit origin").clicked() {
                     state.space.pan = Vec2::new(20.0, 20.0);
                     state.space.zoom = 1.0;
                     state.log.push_str("fit origin\n");
                 }
-                if ui.menu_item("Clear selection").clicked() {
+                if ui.menu_item("clear_selection", "Clear selection").clicked() {
                     state.space.selected_nodes.clear();
                     state.space.selected_link = None;
                 }
-                if ui.menu_item("Clone selected (Ctrl+D)").clicked() {
+                if ui.menu_item("clone_selected_ctrld", "Clone selected (Ctrl+D)").clicked() {
                     if !state.space.selected_nodes.is_empty() {
                         state.space.request_clone_nodes = state.space.selected_nodes.clone();
                     }
                 }
                 ui.separator();
-                ui.menu("Spawn", |ui| {
+                ui.menu("spawn", "Spawn", |ui| {
                     if let Some(kind) = spawn_menu_items(ui) {
                         state.spawn(kind, Vec2::new(120.0, 120.0));
                     }
                 });
             });
-            ui.menu("View", |ui| {
-                ui.menu("UI Scale", |ui| {
+            ui.menu("view", "View", |ui| {
+                ui.menu("ui_scale", "UI Scale", |ui| {
                     for (label, v) in [
                         ("100%", 1.0),
                         ("125%", 1.25),
@@ -960,7 +960,7 @@ impl Scene for NodesDemo {
                         ("175%", 1.75),
                         ("200%", 2.0),
                     ] {
-                        if ui.menu_item(label).clicked() {
+                        if ui.menu_item(label, label).clicked() {
                             state.scale = v;
                         }
                     }
@@ -1092,7 +1092,7 @@ impl Scene for NodesDemo {
                                 if let Some(frame) = space.frames.iter_mut().find(|f| f.id == fid) {
                                     let _ = ui.text_input("frame_label", &mut frame.label);
                                 }
-                                if ui.button("Ungroup").clicked() {
+                                if ui.button("ungroup", "Ungroup").clicked() {
                                     space.ungroup_frame(&fid);
                                 }
                                 ui.separator();
@@ -1104,13 +1104,13 @@ impl Scene for NodesDemo {
                                 "Multi-select ({} nodes)",
                                 space.selected_nodes.len()
                             ));
-                            if ui.button("Group selected").clicked() {
+                            if ui.button("group_selected", "Group selected").clicked() {
                                 space.group_nodes(&space.selected_nodes.clone());
                             }
-                            if ui.button("Clone selected").clicked() {
+                            if ui.button("clone_selected", "Clone selected").clicked() {
                                 space.request_clone_nodes = space.selected_nodes.clone();
                             }
-                            if ui.button("Delete selected").clicked() {
+                            if ui.button("delete_selected", "Delete selected").clicked() {
                                 let ids = space.selected_nodes.clone();
                                 for id in &ids {
                                     space.detach_node(id);
@@ -1130,10 +1130,10 @@ impl Scene for NodesDemo {
                                     ui.label(&format!("Value: {}", n.preview));
                                 }
                                 ui.separator();
-                                if ui.button("Clone node").clicked() {
+                                if ui.button("clone_node", "Clone node").clicked() {
                                     space.request_clone_nodes = vec![sel.clone()];
                                 }
-                                if ui.button("Delete node").clicked() {
+                                if ui.button("delete_node", "Delete node").clicked() {
                                     space.detach_node(&sel);
                                     space.request_delete_nodes.push(sel);
                                 }
@@ -1146,7 +1146,7 @@ impl Scene for NodesDemo {
                                     link.from_node, link.from_port, link.to_node, link.to_port
                                 ));
                                 ui.separator();
-                                if ui.button("Delete link").clicked() {
+                                if ui.button("delete_link", "Delete link").clicked() {
                                     space.remove_link(lid);
                                 }
                             }
@@ -1204,7 +1204,7 @@ impl Scene for NodesDemo {
                             },
                         );
                         ui.separator();
-                        if ui.button("Clear").clicked() {
+                        if ui.button("clear", "Clear").clicked() {
                             log.clear();
                         }
                         ui.separator();

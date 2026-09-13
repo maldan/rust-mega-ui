@@ -75,31 +75,31 @@ impl Ui {
     }
 
     /// Top-level bar menu, or a nested submenu when called inside another menu.
-    pub fn menu(&mut self, label: &str, add: impl FnOnce(&mut Self)) {
+    pub fn menu(&mut self, id: &str, label: &str, add: impl FnOnce(&mut Self)) {
         if self.menu_stack.is_empty() {
-            self.menu_top_level(label, add);
+            self.menu_top_level(id, label, add);
         } else {
-            self.menu_submenu(label, add);
+            self.menu_submenu(id, label, add);
         }
     }
 
     /// Clickable leaf item inside an open menu.
-    pub fn menu_item(&mut self, label: &str) -> Response {
-        self.menu_item_enabled(label, self.enabled())
+    pub fn menu_item(&mut self, id: &str, label: &str) -> Response {
+        self.menu_item_enabled(id, label, self.enabled())
     }
 
-    pub fn menu_item_enabled(&mut self, label: &str, enabled: bool) -> Response {
-        self.menu_item_inner(label, None, enabled, true)
+    pub fn menu_item_enabled(&mut self, id: &str, label: &str, enabled: bool) -> Response {
+        self.menu_item_inner(id, label, None, enabled, true)
     }
 
     /// Like [`Self::menu_item`], but does not dismiss the menu (for drill-down pages).
-    pub fn menu_item_keep_open(&mut self, label: &str) -> Response {
-        self.menu_item_inner(label, None, self.enabled(), false)
+    pub fn menu_item_keep_open(&mut self, id: &str, label: &str) -> Response {
+        self.menu_item_inner(id, label, None, self.enabled(), false)
     }
 
     /// Submenu-looking row with a chevron; keeps the menu open on click.
-    pub fn menu_item_submenu(&mut self, label: &str) -> Response {
-        let Some(item) = self.menu_row_with_icon(label, None, self.enabled(), true) else {
+    pub fn menu_item_submenu(&mut self, id: &str, label: &str) -> Response {
+        let Some(item) = self.menu_row_with_icon(id, label, None, self.enabled(), true) else {
             return Response::default();
         };
         let clicked = self.enabled() && item.hovered && self.input.mouse_released;
@@ -111,22 +111,29 @@ impl Ui {
     }
 
     /// Clickable leaf item with a leading SVG icon.
-    pub fn menu_item_icon(&mut self, icon: &str, label: &str) -> Response {
-        self.menu_item_icon_enabled(icon, label, self.enabled())
+    pub fn menu_item_icon(&mut self, id: &str, icon: &str, label: &str) -> Response {
+        self.menu_item_icon_enabled(id, icon, label, self.enabled())
     }
 
-    pub fn menu_item_icon_enabled(&mut self, icon: &str, label: &str, enabled: bool) -> Response {
-        self.menu_item_inner(label, Some(icon), enabled, true)
+    pub fn menu_item_icon_enabled(
+        &mut self,
+        id: &str,
+        icon: &str,
+        label: &str,
+        enabled: bool,
+    ) -> Response {
+        self.menu_item_inner(id, label, Some(icon), enabled, true)
     }
 
     fn menu_item_inner(
         &mut self,
+        id: &str,
         label: &str,
         icon: Option<&str>,
         enabled: bool,
         close_on_click: bool,
     ) -> Response {
-        let Some(item) = self.menu_row_with_icon(label, icon, enabled, false) else {
+        let Some(item) = self.menu_row_with_icon(id, label, icon, enabled, false) else {
             return Response::default();
         };
         let clicked = enabled && item.hovered && self.input.mouse_released;
@@ -183,15 +190,15 @@ impl Ui {
 }
 
 impl Ui {
-    fn menu_top_level(&mut self, label: &str, add: impl FnOnce(&mut Self)) {
+    fn menu_top_level(&mut self, id: &str, label: &str, add: impl FnOnce(&mut Self)) {
         let Some(bar) = self.menu_bar_stack.last() else {
             // Not inside menu_bar — treat as a one-shot popup button.
-            self.menu_orphan(label, add);
+            self.menu_orphan(id, label, add);
             return;
         };
 
         let bar_id = bar.id;
-        let item_id = self.current_id(label);
+        let item_id = self.current_id(id);
         let pad_x = self.s(10.0);
         let text_w = self.text_width(label);
         let text_h = self.text_height();
@@ -264,7 +271,7 @@ impl Ui {
         );
 
         if open {
-            self.push_id(label);
+            self.push_id(id);
             let origin = Vec2::new(btn.min.x, bar_rect.max.y);
             self.open_menu_popup(item_id, origin, add);
             self.pop_id();
@@ -273,15 +280,15 @@ impl Ui {
         let _ = bar_id;
     }
 
-    fn menu_orphan(&mut self, label: &str, add: impl FnOnce(&mut Self)) {
+    fn menu_orphan(&mut self, id: &str, label: &str, add: impl FnOnce(&mut Self)) {
         // Minimal fallback: a button that opens a popup below itself.
-        let id = self.current_id(label);
+        let widget_id = self.current_id(id);
         let pad_x = self.s(10.0);
         let height = self.s(theme::MENU_BAR_H);
         let width = self.text_width(label) + pad_x * 2.0;
         let btn = self.allocate(Vec2::new(width, height));
         let hovered = self.hovered_rect(btn);
-        let mut open = self.menu_bar_open.get(&id).copied().flatten() == Some(id);
+        let mut open = self.menu_bar_open.get(&widget_id).copied().flatten() == Some(widget_id);
 
         if hovered && self.input.mouse_pressed {
             open = !open;
@@ -301,26 +308,26 @@ impl Ui {
         );
 
         if open {
-            self.menu_bar_open.insert(id, Some(id));
-            self.push_id(label);
-            self.open_menu_popup(id, Vec2::new(btn.min.x, btn.max.y), add);
+            self.menu_bar_open.insert(widget_id, Some(widget_id));
+            self.push_id(id);
+            self.open_menu_popup(widget_id, Vec2::new(btn.min.x, btn.max.y), add);
             self.pop_id();
             if self.input.mouse_pressed && !hovered {
                 // close unless popup kept it
                 if self.menu_stack.is_empty() {
                     // popup already finished; check absorb
                     if !self.mouse_over_absorb() {
-                        self.menu_bar_open.insert(id, None);
+                        self.menu_bar_open.insert(widget_id, None);
                     }
                 }
             }
         } else {
-            self.menu_bar_open.insert(id, None);
+            self.menu_bar_open.insert(widget_id, None);
         }
     }
 
-    fn menu_submenu(&mut self, label: &str, add: impl FnOnce(&mut Self)) {
-        let Some(item) = self.menu_row_with_icon(label, None, self.enabled(), true) else {
+    fn menu_submenu(&mut self, id: &str, label: &str, add: impl FnOnce(&mut Self)) {
+        let Some(item) = self.menu_row_with_icon(id, label, None, self.enabled(), true) else {
             return;
         };
         let parent_id = self.menu_stack.last().map(|m| m.id).unwrap();
@@ -335,7 +342,7 @@ impl Ui {
             return;
         }
 
-        self.push_id(label);
+        self.push_id(id);
         let parent_popup = self.menu_stack.last().unwrap().popup_rect;
         let est_w = self
             .menu_popup_size
@@ -421,13 +428,14 @@ impl Ui {
 
     fn menu_row_with_icon(
         &mut self,
+        id: &str,
         label: &str,
         icon: Option<&str>,
         enabled: bool,
         submenu: bool,
     ) -> Option<MenuRow> {
         let ctx = self.menu_stack.last()?;
-        let id = self.current_id(label);
+        let id = self.current_id(id);
         let item_h = self.s(theme::MENU_ITEM_H);
         let pad = self.s(10.0);
         let icon_s = self.s(14.0);

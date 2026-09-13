@@ -8,14 +8,13 @@ impl Ui {
     /// Group box: border around content with an optional title on the top edge.
     ///
     /// ```ignore
-    /// ui.group("Audio", |ui| {
-    ///     ui.knob("Output", &mut v, 0.0..=1.0);
+    /// ui.group("audio", "Audio", |ui| {
+    ///     ui.knob("output", &mut v, 0.0..=1.0);
     /// });
-    /// ui.group("", |ui| { /* untitled */ });
+    /// ui.group("untitled", "", |ui| { /* untitled */ });
     /// ```
-    pub fn group(&mut self, title: &str, add: impl FnOnce(&mut Self)) {
-        let id_key = if title.is_empty() { "__group" } else { title };
-        let widget_id = self.current_id(id_key);
+    pub fn group(&mut self, id: &str, title: &str, add: impl FnOnce(&mut Self)) {
+        let widget_id = self.current_id(id);
         let pad = self.s(10.0);
         let radius = self.s(theme::GROUP_RADIUS);
         let border = self.s(1.0).max(1.0);
@@ -88,7 +87,7 @@ impl Ui {
         let content_origin = Vec2::new(frame.min.x + pad, frame.min.y + pad_top);
         let content_w = (frame.width() - pad * 2.0).max(0.0);
 
-        self.push_id(id_key);
+        self.push_id(id);
         self.layers.push(new_layer(
             LayoutDir::Vertical,
             content_origin,
@@ -127,7 +126,7 @@ mod tests {
             CrossAlign::Start,
         ));
         let mut v = 0.5;
-        ui.group("Lens", |ui| {
+        ui.group("lens", "Lens", |ui| {
             ui.slider("focal", &mut v, 0.0..=1.0);
         });
         ui.layers.pop().unwrap().used.x

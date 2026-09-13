@@ -12,7 +12,7 @@ impl Ui {
     /// ```ignore
     /// if ui.selectable("layer0", active == 0, |ui| {
     ///     ui.label("Layer 1");
-    ///     ui.checkbox("vis", &mut visible);
+    ///     ui.checkbox("vis", "vis", &mut visible);
     /// }).clicked() {
     ///     active = 0;
     /// }

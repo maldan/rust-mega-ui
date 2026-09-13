@@ -154,62 +154,62 @@ impl Scene for DockDemo {
         ui.set_scale(state.scale);
 
         ui.menu_bar(|ui| {
-            ui.menu("File", |ui| {
-                if ui.menu_item_icon("plus", "New Scene").clicked() {
+            ui.menu("file", "File", |ui| {
+                if ui.menu_item_icon("new_scene", "plus", "New Scene").clicked() {
                     state.last_menu = String::from("File / New Scene");
                     state.log.push_str("new scene\n");
                     ui.notify_success("New scene");
                 }
-                if ui.menu_item_icon("folder_open", "Open…").clicked() {
+                if ui.menu_item_icon("open", "folder_open", "Open…").clicked() {
                     state.last_menu = String::from("File / Open");
                     state.log.push_str("open…\n");
                 }
-                if ui.menu_item_icon("save", "Save").clicked() {
+                if ui.menu_item_icon("save", "save", "Save").clicked() {
                     state.last_menu = String::from("File / Save");
                     state.log.push_str("save\n");
                     ui.notify_success("Saved");
                 }
-                ui.menu("Open Recent", |ui| {
-                    if ui.menu_item_icon("file", "level_01.mega").clicked() {
+                ui.menu("open_recent", "Open Recent", |ui| {
+                    if ui.menu_item_icon("level_01mega", "file", "level_01.mega").clicked() {
                         state.last_menu = String::from("File / Open Recent / level_01.mega");
                         state.log.push_str("open level_01.mega\n");
                     }
-                    if ui.menu_item_icon("file", "sandbox.mega").clicked() {
+                    if ui.menu_item_icon("sandboxmega", "file", "sandbox.mega").clicked() {
                         state.last_menu = String::from("File / Open Recent / sandbox.mega");
                         state.log.push_str("open sandbox.mega\n");
                     }
                 });
                 ui.separator();
-                if ui.menu_item_icon("close", "Exit").clicked() {
+                if ui.menu_item_icon("exit", "close", "Exit").clicked() {
                     state.last_menu = String::from("File / Exit");
                     state.log.push_str("exit\n");
                 }
             });
-            ui.menu("Edit", |ui| {
-                if ui.menu_item_icon("undo", "Undo").clicked() {
+            ui.menu("edit", "Edit", |ui| {
+                if ui.menu_item_icon("undo", "undo", "Undo").clicked() {
                     state.log.push_str("undo\n");
                 }
-                if ui.menu_item_icon("redo", "Redo").clicked() {
+                if ui.menu_item_icon("redo", "redo", "Redo").clicked() {
                     state.log.push_str("redo\n");
                 }
                 ui.separator();
-                if ui.menu_item_icon("copy", "Duplicate").clicked() {
+                if ui.menu_item_icon("duplicate", "copy", "Duplicate").clicked() {
                     state.log.push_str("duplicate\n");
                 }
-                if ui.menu_item_icon("edit", "Rename").clicked() {
+                if ui.menu_item_icon("rename", "edit", "Rename").clicked() {
                     state.log.push_str("rename\n");
                 }
-                if ui.menu_item_icon("delete", "Delete").clicked() {
+                if ui.menu_item_icon("delete", "delete", "Delete").clicked() {
                     state.confirm_open = true;
                     state.last_menu = String::from("Edit / Delete");
                 }
                 ui.separator();
                 ui.add_enabled(false, |ui| {
-                    let _ = ui.menu_item_icon("lock", "Locked action");
+                    let _ = ui.menu_item_icon("locked_action", "lock", "Locked action");
                 });
             });
-            ui.menu("View", |ui| {
-                ui.menu("UI Scale", |ui| {
+            ui.menu("view", "View", |ui| {
+                ui.menu("ui_scale", "UI Scale", |ui| {
                     for (label, v) in [
                         ("100%", 1.0),
                         ("125%", 1.25),
@@ -217,34 +217,34 @@ impl Scene for DockDemo {
                         ("175%", 1.75),
                         ("200%", 2.0),
                     ] {
-                        if ui.menu_item(label).clicked() {
+                        if ui.menu_item(label, label).clicked() {
                             state.scale = v;
                             state.last_menu = format!("View / UI Scale / {label}");
                         }
                     }
                 });
                 ui.separator();
-                if ui.menu_item_icon("settings", "Settings panel").clicked() {
+                if ui.menu_item_icon("settings_panel", "settings", "Settings panel").clicked() {
                     state.last_menu = String::from("View / Settings");
                 }
-                if ui.menu_item("Toggle Wireframe").clicked() {
+                if ui.menu_item("toggle_wireframe", "Toggle Wireframe").clicked() {
                     state.wireframe = !state.wireframe;
                     state
                         .log
                         .push_str(&format!("wireframe = {}\n", state.wireframe));
                 }
-                if ui.menu_item("Toggle Shadows").clicked() {
+                if ui.menu_item("toggle_shadows", "Toggle Shadows").clicked() {
                     state.shadows = !state.shadows;
                     state
                         .log
                         .push_str(&format!("shadows = {}\n", state.shadows));
                 }
             });
-            ui.menu("Help", |ui| {
-                if ui.menu_item_icon("info", "About").clicked() {
+            ui.menu("help", "Help", |ui| {
+                if ui.menu_item_icon("about", "info", "About").clicked() {
                     ui.notify("mega-ui dock demo");
                 }
-                if ui.menu_item_icon("warning", "Report issue").clicked() {
+                if ui.menu_item_icon("report_issue", "warning", "Report issue").clicked() {
                     ui.notify_warn("Issue tracker…");
                 }
             });
@@ -254,7 +254,7 @@ impl Scene for DockDemo {
 
         let bar_h = 26.0; // UI points; window pos is scale-independent
         ui.window(
-            Window::new("UI Scale")
+            Window::new("ui_scale", "UI Scale")
                 .pos(Vec2::new(16.0, bar_h + 12.0))
                 .size(Vec2::new(300.0, 320.0))
                 .resizable(true)
@@ -275,7 +275,7 @@ impl Scene for DockDemo {
                         ("1.75", 1.75),
                         ("2.0", 2.0),
                     ] {
-                        if ui.button(label).clicked() {
+                        if ui.button(label, label).clicked() {
                             state.scale = v;
                         }
                     }
@@ -389,19 +389,19 @@ impl Scene for DockDemo {
                 let tex_size = ui.available_size();
                 let zone = ui.surface(tex_size, *clear);
                 ui.context_menu("viewport_ctx", ui.rect_hovered(zone), |ui| {
-                    if ui.menu_item_icon("search", "Frame selected").clicked() {
+                    if ui.menu_item_icon("frame_selected", "search", "Frame selected").clicked() {
                         log.push_str("frame selected\n");
                         ui.notify("Frame selected");
                     }
-                    if ui.menu_item("Toggle wireframe").clicked() {
+                    if ui.menu_item("toggle_wireframe", "Toggle wireframe").clicked() {
                         *wireframe = !*wireframe;
                         ui.notify(&format!("wireframe = {}", *wireframe));
                     }
-                    if ui.menu_item_icon("copy", "Copy view").clicked() {
+                    if ui.menu_item_icon("copy_view", "copy", "Copy view").clicked() {
                         log.push_str("copy view\n");
                     }
                     ui.separator();
-                    if ui.menu_item_icon("delete", "Clear selection").clicked() {
+                    if ui.menu_item_icon("clear_selection", "delete", "Clear selection").clicked() {
                         ui.notify_warn("Selection cleared");
                     }
                 });
@@ -440,12 +440,12 @@ impl Scene for DockDemo {
                                 },
                             );
                             ui.tree_node_icon("meshes", "folder_open", "Meshes", |ui| {
-                                ui.collapsing_header("Primitives", |ui| {
+                                ui.collapsing_header("primitives", "Primitives", |ui| {
                                     ui.tree_leaf_icon("cube", "file", "Cube");
                                     ui.tree_leaf_icon("plane", "file", "Plane");
                                     ui.tree_leaf_icon("sphere", "file", "Sphere");
                                 });
-                                ui.collapsing_header("Imported", |ui| {
+                                ui.collapsing_header("imported", "Imported", |ui| {
                                     ui.tree_leaf_icon_with("char", "file", "Character", |row| {
                                         row.icon("info");
                                         row.spacer();
@@ -487,17 +487,17 @@ impl Scene for DockDemo {
                         ui.icon_colored("warning", 16.0, [0.95, 0.72, 0.18, 1.0]);
                     });
                     ui.separator();
-                    ui.checkbox("Enabled", enabled);
+                    ui.checkbox("enabled", "Enabled", enabled);
                     ui.add_enabled(*enabled, |ui| {
                         ui.text_input("name", name);
-                        ui.group("Lens", |ui| {
+                        ui.group("lens", "Lens", |ui| {
                             ui.slider("FOV", fov, 20.0..=120.0);
                             ui.slider("Exposure", exposure, 0.0..=4.0);
                             ui.label("Near / Far (drag_float)");
                             ui.drag_float("near", near_clip, 0.01);
                             ui.drag_float("far", far_clip, 1.0);
                         });
-                        ui.group("Transform", |ui| {
+                        ui.group("transform", "Transform", |ui| {
                             ui.label("Position");
                             ui.vec3("pos", position, 0.1, Vec3::ZERO);
                             ui.label("Rotation");
@@ -507,7 +507,7 @@ impl Scene for DockDemo {
                             ui.label("Offset (vec2)");
                             ui.vec2("off", offset, 0.1, Vec2::ZERO);
                         });
-                        ui.group("Mix", |ui| {
+                        ui.group("mix", "Mix", |ui| {
                             ui.horizontal(|ui| {
                                 ui.knob("Output", output, 0.0..=1.0);
                                 ui.knob_colored("Drive", drive, 0.0..=1.0, [0.35, 0.72, 0.85, 1.0]);
@@ -515,10 +515,10 @@ impl Scene for DockDemo {
                             ui.slider("Volume", volume, 0.0..=1.0);
                             ui.drag_float("Speed", speed, 0.05);
                         });
-                        ui.group("Flags", |ui| {
-                            ui.checkbox("Wireframe", wireframe);
-                            ui.checkbox("Shadows", shadows);
-                            ui.checkbox("Bloom", bloom);
+                        ui.group("flags", "Flags", |ui| {
+                            ui.checkbox("wireframe", "Wireframe", wireframe);
+                            ui.checkbox("shadows", "Shadows", shadows);
+                            ui.checkbox("bloom", "Bloom", bloom);
                             ui.select("Quality", quality, &["Low", "Medium", "High", "Ultra"]);
                         });
                         ui.separator();
@@ -576,18 +576,18 @@ impl Scene for DockDemo {
                             ui.scroll_area("settings_gen", size, ScrollAxes::Vertical, |ui| {
                                 ui.label("General");
                                 ui.separator();
-                                ui.group("Display", |ui| {
+                                ui.group("display", "Display", |ui| {
                                     ui.toggle(
                                         "theme_like",
                                         render_mode,
                                         &["Shaded", "Wire", "Lit"],
                                     );
                                     ui.slider("UI Scale", scale, 0.75..=2.0);
-                                    ui.checkbox("Wireframe", wireframe);
-                                    ui.checkbox("Shadows", shadows);
-                                    ui.checkbox("Bloom", bloom);
+                                    ui.checkbox("wireframe", "Wireframe", wireframe);
+                                    ui.checkbox("shadows", "Shadows", shadows);
+                                    ui.checkbox("bloom", "Bloom", bloom);
                                 });
-                                ui.group("Bake", |ui| {
+                                ui.group("bake", "Bake", |ui| {
                                     ui.progress_bar(*progress);
                                     ui.horizontal(|ui| {
                                         if ui
@@ -644,13 +644,13 @@ impl Scene for DockDemo {
                 ui.scroll_area("widgets_pane", size, ScrollAxes::Vertical, |ui| {
                     ui.label("Widget playground");
                     ui.separator();
-                    ui.group("Inputs", |ui| {
+                    ui.group("inputs", "Inputs", |ui| {
                         ui.toggle("w_mode", render_mode, &["A", "B", "C"]);
                         ui.select("w_quality", quality, &["Low", "Medium", "High", "Ultra"]);
                         ui.drag_float("w_speed", speed, 0.1);
                         ui.slider("w_volume", volume, 0.0..=1.0);
                     });
-                    ui.group("Icons", |ui| {
+                    ui.group("icons", "Icons", |ui| {
                         ui.horizontal(|ui| {
                             for id in ["folder", "folder_open", "file", "save", "search", "grid"] {
                                 ui.icon(id, 18.0);
@@ -664,7 +664,7 @@ impl Scene for DockDemo {
                             ui.icon_colored("folder", 18.0, [0.95, 0.78, 0.28, 1.0]);
                         });
                     });
-                    ui.group("Swatches", |ui| {
+                    ui.group("swatches", "Swatches", |ui| {
                         ui.horizontal(|ui| {
                             ui.color_box(22.0, *tint);
                             ui.color_box(22.0, *clear);
@@ -673,7 +673,7 @@ impl Scene for DockDemo {
                             ui.color_box(22.0, [0.95, 0.72, 0.18, 1.0]);
                         });
                     });
-                    ui.group("Gradient", |ui| {
+                    ui.group("gradient", "Gradient", |ui| {
                         ui.label("Color below · opacity above · Ctrl/double-click add");
                         let _ = ui.gradient_editor(
                             "dock_gradient",
@@ -689,7 +689,7 @@ impl Scene for DockDemo {
                             ui.color_box(22.0, sampled);
                         });
                     });
-                    ui.group("Table", |ui| {
+                    ui.group("table", "Table", |ui| {
                         ui.table(
                             "demo_table",
                             &[
@@ -733,10 +733,10 @@ impl Scene for DockDemo {
                             },
                         );
                     });
-                    ui.group("Disabled", |ui| {
+                    ui.group("disabled", "Disabled", |ui| {
                         ui.add_enabled(false, |ui| {
-                            let _ = ui.button("Disabled button");
-                            ui.checkbox("Can't toggle", wireframe);
+                            let _ = ui.button("disabled_button", "Disabled button");
+                            ui.checkbox("cant_toggle", "Can't toggle", wireframe);
                         });
                     });
                 });
@@ -895,7 +895,7 @@ impl Scene for DockDemo {
         });
 
         ui.modal(
-            Window::new("Confirm")
+            Window::new("confirm", "Confirm")
                 .size(Vec2::new(320.0, 150.0))
                 .open(confirm_open),
             |ui| {
@@ -906,7 +906,7 @@ impl Scene for DockDemo {
                 ui.label("This cannot be undone.");
                 ui.separator();
                 ui.horizontal(|ui| {
-                    if ui.button("Cancel").clicked() {
+                    if ui.button("cancel", "Cancel").clicked() {
                         ui.close_modal();
                     }
                     if ui

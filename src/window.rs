@@ -26,6 +26,7 @@ pub(crate) fn clamp_win(
 /// [`Self::pos`] / [`Self::size`] are in **UI points** (same units as widget
 /// sizes before scale). Screen pixels = points × [`Ui::scale`].
 pub struct Window<'a> {
+    pub(crate) id: &'a str,
     pub(crate) title: &'a str,
     pub(crate) default_pos: Vec2,
     pub(crate) default_size: Vec2,
@@ -35,8 +36,9 @@ pub struct Window<'a> {
 }
 
 impl<'a> Window<'a> {
-    pub fn new(title: &'a str) -> Self {
+    pub fn new(id: &'a str, title: &'a str) -> Self {
         Self {
+            id,
             title,
             default_pos: Vec2::new(40.0, 40.0),
             default_size: Vec2::new(280.0, 200.0),
@@ -121,7 +123,7 @@ impl Ui {
         let closable = cfg.open.is_some();
 
         let vp = self.input.viewport;
-        if !self.windows.contains_key(&Id::new(cfg.title)) {
+        if !self.windows.contains_key(&Id::new(cfg.id)) {
             let size_px = cfg.default_size * self.scale;
             cfg.default_pos = Vec2::new(
                 ((vp.x - size_px.x) * 0.5).max(0.0),
@@ -145,6 +147,7 @@ impl Ui {
 
         // Don't hold `open` during content — apply close afterwards.
         let inner = Window {
+            id: cfg.id,
             title: cfg.title,
             default_pos: cfg.default_pos,
             default_size: cfg.default_size,
@@ -176,13 +179,13 @@ impl Ui {
         add: impl FnOnce(&mut Self),
     ) {
         if cfg.open.as_ref().is_some_and(|o| !**o) {
-            let window_id = self.current_id(cfg.title);
+            let window_id = self.current_id(cfg.id);
             self.win_rects.remove(&window_id);
             return;
         }
 
         let draw_start = self.draw_list.len();
-        self.push_id(cfg.title);
+        self.push_id(cfg.id);
         let window_id = *self.id_stack.last().unwrap();
         if !self.win_order.contains(&window_id) {
             self.win_order.push(window_id);

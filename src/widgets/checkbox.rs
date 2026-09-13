@@ -5,8 +5,8 @@ use crate::theme;
 use crate::types::{CursorIcon, Rect, Response};
 
 impl Ui {
-    pub fn checkbox(&mut self, label: &str, checked: &mut bool) -> Response {
-        let id = self.current_id(label);
+    pub fn checkbox(&mut self, id: &str, label: &str, checked: &mut bool) -> Response {
+        let id = self.current_id(id);
         let box_s: f32 = self.s(16.0);
         let gap = self.s(8.0);
         let text_w = self.text_width(label);

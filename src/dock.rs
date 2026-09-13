@@ -325,11 +325,11 @@ fn draw_leaf(
         false,
     );
     ui.context_menu(&format!("#dock_more{path}"), more_hov, |ui| {
-        if tabs.len() > 1 && ui.menu_item("Close Tab").clicked() {
+        if tabs.len() > 1 && ui.menu_item("close_tab", "Close Tab").clicked() {
             // Caller owns tab list; just signal via notify for now.
             ui.notify("Close tab");
         }
-        if ui.menu_item("Close Others").clicked() {
+        if ui.menu_item("close_others", "Close Others").clicked() {
             ui.notify("Close others");
         }
     });

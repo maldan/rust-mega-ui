@@ -81,7 +81,7 @@ let input = UiInput {
 ui.set_scale(1.0); // 2.0 = UI в 2 раза крупнее (виджеты + окна)
 ui.begin_frame(input);
 
-if ui.button("Save").clicked() { /* … */ }
+if ui.button("save", "Save").clicked() { /* … */ }
 ui.text_input("name", &mut name);
 
 let out = ui.end_frame();
@@ -278,30 +278,30 @@ ui.load_builtin_icons(); // once at startup
 // or: ui.load_icons([("my_icon", include_bytes!("my.svg"))]);
 
 ui.icon("folder", 18.0);
-ui.menu_item_icon("file", "Open…");
+ui.menu_item_icon("open", "file", "Open…");
 
-ui.modal(Window::new("Confirm").size(s).open(&mut show), |ui| {
+ui.modal(Window::new("confirm", "Confirm").size(s).open(&mut show), |ui| {
     ui.label("Are you sure?");
-    if ui.button("OK").clicked() { ui.close_modal(); }
+    if ui.button("ok", "OK").clicked() { ui.close_modal(); }
 });
 
 ui.menu_bar(|ui| {
-    ui.menu("File", |ui| {
-        if ui.menu_item("New").clicked() {}
-        if ui.menu_item("Open…").clicked() {}
-        ui.menu("Open Recent", |ui| {
-            if ui.menu_item("a.mega").clicked() {}
+    ui.menu("file", "File", |ui| {
+        if ui.menu_item("new", "New").clicked() {}
+        if ui.menu_item("open", "Open…").clicked() {}
+        ui.menu("open_recent", "Open Recent", |ui| {
+            if ui.menu_item("amega", "a.mega").clicked() {}
         });
         ui.menu_separator();
-        if ui.menu_item("Exit").clicked() {}
+        if ui.menu_item("exit", "Exit").clicked() {}
     });
 });
 
-ui.window(Window::new("Settings").pos(p).size(s).resizable(true), |ui| {
+ui.window(Window::new("settings", "Settings").pos(p).size(s).resizable(true), |ui| {
     // pos/size — UI points (экран = points × scale)
     ui.label("Hello");
-    if ui.button("OK").clicked() {}
-    ui.checkbox("Enabled", &mut on);
+    if ui.button("ok", "OK").clicked() {}
+    ui.checkbox("enabled", "Enabled", &mut on);
     ui.toggle("mode", &mut mode, &["A", "B"]);
     ui.slider("vol", &mut vol, 0.0..=1.0);
     ui.drag_float("x", &mut x, 0.1);
@@ -316,7 +316,7 @@ ui.window(Window::new("Settings").pos(p).size(s).resizable(true), |ui| {
     ui.row(|ui| {
         ui.label("Name");
         ui.flex(1.0, |ui| { ui.text_input("n", &mut name); });
-        ui.button("OK");
+        ui.button("ok", "OK");
     });
     ui.property("Volume", 0.35, |ui| { ui.slider("v", &mut vol, 0.0..=1.0); });
     ui.grid(3, |ui| {
@@ -340,7 +340,7 @@ ui.window(Window::new("Settings").pos(p).size(s).resizable(true), |ui| {
     });
     ui.browser("assets", size, &items);
     ui.notify_success("Saved");
-    ui.add_enabled(false, |ui| { ui.button("Locked"); });
+    ui.add_enabled(false, |ui| { ui.button("locked", "Locked"); });
 });
 
 ui.status_bar(|ui| {
@@ -356,7 +356,7 @@ ui.dock_space("main", viewport, &mut dock, |ui, tab| match tab {
 
 // ПКМ-меню над зоной
 ui.context_menu("ctx", hovered, |ui| {
-    if ui.menu_item("Delete").clicked() {}
+    if ui.menu_item("delete", "Delete").clicked() {}
 });
 ```
 

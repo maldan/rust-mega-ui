@@ -360,7 +360,7 @@ fn calc_clear(calc: &mut CalcState) {
 }
 
 fn draw_calc_screen(ui: &mut Ui, text: &str) {
-    ui.group("", |ui| {
+    ui.group("id", "", |ui| {
         ui.row(|ui| {
             ui.spacer();
             ui.label_styled(
@@ -376,7 +376,7 @@ fn draw_calc_screen(ui: &mut Ui, text: &str) {
 
 fn calc_key(ui: &mut Ui, label: &str, calc: &mut CalcState, action: char) {
     ui.id_scope(label, |ui| {
-        if ui.button(label).clicked() {
+        if ui.button(label, label).clicked() {
             match action {
                 '0' | '1' | '2' | '3' | '4' | '5' | '6' | '7' | '8' | '9' => {
                     calc_digit(calc, action);
@@ -425,115 +425,115 @@ impl Scene for Demo {
         ui.set_scale(state.ui_scale);
 
         ui.menu_bar(|ui| {
-            ui.menu("File", |ui| {
-                if ui.menu_item_icon("plus", "New").clicked() {
+            ui.menu("file", "File", |ui| {
+                if ui.menu_item_icon("new", "plus", "New").clicked() {
                     state.last_menu = String::from("File / New");
                     ui.notify_success("Created new project");
                 }
-                if ui.menu_item_icon("folder", "Open…").clicked() {
+                if ui.menu_item_icon("open", "folder", "Open…").clicked() {
                     state.last_menu = String::from("File / Open");
                     ui.notify("Open dialog…");
                 }
-                ui.menu("Open Recent", |ui| {
-                    if ui.menu_item_icon("file", "project.mega").clicked() {
+                ui.menu("open_recent", "Open Recent", |ui| {
+                    if ui.menu_item_icon("projectmega", "file", "project.mega").clicked() {
                         state.last_menu = String::from("File / Open Recent / project.mega");
                     }
-                    if ui.menu_item_icon("file", "demo.mega").clicked() {
+                    if ui.menu_item_icon("demomega", "file", "demo.mega").clicked() {
                         state.last_menu = String::from("File / Open Recent / demo.mega");
                     }
                     ui.separator();
                     ui.add_enabled(false, |ui| {
-                        let _ = ui.menu_item("Clear List");
+                        let _ = ui.menu_item("clear_list", "Clear List");
                     });
                 });
                 ui.separator();
-                if ui.menu_item_icon("folder", "File Manager").clicked() {
+                if ui.menu_item_icon("file_manager", "folder", "File Manager").clicked() {
                     state.show_fm = true;
                     state.last_menu = String::from("File / File Manager");
                 }
-                if ui.menu_item_icon("folder", "Explorer").clicked() {
+                if ui.menu_item_icon("explorer", "folder", "Explorer").clicked() {
                     state.show_explorer = true;
                     state.last_menu = String::from("File / Explorer");
                 }
-                if ui.menu_item_icon("file", "Asset Manager").clicked() {
+                if ui.menu_item_icon("asset_manager", "file", "Asset Manager").clicked() {
                     state.show_assets = true;
                     state.last_menu = String::from("File / Asset Manager");
                 }
                 ui.separator();
-                if ui.menu_item_icon("delete", "Delete project…").clicked() {
+                if ui.menu_item_icon("delete_project", "delete", "Delete project…").clicked() {
                     state.confirm_open = true;
                     state.last_menu = String::from("File / Delete project");
                 }
                 ui.separator();
-                if ui.menu_item_icon("close", "Exit").clicked() {
+                if ui.menu_item_icon("exit", "close", "Exit").clicked() {
                     state.last_menu = String::from("File / Exit");
                 }
             });
-            ui.menu("Edit", |ui| {
-                if ui.menu_item("Undo").clicked() {
+            ui.menu("edit", "Edit", |ui| {
+                if ui.menu_item("undo", "Undo").clicked() {
                     state.last_menu = String::from("Edit / Undo");
                 }
-                if ui.menu_item("Redo").clicked() {
+                if ui.menu_item("redo", "Redo").clicked() {
                     state.last_menu = String::from("Edit / Redo");
                 }
                 ui.separator();
-                if ui.menu_item("Cut").clicked() {
+                if ui.menu_item("cut", "Cut").clicked() {
                     state.last_menu = String::from("Edit / Cut");
                 }
-                if ui.menu_item("Copy").clicked() {
+                if ui.menu_item("copy", "Copy").clicked() {
                     state.last_menu = String::from("Edit / Copy");
                 }
-                if ui.menu_item("Paste").clicked() {
+                if ui.menu_item("paste", "Paste").clicked() {
                     state.last_menu = String::from("Edit / Paste");
                 }
             });
-            ui.menu("View", |ui| {
-                if ui.menu_item("Toggle Help").clicked() {
+            ui.menu("view", "View", |ui| {
+                if ui.menu_item("toggle_help", "Toggle Help").clicked() {
                     state.show_help = !state.show_help;
                     state.last_menu = String::from("View / Toggle Help");
                 }
-                if ui.menu_item("Toggle Inputs").clicked() {
+                if ui.menu_item("toggle_inputs", "Toggle Inputs").clicked() {
                     state.show_inputs = !state.show_inputs;
                 }
-                if ui.menu_item("Toggle File Manager").clicked() {
+                if ui.menu_item("toggle_file_manager", "Toggle File Manager").clicked() {
                     state.show_fm = !state.show_fm;
                 }
-                if ui.menu_item("Calculator").clicked() {
+                if ui.menu_item("calculator", "Calculator").clicked() {
                     state.show_calc = !state.show_calc;
                     state.last_menu = String::from("View / Calculator");
                 }
-                ui.menu("UI Scale", |ui| {
-                    if ui.menu_item("75%").clicked() {
+                ui.menu("ui_scale", "UI Scale", |ui| {
+                    if ui.menu_item("75pct", "75%").clicked() {
                         state.ui_scale = 0.75;
                         state.last_menu = String::from("View / UI Scale / 75%");
                     }
-                    if ui.menu_item("100%").clicked() {
+                    if ui.menu_item("100pct", "100%").clicked() {
                         state.ui_scale = 1.0;
                         state.last_menu = String::from("View / UI Scale / 100%");
                     }
-                    if ui.menu_item("125%").clicked() {
+                    if ui.menu_item("125pct", "125%").clicked() {
                         state.ui_scale = 1.25;
                         state.last_menu = String::from("View / UI Scale / 125%");
                     }
-                    if ui.menu_item("150%").clicked() {
+                    if ui.menu_item("150pct", "150%").clicked() {
                         state.ui_scale = 1.5;
                         state.last_menu = String::from("View / UI Scale / 150%");
                     }
-                    if ui.menu_item("175%").clicked() {
+                    if ui.menu_item("175pct", "175%").clicked() {
                         state.ui_scale = 1.75;
                         state.last_menu = String::from("View / UI Scale / 175%");
                     }
-                    if ui.menu_item("200%").clicked() {
+                    if ui.menu_item("200pct", "200%").clicked() {
                         state.ui_scale = 2.0;
                         state.last_menu = String::from("View / UI Scale / 200%");
                     }
                 });
-                ui.menu("Theme", |ui| {
-                    if ui.menu_item("Dark").clicked() {
+                ui.menu("theme", "Theme", |ui| {
+                    if ui.menu_item("dark", "Dark").clicked() {
                         state.theme = 0;
                         state.last_menu = String::from("View / Theme / Dark");
                     }
-                    if ui.menu_item("Light").clicked() {
+                    if ui.menu_item("light", "Light").clicked() {
                         state.theme = 1;
                         state.last_menu = String::from("View / Theme / Light");
                     }
@@ -542,7 +542,7 @@ impl Scene for Demo {
         });
 
         ui.window(
-            Window::new("Widgets")
+            Window::new("widgets", "Widgets")
                 .pos(Vec2::new(24.0, 40.0))
                 .size(Vec2::new(340.0, 520.0))
                 .resizable(true)
@@ -607,10 +607,10 @@ impl Scene for Demo {
                         });
                         ui.separator();
                         ui.text_input("name", &mut state.name);
-                        ui.checkbox("Enabled", &mut state.enabled);
+                        ui.checkbox("enabled", "Enabled", &mut state.enabled);
                         ui.slider("Volume", &mut state.volume, 0.0..=1.0);
                         ui.separator();
-                        ui.group("Mix", |ui| {
+                        ui.group("mix", "Mix", |ui| {
                             ui.horizontal(|ui| {
                                 ui.knob("Output", &mut state.output, 0.0..=1.0);
                                 ui.knob_colored(
@@ -621,7 +621,7 @@ impl Scene for Demo {
                                 );
                             });
                         });
-                        ui.group("Mode", |ui| {
+                        ui.group("mode", "Mode", |ui| {
                             ui.select("Mode", &mut state.mode, &["Edit", "Play", "Inspect"]);
                             ui.toggle("Theme", &mut state.theme, &["Dark", "Light"]);
                         });
@@ -632,19 +632,19 @@ impl Scene for Demo {
                         ui.label("Progress");
                         ui.progress_bar(state.progress);
                         ui.horizontal(|ui| {
-                            if ui.button("-0.1").clicked() {
+                            if ui.button("01", "-0.1").clicked() {
                                 state.progress = (state.progress - 0.1).clamp(0.0, 1.0);
                             }
-                            if ui.button("+0.1").clicked() {
+                            if ui.button("01", "+0.1").clicked() {
                                 state.progress = (state.progress + 0.1).clamp(0.0, 1.0);
                             }
-                            if ui.button("Fill").clicked() {
+                            if ui.button("fill", "Fill").clicked() {
                                 state.progress = 1.0;
                             }
                         });
                         ui.separator();
                         ui.add_enabled(state.enabled, |ui| {
-                            if ui.button("Click me").clicked() {
+                            if ui.button("click_me", "Click me").clicked() {
                                 state.clicks += 1;
                                 ui.notify(&format!("Clicks: {}", state.clicks));
                             }
@@ -688,17 +688,17 @@ impl Scene for Demo {
                                 ui.notify("Close clicked");
                             }
                         });
-                        if ui.button("Confirm…").clicked() {
+                        if ui.button("confirm", "Confirm…").clicked() {
                             state.confirm_open = true;
                         }
                         ui.horizontal(|ui| {
-                            if ui.button("Toast OK").clicked() {
+                            if ui.button("toast_ok", "Toast OK").clicked() {
                                 ui.notify_success("All good");
                             }
-                            if ui.button("Warn").clicked() {
+                            if ui.button("warn", "Warn").clicked() {
                                 ui.notify_warn("Careful…");
                             }
-                            if ui.button("Error").clicked() {
+                            if ui.button("error", "Error").clicked() {
                                 ui.notify_error("Something failed");
                             }
                         });
@@ -707,15 +707,15 @@ impl Scene for Demo {
                         let zone_w = ui.available_size().x.max(80.0);
                         let zone = ui.surface(Vec2::new(zone_w, 48.0), [0.08, 0.08, 0.08, 1.0]);
                         ui.context_menu("widgets_ctx", ui.rect_hovered(zone), |ui| {
-                            if ui.menu_item_icon("plus", "Add item").clicked() {
+                            if ui.menu_item_icon("add_item", "plus", "Add item").clicked() {
                                 state.clicks += 1;
                                 ui.notify("Context: Add item");
                             }
-                            if ui.menu_item_icon("file", "Duplicate").clicked() {
+                            if ui.menu_item_icon("duplicate", "file", "Duplicate").clicked() {
                                 ui.notify("Context: Duplicate");
                             }
                             ui.separator();
-                            if ui.menu_item_icon("delete", "Delete").clicked() {
+                            if ui.menu_item_icon("delete", "delete", "Delete").clicked() {
                                 ui.notify_error("Context: Delete");
                             }
                         });
@@ -753,12 +753,12 @@ impl Scene for Demo {
                             });
                         });
                         ui.separator();
-                        ui.collapsing_header("Collapsing A", |ui| {
+                        ui.collapsing_header("collapsing_a", "Collapsing A", |ui| {
                             ui.label("Nested content inside header.");
-                            ui.checkbox("Nested flag", &mut state.enabled);
-                            ui.button("Nested button");
+                            ui.checkbox("nested_flag", "Nested flag", &mut state.enabled);
+                            ui.button("nested_button", "Nested button");
                         });
-                        ui.collapsing_header("Collapsing B", |ui| {
+                        ui.collapsing_header("collapsing_b", "Collapsing B", |ui| {
                             ui.label("Another section.");
                             ui.select("Quality", &mut state.quality, &["Low", "Med", "High"]);
                         });
@@ -867,7 +867,7 @@ impl Scene for Demo {
         );
 
         ui.window(
-            Window::new("Inputs")
+            Window::new("inputs", "Inputs")
                 .pos(Vec2::new(380.0, 40.0))
                 .size(Vec2::new(320.0, 420.0))
                 .resizable(true)
@@ -896,7 +896,7 @@ impl Scene for Demo {
         );
 
         ui.window(
-            Window::new("Help")
+            Window::new("help", "Help")
                 .pos(Vec2::new(380.0, 480.0))
                 .size(Vec2::new(320.0, 200.0))
                 .open(&mut state.show_help),
@@ -912,19 +912,19 @@ impl Scene for Demo {
                     ui.label(&format!("UI scale = {:.0}%", state.ui_scale * 100.0));
                     ui.slider("UI Scale", &mut state.ui_scale, 0.75..=2.0);
                     ui.horizontal(|ui| {
-                        if ui.button("75%").clicked() {
+                        if ui.button("75pct", "75%").clicked() {
                             state.ui_scale = 0.75;
                         }
-                        if ui.button("100%").clicked() {
+                        if ui.button("100pct", "100%").clicked() {
                             state.ui_scale = 1.0;
                         }
-                        if ui.button("150%").clicked() {
+                        if ui.button("150pct", "150%").clicked() {
                             state.ui_scale = 1.5;
                         }
-                        if ui.button("175%").clicked() {
+                        if ui.button("175pct", "175%").clicked() {
                             state.ui_scale = 1.75;
                         }
-                        if ui.button("200%").clicked() {
+                        if ui.button("200pct", "200%").clicked() {
                             state.ui_scale = 2.0;
                         }
                     });
@@ -935,7 +935,7 @@ impl Scene for Demo {
         );
 
         ui.window(
-            Window::new("File Manager")
+            Window::new("file_manager", "File Manager")
                 .pos(Vec2::new(720.0, 40.0))
                 .size(Vec2::new(560.0, 560.0))
                 .resizable(true)
@@ -1055,7 +1055,7 @@ impl Scene for Demo {
 
         // Meta-widget: Explorer (file browser) — old File Manager kept above.
         ui.window(
-            Window::new("Explorer")
+            Window::new("explorer", "Explorer")
                 .pos(Vec2::new(40.0, 580.0))
                 .size(Vec2::new(360.0, 320.0))
                 .resizable(true)
@@ -1120,7 +1120,7 @@ impl Scene for Demo {
 
         // Meta-widget: Asset Manager (abstract resources).
         ui.window(
-            Window::new("Asset Manager")
+            Window::new("asset_manager", "Asset Manager")
                 .pos(Vec2::new(420.0, 580.0))
                 .size(Vec2::new(340.0, 320.0))
                 .resizable(true)
@@ -1184,7 +1184,7 @@ impl Scene for Demo {
         );
 
         ui.window(
-            Window::new("Calculator")
+            Window::new("calculator", "Calculator")
                 .pos(Vec2::new(720.0, 480.0))
                 .size(Vec2::new(248.0, 320.0))
                 .resizable(true)
@@ -1218,14 +1218,14 @@ impl Scene for Demo {
                     }
                 });
                 ui.space(4.0);
-                if ui.button("=").clicked() {
+                if ui.button("id", "=").clicked() {
                     calc_equals(&mut state.calc);
                 }
             },
         );
 
         ui.modal(
-            Window::new("Confirm")
+            Window::new("confirm", "Confirm")
                 .size(Vec2::new(320.0, 160.0))
                 .open(&mut state.confirm_open),
             |ui| {
@@ -1233,11 +1233,11 @@ impl Scene for Demo {
                 ui.label("This cannot be undone.");
                 ui.separator();
                 ui.horizontal(|ui| {
-                    if ui.button("Cancel").clicked() {
+                    if ui.button("cancel", "Cancel").clicked() {
                         ui.close_modal();
                         state.last_menu = String::from("Confirm / Cancel");
                     }
-                    if ui.button("Delete").clicked() {
+                    if ui.button("delete", "Delete").clicked() {
                         ui.close_modal();
                         state.clicks = 0;
                         state.last_menu = String::from("Confirm / Delete");

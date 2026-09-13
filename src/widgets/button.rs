@@ -5,9 +5,9 @@ use crate::types::{CursorIcon, Rect, Response};
 use crate::{CrossAlign, LayoutDir, Ui, new_layer};
 
 impl Ui {
-    pub fn button(&mut self, label: &str) -> Response {
+    pub fn button(&mut self, id: &str, label: &str) -> Response {
         let enabled = self.enabled();
-        let id = self.current_id(label);
+        let id = self.current_id(id);
         let pad_x = self.s(14.0);
         let text_w = self.text_width(label);
         let text_h = self.text_height();

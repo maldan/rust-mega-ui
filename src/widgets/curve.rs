@@ -333,7 +333,7 @@ impl Ui {
                     ("InOut", CurvePreset::EaseInOut),
                 ];
                 for (label, p) in presets {
-                    if ui.button(label).clicked() {
+                    if ui.button(label, label).clicked() {
                         apply_preset(curve, p);
                         out.changed = true;
                         curve.preset = p;
