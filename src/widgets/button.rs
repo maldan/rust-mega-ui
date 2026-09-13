@@ -1,6 +1,5 @@
 use glam::Vec2;
 
-use crate::theme;
 use crate::types::{CursorIcon, Rect, Response};
 use crate::{CrossAlign, LayoutDir, Ui, new_layer};
 
@@ -23,14 +22,14 @@ impl Ui {
 
         let (hovered, clicked, draw_rect, color) = self.button_interact(id, rect, enabled);
 
-        let radius = self.s(theme::BTN_RADIUS);
-        self.round_rect(draw_rect, radius, theme::BTN_BORDER);
+        let radius = self.s(self.theme.metrics.button_radius);
+        self.round_rect(draw_rect, radius, self.theme.button.border);
         self.round_rect(draw_rect.inset(1.0), (radius - 1.0).max(0.0), color);
 
         let text_color = if enabled {
-            theme::TEXT
+            self.theme.text.primary
         } else {
-            theme::TEXT_DISABLED
+            self.theme.text.disabled
         };
         let text_pos = Vec2::new(
             draw_rect.min.x + (draw_rect.width() - text_w) * 0.5,
@@ -82,8 +81,8 @@ impl Ui {
 
         let (hovered, clicked, draw_rect, color) = self.button_interact(widget_id, rect, enabled);
 
-        let radius = self.s(theme::BTN_RADIUS);
-        self.round_rect(draw_rect, radius, theme::BTN_BORDER);
+        let radius = self.s(self.theme.metrics.button_radius);
+        self.round_rect(draw_rect, radius, self.theme.button.border);
         self.round_rect(draw_rect.inset(1.0), (radius - 1.0).max(0.0), color);
 
         let inner = Rect {
@@ -139,13 +138,13 @@ impl Ui {
         let clicked = active && hovered && self.input.mouse_released;
 
         let color = if !enabled {
-            theme::BTN_DISABLED
+            self.theme.button.disabled
         } else if pressed {
-            theme::BTN_PRESS
+            self.theme.button.press
         } else if hovered {
-            theme::BTN_HOVER
+            self.theme.button.hover
         } else {
-            theme::BTN
+            self.theme.button.bg
         };
 
         let draw_rect = if pressed {

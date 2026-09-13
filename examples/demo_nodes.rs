@@ -25,7 +25,7 @@ mod framework;
 
 use std::collections::HashMap;
 
-use framework::{DrawStats, Host, Scene};
+use framework::{DrawStats, Host, Scene, apply_theme, theme_menu, theme_toggle};
 use glam::{Mat4, Quat, Vec2, Vec3};
 use mega_ui::{
     DockNode, DockState, GradientStop, NodePortSide, NodeSpace, OpacityStop, ScrollAxes, TextStyle,
@@ -89,6 +89,7 @@ struct NodesDemo {
     status: String,
     log: String,
     scale: f32,
+    dark: bool,
     gradient_stops: Vec<GradientStop>,
     gradient_opacities: Vec<OpacityStop>,
     gradient_sample: f32,
@@ -305,6 +306,7 @@ impl Default for NodesDemo {
             status: "Ctrl+D clone · Delete remove · RMB wire del".into(),
             log: String::from("graph ready\n"),
             scale: 1.0,
+            dark: false,
             gradient_stops: vec![
                 GradientStop {
                     t: 0.0,
@@ -927,6 +929,7 @@ impl Scene for NodesDemo {
         state.evaluate();
 
         ui.set_scale(state.scale);
+        apply_theme(ui, state.dark);
 
         ui.menu_bar(|ui| {
             ui.menu("graph", "Graph", |ui| {
@@ -966,6 +969,7 @@ impl Scene for NodesDemo {
                     }
                 });
             });
+            theme_menu(ui, &mut state.dark);
         });
 
         let status_h = 24.0 * ui.scale();
@@ -985,6 +989,7 @@ impl Scene for NodesDemo {
                 gradient_stops,
                 gradient_opacities,
                 gradient_sample,
+                dark,
                 ..
             } = state;
 
@@ -1057,6 +1062,7 @@ impl Scene for NodesDemo {
                             },
                         );
                         ui.separator();
+                        theme_toggle(ui, dark);
                         ui.label(&format!("Zoom: {:.2}", space.zoom));
                         ui.label(&format!("Snap: {:.0}", space.snap));
                         ui.drag_float("snap", &mut space.snap, 1.0);
@@ -1222,6 +1228,8 @@ impl Scene for NodesDemo {
         let fps = (1.0 / dt.max(1e-4)).min(999.0);
         ui.status_bar(|ui| {
             ui.label(&state.status.clone());
+            ui.label("·");
+            ui.label(if state.dark { "Dark" } else { "Default" });
             ui.spacer();
             ui.label(&format!(
                 "zoom {:.0}% · {} nodes · {} links · quads {} · FPS {:.0}",

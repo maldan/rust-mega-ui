@@ -2,7 +2,6 @@
 
 use glam::Vec2;
 
-use crate::theme;
 use crate::types::{CursorIcon, DrawCommand, Id, Rect, Response};
 use crate::{LayoutDir, Ui};
 
@@ -163,8 +162,8 @@ impl Ui {
             }
         }
 
-        let r = self.s(theme::BTN_RADIUS);
-        self.round_rect(swatch, r, theme::BTN_BORDER);
+        let r = self.s(self.theme.metrics.button_radius);
+        self.round_rect(swatch, r, self.theme.button.border);
         let inner = swatch.inset(1.0);
         // One swatch — opaque preview of RGB (alpha edited in popup).
         self.round_rect(
@@ -213,9 +212,9 @@ impl Ui {
             origin.y = (anchor.min.y - popup_h - self.s(2.0)).max(0.0);
         }
         let popup = Rect::from_min_size(origin, Vec2::new(popup_w, popup_h));
-        let radius = self.s(theme::BTN_RADIUS);
-        self.round_rect_overlay(popup, radius, theme::BTN_BORDER);
-        self.round_rect_overlay(popup.inset(1.0), (radius - 1.0).max(0.0), theme::POPUP_BG);
+        let radius = self.s(self.theme.metrics.button_radius);
+        self.round_rect_overlay(popup, radius, self.theme.button.border);
+        self.round_rect_overlay(popup.inset(1.0), (radius - 1.0).max(0.0), self.theme.popup.bg);
         self.absorb_rect(popup);
 
         let popup_hov = popup.contains(self.input.mouse_pos);
@@ -237,10 +236,10 @@ impl Ui {
         let mut changed = false;
 
         self.draw_sv_field(sv_rect, st.h);
-        self.stroke_rect_overlay(sv_rect, theme::BTN_BORDER);
+        self.stroke_rect_overlay(sv_rect, self.theme.button.border);
 
         self.draw_hue_bar(hue_rect);
-        self.stroke_rect_overlay(hue_rect, theme::BTN_BORDER);
+        self.stroke_rect_overlay(hue_rect, self.theme.button.border);
 
         // Alpha bar
         self.draw_checker_overlay(alpha_rect, 0.0);
@@ -253,7 +252,7 @@ impl Ui {
             ),
         };
         self.round_rect_overlay(fill_a, 0.0, [cr, cg, cb, 1.0]);
-        self.stroke_rect_overlay(alpha_rect, theme::BTN_BORDER);
+        self.stroke_rect_overlay(alpha_rect, self.theme.button.border);
 
         let sv_id = id.child("sv");
         let hue_id = id.child("hue");

@@ -1,6 +1,5 @@
 use glam::Vec2;
 
-use crate::theme;
 use crate::types::{CursorIcon, Rect, Response};
 use crate::{LayoutDir, Ui};
 
@@ -17,7 +16,7 @@ impl Ui {
 
         let height = self.s(28.0);
         let item_h = self.s(26.0);
-        let radius = self.s(theme::BTN_RADIUS);
+        let radius = self.s(self.theme.metrics.button_radius);
         let pad = self.s(10.0);
         let fill_w = self.layer().fill_w;
         let filling = fill_w > 0.0 && matches!(self.layer().dir, LayoutDir::Vertical);
@@ -100,18 +99,18 @@ impl Ui {
 
         let label = options.get(*selected).copied().unwrap_or("");
         let color = if header_hovered {
-            theme::BTN_HOVER
+            self.theme.button.hover
         } else {
-            theme::BTN
+            self.theme.button.bg
         };
-        self.round_rect(header, radius, theme::BTN_BORDER);
+        self.round_rect(header, radius, self.theme.button.border);
         self.round_rect(header.inset(1.0), (radius - 1.0).max(0.0), color);
 
         let th = self.text_height();
         self.text(
             Vec2::new(header.min.x + pad, header.min.y + (height - th) * 0.5),
             label,
-            theme::TEXT,
+            self.theme.text.primary,
         );
         let arrow_s = self.s(12.0);
         let arrow_rect = Rect::from_min_size(
@@ -126,7 +125,7 @@ impl Ui {
         } else {
             "chevron_down"
         };
-        self.draw_icon_at(arrow, arrow_rect, theme::TEXT_DIM, false);
+        self.draw_icon_at(arrow, arrow_rect, self.theme.text.dim, false);
 
         if st.open
             && let Some(list) = list
@@ -137,8 +136,8 @@ impl Ui {
                 self.set_cursor(CursorIcon::Pointer);
             }
 
-            self.round_rect_overlay(list, radius, theme::BTN_BORDER);
-            self.round_rect_overlay(list.inset(1.0), (radius - 1.0).max(0.0), theme::POPUP_BG);
+            self.round_rect_overlay(list, radius, self.theme.button.border);
+            self.round_rect_overlay(list.inset(1.0), (radius - 1.0).max(0.0), self.theme.popup.bg);
 
             for (i, opt) in options.iter().enumerate() {
                 let item = Self::select_item_rect(list, width, item_h, i, st.scroll);
@@ -149,15 +148,15 @@ impl Ui {
                 if hot {
                     self.want_capture = true;
                     self.set_cursor(CursorIcon::Pointer);
-                    self.round_rect_overlay(item, self.s(3.0), theme::POPUP_HOVER);
+                    self.round_rect_overlay(item, self.s(3.0), self.theme.popup.hover);
                 } else if i == *selected {
-                    self.round_rect_overlay(item, self.s(3.0), theme::HEADER);
+                    self.round_rect_overlay(item, self.s(3.0), self.theme.header.bg);
                 }
 
                 self.text_overlay(
                     Vec2::new(item.min.x + pad, item.min.y + (item_h - th) * 0.5),
                     opt,
-                    theme::TEXT,
+                    self.theme.text.primary,
                 );
             }
 

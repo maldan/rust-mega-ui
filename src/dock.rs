@@ -1,6 +1,5 @@
 use glam::Vec2;
 
-use crate::theme;
 use crate::types::{CursorIcon, Rect};
 use crate::{CrossAlign, LayoutDir, Ui, new_layer};
 
@@ -84,7 +83,7 @@ impl Ui {
         };
         let rect = self.allocate(size);
         self.push_id(id);
-        self.round_rect(rect, 0.0, theme::DOCK_BG);
+        self.round_rect(rect, 0.0, self.theme.dock.bg);
         layout_node(self, &mut state.root, rect, 0, &mut add);
         self.pop_id();
     }
@@ -111,7 +110,7 @@ fn layout_node(
             first,
             second,
         } => {
-            let gap = ui.s(theme::DOCK_SPLIT);
+            let gap = ui.s(ui.theme.metrics.dock_split);
             let min = ui.s(MIN_PANE);
             let split_id = ui.current_id(&format!("#split{path}"));
 
@@ -148,9 +147,9 @@ fn layout_node(
 
             let (a_rect, split_rect, b_rect) = split_rects(rect, *axis, *ratio, gap, min);
             let split_color = if ui.active_id == Some(split_id) || hovered {
-                theme::DOCK_SPLIT_HOT
+                ui.theme.dock.split_hot
             } else {
-                theme::DOCK_SPLIT_COL
+                ui.theme.dock.split
             };
             ui.round_rect(split_rect, 0.0, split_color);
 
@@ -216,22 +215,22 @@ fn draw_leaf(
     }
     *active = (*active).min(tabs.len() - 1);
 
-    let tab_h = ui.s(theme::DOCK_TAB_H);
+    let tab_h = ui.s(ui.theme.metrics.dock_tab_h);
     let pad = ui.s(6.0);
     let tab_pad_x = ui.s(10.0);
     let tab_gap = ui.s(1.0);
-    let radius = ui.s(theme::DOCK_TAB_RADIUS);
+    let radius = ui.s(ui.theme.metrics.dock_tab_radius);
     let more_s = ui.s(16.0);
 
     // Pane chrome
-    ui.round_rect(rect, 0.0, theme::WIN_BORDER);
-    ui.round_rect(rect.inset(1.0), 0.0, theme::WIN_BODY);
+    ui.round_rect(rect, 0.0, ui.theme.window.border);
+    ui.round_rect(rect.inset(1.0), 0.0, ui.theme.window.body);
 
     let bar = Rect {
         min: rect.min + Vec2::new(1.0, 1.0),
         max: Vec2::new(rect.max.x - 1.0, rect.min.y + 1.0 + tab_h),
     };
-    ui.round_rect(bar, 0.0, theme::DOCK_TAB_BAR);
+    ui.round_rect(bar, 0.0, ui.theme.dock.tab_bar);
 
     // Content-sized tabs, left-aligned (not stretched).
     let more_w = more_s + ui.s(8.0);
@@ -269,11 +268,11 @@ fn draw_leaf(
         }
 
         let color = if is_active {
-            theme::DOCK_TAB_ACTIVE
+            ui.theme.dock.tab_active
         } else if hovered {
-            theme::DOCK_TAB_HOVER
+            ui.theme.dock.tab_hover
         } else {
-            theme::DOCK_TAB
+            ui.theme.dock.tab
         };
         ui.round_rect_corners(tr, radius, color, true, false);
 
@@ -284,14 +283,14 @@ fn draw_leaf(
                 min: tr.min,
                 max: Vec2::new(tr.max.x, tr.min.y + ui.s(2.0)),
             };
-            ui.round_rect(accent, 0.0, theme::DOCK_FOCUS);
+            ui.round_rect(accent, 0.0, ui.theme.dock.focus);
         }
 
         let th = ui.text_height();
         let text_col = if is_active {
-            theme::DOCK_TAB_TEXT_ACTIVE
+            ui.theme.dock.tab_text_active
         } else {
-            theme::DOCK_TAB_TEXT
+            ui.theme.dock.tab_text
         };
         ui.text(
             Vec2::new(tr.min.x + tab_pad_x, tr.min.y + (tr.height() - th) * 0.5),
@@ -311,16 +310,16 @@ fn draw_leaf(
     if more_hov {
         ui.want_capture = true;
         ui.set_cursor(CursorIcon::Pointer);
-        ui.round_rect(more_rect, ui.s(3.0), theme::DOCK_TAB_HOVER);
+        ui.round_rect(more_rect, ui.s(3.0), ui.theme.dock.tab_hover);
     }
     let icon_r = Rect::from_min_size(more_rect.min + Vec2::splat(ui.s(2.0)), Vec2::splat(more_s));
     ui.draw_icon_at(
         "more_vert",
         icon_r,
         if more_hov {
-            theme::DOCK_TAB_TEXT_ACTIVE
+            ui.theme.dock.tab_text_active
         } else {
-            theme::DOCK_TAB_TEXT
+            ui.theme.dock.tab_text
         },
         false,
     );

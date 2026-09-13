@@ -1,6 +1,5 @@
 use glam::Vec2;
 
-use crate::theme;
 use crate::types::{CursorIcon, Rect, Response};
 use crate::{LayoutDir, Ui};
 
@@ -105,7 +104,7 @@ impl Ui {
         self.text(
             Vec2::new(rect.min.x.round(), labels_y),
             &min_s,
-            theme::TEXT_DIM,
+            self.theme.text.dim,
         );
         self.text(
             Vec2::new(
@@ -113,12 +112,12 @@ impl Ui {
                 labels_y,
             ),
             &val_s,
-            theme::TEXT_BRIGHT,
+            self.theme.text.bright,
         );
         self.text(
             Vec2::new((rect.max.x - max_w).round(), labels_y),
             &max_s,
-            theme::TEXT_DIM,
+            self.theme.text.dim,
         );
 
         let track_h = (track_row_h * 0.35).round().max(2.0);
@@ -137,22 +136,22 @@ impl Ui {
         let thumb = Rect::from_min_size(Vec2::new(thumb_x, thumb_y), Vec2::new(thumb_w, thumb_h));
         let thumb_r = thumb_h * 0.5;
 
-        self.round_rect(track, track_r, theme::SLIDER_TRACK);
+        self.round_rect(track, track_r, self.theme.slider.track);
         if t > 0.0 {
             let fill_x1 = (thumb_x + thumb_w * 0.5).clamp(track.min.x, track.max.x);
             let fill = Rect {
                 min: track.min,
                 max: Vec2::new(fill_x1, track.max.y),
             };
-            self.round_rect(fill, track_r, theme::SLIDER_FILL);
+            self.round_rect(fill, track_r, self.theme.slider.fill);
         }
 
         let thumb_color = if active || hovered {
-            theme::SLIDER_THUMB_HOT
+            self.theme.slider.thumb_hot
         } else {
-            theme::SLIDER_THUMB
+            self.theme.slider.thumb
         };
-        self.round_rect(thumb, thumb_r, theme::BTN_BORDER);
+        self.round_rect(thumb, thumb_r, self.theme.button.border);
         self.round_rect(
             thumb.inset(1.0).round_px(),
             (thumb_r - 1.0).max(0.0),

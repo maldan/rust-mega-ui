@@ -3,7 +3,6 @@
 use glam::Vec2;
 
 use crate::plot_view::PlotView;
-use crate::theme;
 use crate::types::{CursorIcon, Rect};
 use crate::{LayoutDir, Ui};
 
@@ -343,7 +342,7 @@ impl Ui {
         }
 
         let outer = self.allocate(Vec2::new(w, h));
-        let radius = self.s(theme::BTN_RADIUS);
+        let radius = self.s(self.theme.metrics.button_radius);
         let inner = outer.inset(self.s(4.0));
         let axis_h = if ticks.is_empty() { 0.0 } else { self.s(13.0) };
         let plot_rect = Rect {
@@ -351,7 +350,7 @@ impl Ui {
             max: Vec2::new(inner.max.x, (inner.max.y - axis_h).max(inner.min.y + 8.0)),
         };
         let view = PlotView::default();
-        self.round_rect(inner, radius, theme::PLOT_BG);
+        self.round_rect(inner, radius, self.theme.plot.bg);
 
         self.push_clip(plot_rect);
         if ticks.is_empty() {
@@ -368,7 +367,7 @@ impl Ui {
             let v = sample_curve(curve, t);
             line_pts.push(view.plot_to_screen(plot_rect, t, v));
         }
-        self.draw_polyline(&line_pts, self.s(2.0), theme::PLOT_LINE);
+        self.draw_polyline(&line_pts, self.s(2.0), self.theme.plot.line);
 
         let n = curve.points.len();
         let mp = self.input.mouse_pos;
@@ -385,11 +384,11 @@ impl Ui {
                 p_rect,
                 r,
                 if sel {
-                    theme::ACCENT
+                    self.theme.accent
                 } else if hot {
-                    theme::SLIDER_THUMB_HOT
+                    self.theme.slider.thumb_hot
                 } else {
-                    theme::SLIDER_THUMB
+                    self.theme.slider.thumb
                 },
             );
         }
@@ -399,7 +398,7 @@ impl Ui {
         if hint {
             let vline_a = Vec2::new(px.x, plot_rect.min.y);
             let vline_b = Vec2::new(px.x, plot_rect.max.y);
-            self.draw_line_segment(vline_a, vline_b, self.s(1.0), theme::ACCENT_DIM);
+            self.draw_line_segment(vline_a, vline_b, self.s(1.0), self.theme.accent_dim);
         }
         self.pop_clip();
         if !ticks.is_empty() {
@@ -410,7 +409,7 @@ impl Ui {
             self.label_styled(
                 "Drag keys · double-click / Ctrl+click add · Del or RMB delete",
                 crate::widgets::label::TextStyle {
-                    color: theme::TEXT_DIM,
+                    color: self.theme.text.dim,
                     size: 11.0,
                 },
             );
@@ -599,14 +598,14 @@ fn draw_grid(ui: &mut Ui, rect: Rect, view: &PlotView) {
         let x = view.plot_to_screen(rect, t, view.v_min).x;
         let a = Vec2::new(x, rect.min.y);
         let b = Vec2::new(x, rect.max.y);
-        ui.draw_line_segment(a, b, 1.0, theme::PLOT_GRID);
+        ui.draw_line_segment(a, b, 1.0, ui.theme.plot.grid);
     }
     for i in 1..4 {
         let v = view.v_min + (view.v_max - view.v_min) * (i as f32 / 4.0);
         let y = view.plot_to_screen(rect, view.t_min, v).y;
         let a = Vec2::new(rect.min.x, y);
         let b = Vec2::new(rect.max.x, y);
-        ui.draw_line_segment(a, b, 1.0, theme::PLOT_GRID);
+        ui.draw_line_segment(a, b, 1.0, ui.theme.plot.grid);
     }
 }
 

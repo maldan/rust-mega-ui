@@ -3,7 +3,7 @@
 use glam::Vec2;
 
 use crate::Ui;
-use crate::theme;
+use crate::theme::Theme;
 use crate::types::Rect;
 
 #[derive(Clone, Copy, PartialEq, Eq)]
@@ -22,12 +22,12 @@ pub(crate) struct Toast {
 }
 
 impl ToastKind {
-    fn color(self) -> [f32; 4] {
+    fn color(self, theme: &Theme) -> [f32; 4] {
         match self {
-            Self::Info => theme::TOAST_INFO,
-            Self::Success => theme::TOAST_SUCCESS,
-            Self::Warn => theme::TOAST_WARN,
-            Self::Error => theme::TOAST_ERROR,
+            Self::Info => theme.toast.info,
+            Self::Success => theme.toast.success,
+            Self::Warn => theme.toast.warn,
+            Self::Error => theme.toast.error,
         }
     }
 }
@@ -67,7 +67,7 @@ impl Ui {
         for t in &mut self.toasts {
             t.age += dt;
         }
-        let life = theme::TOAST_LIFETIME;
+        let life = self.theme.metrics.toast_lifetime;
         self.toasts.retain(|t| t.age < life);
         if !self.toasts.is_empty() {
             self.needs_repaint = true;
@@ -83,7 +83,7 @@ impl Ui {
         let width = self.s(280.0);
         let mut y = pad;
         let vp = self.input.viewport;
-        let life = theme::TOAST_LIFETIME;
+        let life = self.theme.metrics.toast_lifetime;
 
         // Clone texts to avoid borrow issues while drawing
         let items: Vec<_> = self.toasts.clone();
@@ -99,15 +99,15 @@ impl Ui {
             let h = th + self.s(16.0);
             let x = vp.x - width - pad;
             let rect = Rect::from_min_size(Vec2::new(x, y), Vec2::new(width, h));
-            let mut bg = theme::TOAST_BG;
+            let mut bg = self.theme.toast.bg;
             bg[3] *= fade;
-            let mut accent = t.kind.color();
+            let mut accent = t.kind.color(&self.theme);
             accent[3] *= fade;
-            let mut text_c = theme::TEXT;
+            let mut text_c = self.theme.text.primary;
             text_c[3] *= fade;
 
             let radius = self.s(5.0);
-            self.round_rect_overlay(rect, radius, theme::BTN_BORDER);
+            self.round_rect_overlay(rect, radius, self.theme.button.border);
             self.round_rect_overlay(rect.inset(1.0), (radius - 1.0).max(0.0), bg);
             let strip = Rect {
                 min: rect.min + Vec2::new(1.0, 1.0),

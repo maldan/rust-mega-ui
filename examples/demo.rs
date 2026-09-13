@@ -11,7 +11,7 @@ use std::fs;
 use std::path::{Path, PathBuf};
 use std::time::Instant;
 
-use framework::{DrawStats, Host, Scene};
+use framework::{DrawStats, Host, Scene, apply_theme, theme_menu, theme_toggle};
 use glam::{Vec2, Vec3};
 use mega_ui::{
     AnimationCurve, GradientStop, OpacityStop, ease_in_out, sample_curve, sample_gradient,
@@ -151,7 +151,7 @@ struct Demo {
     drive: f32,
     speed: f32,
     mode: usize,
-    theme: usize,
+    dark: bool,
     quality: usize,
     clicks: u32,
     progress: f32,
@@ -203,7 +203,7 @@ impl Default for Demo {
             drive: 0.35,
             speed: 1.25,
             mode: 0,
-            theme: 0,
+            dark: false,
             quality: 1,
             clicks: 0,
             progress: 0.35,
@@ -423,6 +423,7 @@ impl Scene for Demo {
 
     fn build(ui: &mut Ui, state: &mut Self, _viewport: Vec2, dt: f32, stats: DrawStats) -> bool {
         ui.set_scale(state.ui_scale);
+        apply_theme(ui, state.dark);
 
         ui.menu_bar(|ui| {
             ui.menu("file", "File", |ui| {
@@ -528,17 +529,8 @@ impl Scene for Demo {
                         state.last_menu = String::from("View / UI Scale / 200%");
                     }
                 });
-                ui.menu("theme", "Theme", |ui| {
-                    if ui.menu_item("dark", "Dark").clicked() {
-                        state.theme = 0;
-                        state.last_menu = String::from("View / Theme / Dark");
-                    }
-                    if ui.menu_item("light", "Light").clicked() {
-                        state.theme = 1;
-                        state.last_menu = String::from("View / Theme / Light");
-                    }
-                });
             });
+            theme_menu(ui, &mut state.dark);
         });
 
         ui.window(
@@ -551,6 +543,7 @@ impl Scene for Demo {
                 let size = ui.available_size();
                 ui.scroll_area("widgets_scroll", size, ScrollAxes::Vertical, |ui| {
                 ui.label(&format!("Last menu: {}", state.last_menu));
+                theme_toggle(ui, &mut state.dark);
                 ui.separator();
 
                 ui.tabs("widgets_tabs", &["Basics", "Layout", "Plot"], |ui, tab| match tab {
@@ -623,7 +616,6 @@ impl Scene for Demo {
                         });
                         ui.group("mode", "Mode", |ui| {
                             ui.select("Mode", &mut state.mode, &["Edit", "Play", "Inspect"]);
-                            ui.toggle("Theme", &mut state.theme, &["Dark", "Light"]);
                         });
                         ui.separator();
                         ui.label("Tint (color_edit)");
@@ -1272,7 +1264,10 @@ impl Scene for Demo {
                 hover_lbl, focus_lbl, dbg.block_input, dbg.ghost_hover, dbg.win_rects, active_lbl,
             ));
             ui.label("·");
-            ui.label(&format!("menu: {}", state.last_menu));
+            ui.label(&format!(
+                "theme {}",
+                if state.dark { "Dark" } else { "Default" }
+            ));
             ui.label("·");
             ui.label("RMB = context menu");
             ui.label("·");

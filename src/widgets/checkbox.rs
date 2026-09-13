@@ -1,7 +1,6 @@
 use glam::Vec2;
 
 use crate::Ui;
-use crate::theme;
 use crate::types::{CursorIcon, Rect, Response};
 
 impl Ui {
@@ -36,24 +35,24 @@ impl Ui {
             changed = true;
         }
 
-        self.round_rect(box_rect, self.s(3.0), theme::CHECK_BORDER);
+        self.round_rect(box_rect, self.s(3.0), self.theme.check.border);
         let fill = if *checked {
-            theme::CHECK_ON
+            self.theme.check.on
         } else if hovered {
-            theme::BTN_HOVER
+            self.theme.button.hover
         } else {
-            theme::CHECK
+            self.theme.check.bg
         };
         self.round_rect(box_rect.inset(1.0), self.s(2.0), fill);
         if *checked {
             let mark = box_rect.inset(self.s(2.0));
-            self.draw_icon_at("check", mark, theme::CHECK_MARK, false);
+            self.draw_icon_at("check", mark, self.theme.check.mark, false);
         }
 
         self.text(
             Vec2::new(box_rect.max.x + gap, rect.min.y + (height - text_h) * 0.5),
             label,
-            theme::TEXT,
+            self.theme.text.primary,
         );
 
         Response {

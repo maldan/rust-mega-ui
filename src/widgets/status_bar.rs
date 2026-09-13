@@ -2,7 +2,6 @@
 
 use glam::Vec2;
 
-use crate::theme;
 use crate::types::Rect;
 use crate::{CrossAlign, LayoutDir, Ui, new_layer};
 
@@ -10,7 +9,7 @@ impl Ui {
     /// Full-width status bar pinned to the bottom of the viewport.
     /// Drawn on the overlay layer. Call near the end of the frame.
     pub fn status_bar(&mut self, add: impl FnOnce(&mut Self)) {
-        let h = self.s(theme::STATUS_BAR_H);
+        let h = self.s(self.theme.metrics.status_bar_h);
         let w = self.input.viewport.x.max(1.0);
         let y = (self.input.viewport.y - h).max(0.0);
         let bar = Rect::from_min_size(Vec2::new(0.0, y), Vec2::new(w, h));
@@ -18,12 +17,12 @@ impl Ui {
         let prev = self.draw_to_overlay;
         self.draw_to_overlay = true;
 
-        self.round_rect(bar, 0.0, theme::STATUS_BAR_BG);
+        self.round_rect(bar, 0.0, self.theme.status.bg);
         let line = Rect {
             min: bar.min,
             max: Vec2::new(bar.max.x, bar.min.y + 1.0),
         };
-        self.round_rect(line, 0.0, theme::WIN_BORDER);
+        self.round_rect(line, 0.0, self.theme.window.border);
 
         let pad = self.s(8.0);
         let origin = Vec2::new(bar.min.x + pad, bar.min.y);

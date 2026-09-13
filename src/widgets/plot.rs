@@ -1,7 +1,6 @@
 use glam::Vec2;
 
 use crate::plot_view::PlotView;
-use crate::theme;
 use crate::types::{DrawCommand, Rect, Response};
 use crate::{LayoutDir, Ui};
 
@@ -58,16 +57,16 @@ impl Ui {
             self.s(size.x.max(40.0))
         };
         let h = self.s(size.y.max(40.0));
-        let radius = self.s(theme::BTN_RADIUS);
+        let radius = self.s(self.theme.metrics.button_radius);
         let rect = if filling {
             self.allocate_fill_x(Vec2::new(w, h))
         } else {
             self.allocate(Vec2::new(w, h))
         };
-        self.round_rect(rect, radius, theme::PLOT_BG);
+        self.round_rect(rect, radius, self.theme.plot.bg);
         self.push_clip(rect);
         draw_plot_grid(self, rect, view);
-        draw_plot_series(self, rect, view, values, theme::PLOT_LINE);
+        draw_plot_series(self, rect, view, values, self.theme.plot.line);
         self.pop_clip();
         self.interact_rect(self.current_id(id), rect)
     }
@@ -82,7 +81,7 @@ impl Ui {
         ticks: &[(f32, &str)],
     ) -> Response {
         let (rect, radius) = plot_rect(self, size);
-        self.round_rect(rect, radius, theme::PLOT_BG);
+        self.round_rect(rect, radius, self.theme.plot.bg);
         let axis_h = self.s(13.0);
         let plot = Rect {
             min: rect.min,
@@ -103,7 +102,7 @@ impl Ui {
                     min: Vec2::new(x, plot.max.y - h),
                     max: Vec2::new(x + bw, plot.max.y),
                 };
-                self.fill_rect(bar, theme::PLOT_LINE);
+                self.fill_rect(bar, self.theme.plot.line);
             }
         }
         draw_tick_grid_x(self, plot, ticks);
@@ -121,7 +120,7 @@ impl Ui {
         ticks: &[(f32, &str)],
     ) -> Response {
         let (rect, radius) = plot_rect(self, size);
-        self.round_rect(rect, radius, theme::PLOT_BG);
+        self.round_rect(rect, radius, self.theme.plot.bg);
         let axis_h = self.s(13.0);
         let plot = Rect {
             min: rect.min,
@@ -142,7 +141,7 @@ impl Ui {
                     min: Vec2::new(x, plot.max.y - h),
                     max: Vec2::new(x + bw, plot.max.y),
                 };
-                self.fill_rect(bar, theme::PLOT_LINE);
+                self.fill_rect(bar, self.theme.plot.line);
             }
         }
         draw_tick_grid_x(self, plot, ticks);
@@ -175,7 +174,7 @@ impl Ui {
         ticks: &[(f32, &str)],
     ) -> Response {
         let (rect, radius) = plot_rect(self, size);
-        self.round_rect(rect, radius, theme::PLOT_BG);
+        self.round_rect(rect, radius, self.theme.plot.bg);
         let axis_h = self.s(13.0);
         let plot = Rect {
             min: rect.min,
@@ -192,7 +191,7 @@ impl Ui {
                     plot.max.y - plot.height() * v.clamp(0.0, 1.0),
                 ));
             }
-            self.draw_polyline(&pts, self.s(1.5), theme::PLOT_LINE);
+            self.draw_polyline(&pts, self.s(1.5), self.theme.plot.line);
         }
         draw_tick_grid_x(self, plot, ticks);
         self.pop_clip();
@@ -214,7 +213,7 @@ impl Ui {
         notes: &[(f32, &str)],
     ) -> Response {
         let (rect, radius) = plot_rect(self, size);
-        self.round_rect(rect, radius, theme::PLOT_BG);
+        self.round_rect(rect, radius, self.theme.plot.bg);
         let note_w = if notes.is_empty() { 0.0 } else { self.s(22.0) };
         let axis_w = note_w + self.s(26.0);
         let plot = Rect {
@@ -262,7 +261,7 @@ pub(crate) fn draw_tick_grid_x(ui: &mut Ui, plot: Rect, ticks: &[(f32, &str)]) {
             Vec2::new(x, plot.min.y),
             Vec2::new(x, plot.max.y),
             1.0,
-            theme::PLOT_GRID,
+            ui.theme.plot.grid,
         );
     }
 }
@@ -274,7 +273,7 @@ fn draw_tick_grid_y(ui: &mut Ui, plot: Rect, ticks: &[(f32, &str)]) {
             Vec2::new(plot.min.x, y),
             Vec2::new(plot.max.x, y),
             1.0,
-            theme::PLOT_GRID,
+            ui.theme.plot.grid,
         );
     }
 }
@@ -292,7 +291,7 @@ pub(crate) fn draw_tick_labels_x(ui: &mut Ui, outer: Rect, plot: Rect, ticks: &[
         ui.text_sized(
             Vec2::new(lx, plot.max.y + ui.s(1.0)),
             label,
-            theme::TEXT_DISABLED,
+            ui.theme.text.disabled,
             px,
         );
         last = lx + tw + ui.s(4.0);
@@ -309,7 +308,7 @@ fn draw_tick_labels_y(ui: &mut Ui, x: f32, outer: Rect, plot: Rect, ticks: &[(f3
         if (last_y - ty).abs() < th {
             continue;
         }
-        ui.text_sized(Vec2::new(x, ty), label, theme::TEXT_DISABLED, px);
+        ui.text_sized(Vec2::new(x, ty), label, ui.theme.text.disabled, px);
         last_y = ty;
     }
 }
@@ -323,7 +322,7 @@ fn plot_rect(ui: &mut Ui, size: Vec2) -> (Rect, f32) {
         ui.s(size.x.max(40.0))
     };
     let h = ui.s(size.y.max(40.0));
-    let radius = ui.s(theme::BTN_RADIUS);
+    let radius = ui.s(ui.theme.metrics.button_radius);
     let rect = if filling {
         ui.allocate_fill_x(Vec2::new(w, h))
     } else {
@@ -371,7 +370,7 @@ fn draw_plot_grid(ui: &mut Ui, rect: Rect, view: &PlotView) {
             Vec2::new(x, rect.min.y),
             Vec2::new(x, rect.max.y),
             1.0,
-            theme::PLOT_GRID,
+            ui.theme.plot.grid,
         );
     }
     for i in 1..4 {
@@ -381,7 +380,7 @@ fn draw_plot_grid(ui: &mut Ui, rect: Rect, view: &PlotView) {
             Vec2::new(rect.min.x, y),
             Vec2::new(rect.max.x, y),
             1.0,
-            theme::PLOT_GRID,
+            ui.theme.plot.grid,
         );
     }
 }

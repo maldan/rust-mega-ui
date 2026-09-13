@@ -1,6 +1,5 @@
 use glam::Vec2;
 
-use crate::theme;
 use crate::types::{CursorIcon, Response};
 use crate::widgets::edit::{
     EditState, byte_at_x, clamp_edit, draw_sel_line, handle_clipboard, handle_typing, has_sel,
@@ -84,17 +83,17 @@ impl Ui {
         self.edits.insert(widget_id, st);
 
         let border = if focused {
-            theme::INPUT_BORDER_FOCUS
+            self.theme.input.border_focus
         } else {
-            theme::INPUT_BORDER
+            self.theme.input.border
         };
         let bg = if enabled {
-            theme::INPUT_BG
+            self.theme.input.bg
         } else {
-            theme::INPUT_BG_DISABLED
+            self.theme.input.bg_disabled
         };
-        self.round_rect(rect, self.s(theme::BTN_RADIUS), border);
-        self.round_rect(rect.inset(1.0), self.s(theme::BTN_RADIUS) - 1.0, bg);
+        self.round_rect(rect, self.s(self.theme.metrics.button_radius), border);
+        self.round_rect(rect.inset(1.0), self.s(self.theme.metrics.button_radius) - 1.0, bg);
 
         let th = self.text_height();
         let inner_w = width - pad * 2.0;
@@ -124,9 +123,9 @@ impl Ui {
         let draw = &text[view_start..end];
         let text_pos = Vec2::new(rect.min.x + pad, rect.min.y + (height - th) * 0.5);
         let text_color = if enabled {
-            theme::TEXT
+            self.theme.text.primary
         } else {
-            theme::TEXT_DISABLED
+            self.theme.text.disabled
         };
 
         if has_sel(st) {
@@ -149,7 +148,7 @@ impl Ui {
                     Vec2::new(1.0, height - self.s(12.0)),
                 ),
                 0.0,
-                theme::TEXT,
+                self.theme.text.primary,
             );
         }
 

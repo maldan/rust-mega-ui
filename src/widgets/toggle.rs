@@ -1,6 +1,5 @@
 use glam::Vec2;
 
-use crate::theme;
 use crate::types::{CursorIcon, Response};
 use crate::{LayoutDir, Ui};
 
@@ -16,7 +15,7 @@ impl Ui {
         }
 
         let height = self.s(26.0);
-        let radius = self.s(theme::BTN_RADIUS);
+        let radius = self.s(self.theme.metrics.button_radius);
         let pad = self.s(24.0);
         let fill_w = self.layer().fill_w;
         let width = if fill_w > 0.0 && matches!(self.layer().dir, LayoutDir::Vertical) {
@@ -29,8 +28,8 @@ impl Ui {
                 .max(self.s(120.0))
         };
         let rect = self.allocate(Vec2::new(width, height));
-        self.round_rect(rect, radius, theme::BTN_BORDER);
-        self.round_rect(rect.inset(1.0), (radius - 1.0).max(0.0), theme::TOGGLE_OFF);
+        self.round_rect(rect, radius, self.theme.button.border);
+        self.round_rect(rect.inset(1.0), (radius - 1.0).max(0.0), self.theme.toggle.off);
 
         let n = options.len() as f32;
         let seg_w = rect.width() / n;
@@ -61,11 +60,11 @@ impl Ui {
 
             let active = *selected == i;
             let color = if active {
-                theme::TOGGLE_ON
+                self.theme.toggle.on
             } else if hovered {
-                theme::BTN_HOVER
+                self.theme.button.hover
             } else {
-                theme::TOGGLE_OFF
+                self.theme.toggle.off
             };
             if active || hovered {
                 self.round_rect(seg.inset(self.s(2.0)), (radius - 1.0).max(0.0), color);
@@ -80,9 +79,9 @@ impl Ui {
                 ),
                 label,
                 if active {
-                    theme::TEXT_BRIGHT
+                    self.theme.text.bright
                 } else {
-                    theme::TEXT
+                    self.theme.text.primary
                 },
             );
         }
@@ -102,16 +101,16 @@ impl Ui {
             self.s(160.0)
         };
         let height = self.s(14.0);
-        let radius = self.s(theme::BTN_RADIUS);
+        let radius = self.s(self.theme.metrics.button_radius);
         let rect = self.allocate(Vec2::new(width, height));
         let t = value.clamp(0.0, 1.0);
-        self.round_rect(rect, radius, theme::PROGRESS_BG);
+        self.round_rect(rect, radius, self.theme.progress.bg);
         if t > 0.0 {
             let fill = crate::Rect {
                 min: rect.min,
                 max: Vec2::new(rect.min.x + rect.width() * t, rect.max.y),
             };
-            self.round_rect(fill, radius, theme::PROGRESS_FILL);
+            self.round_rect(fill, radius, self.theme.progress.fill);
         }
         let label = format!("{:.0}%", t * 100.0);
         let tw = self.text_width(&label);
@@ -123,7 +122,7 @@ impl Ui {
                     rect.min.y + (height - th) * 0.5,
                 ),
                 &label,
-                theme::TEXT,
+                self.theme.text.primary,
             );
         }
     }

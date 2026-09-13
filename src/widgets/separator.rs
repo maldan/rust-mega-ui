@@ -1,6 +1,5 @@
 use glam::Vec2;
 
-use crate::theme;
 use crate::types::Rect;
 use crate::{LayoutDir, Ui};
 
@@ -23,6 +22,6 @@ impl Ui {
             min: Vec2::new(rect.min.x, y),
             max: Vec2::new(rect.max.x, y + 1.0),
         };
-        self.round_rect(line, 0.0, theme::WIN_BORDER);
+        self.round_rect(line, 0.0, self.theme.window.border);
     }
 }

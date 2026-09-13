@@ -1,6 +1,5 @@
 use glam::Vec2;
 
-use crate::theme;
 use crate::types::{CursorIcon, Id, Rect};
 use crate::{CrossAlign, LayoutDir, ScrollState, Ui, new_layer};
 
@@ -43,8 +42,8 @@ impl Ui {
                 content: Vec2::ZERO,
             });
 
-        let bar = self.s(theme::SCROLL_BAR);
-        let gap = self.s(theme::SCROLL_GAP);
+        let bar = self.s(self.theme.metrics.scroll_bar);
+        let gap = self.s(self.theme.metrics.scroll_gap);
         let need_v = axes.vertical() && st.content.y > size.y + 0.5;
         let need_h = axes.horizontal() && st.content.x > size.x + 0.5;
         let view = Rect {
@@ -75,7 +74,7 @@ impl Ui {
             st.offset = st.target;
         } else {
             let dt = self.input.dt.clamp(0.0, 0.1);
-            let t = 1.0 - (-theme::SCROLL_SMOOTH * dt).exp();
+            let t = 1.0 - (-self.theme.metrics.scroll_smooth * dt).exp();
             st.offset = st.offset.lerp(st.target, t);
             if (st.offset - st.target).length_squared() > 0.25 {
                 self.needs_repaint = true;
@@ -207,7 +206,7 @@ pub(crate) fn interact_vertical_scroll_bar(
         min: Vec2::new(view.max.x + gap, view.min.y),
         max: Vec2::new(view.max.x + gap + bar, view.max.y),
     };
-    let th = thumb_len(view_h, content_h, ui.s(theme::SCROLL_THUMB_MIN));
+    let th = thumb_len(view_h, content_h, ui.s(ui.theme.metrics.scroll_thumb_min));
     let travel = (view_h - th).max(0.0);
     let ty = if travel > 0.0 {
         view.min.y + *offset_y / max_s * travel
@@ -259,8 +258,8 @@ pub(crate) fn draw_vertical_scroll_bar(
         min: Vec2::new(view.max.x + gap, view.min.y),
         max: Vec2::new(view.max.x + gap + bar, view.max.y),
     };
-    ui.round_rect(track, 0.0, theme::SCROLL_BG);
-    let th = thumb_len(view_h, content_h, ui.s(theme::SCROLL_THUMB_MIN));
+    ui.round_rect(track, 0.0, ui.theme.scroll.bg);
+    let th = thumb_len(view_h, content_h, ui.s(ui.theme.metrics.scroll_thumb_min));
     let travel = (view_h - th).max(0.0);
     let max_s = (content_h - view_h).max(0.0);
     let ty = if max_s > 0.0 && travel > 0.0 {
@@ -274,9 +273,9 @@ pub(crate) fn draw_vertical_scroll_bar(
         thumb,
         3.0,
         if hot {
-            theme::SCROLL_THUMB_HOT
+            ui.theme.scroll.thumb_hot
         } else {
-            theme::SCROLL_THUMB
+            ui.theme.scroll.thumb
         },
     );
 }
@@ -314,7 +313,7 @@ fn interact_bars(
             min: Vec2::new(view.min.x, view.max.y + gap),
             max: Vec2::new(view.max.x, view.max.y + gap + bar),
         };
-        let tw = thumb_len(view.width(), st.content.x, ui.s(theme::SCROLL_THUMB_MIN));
+        let tw = thumb_len(view.width(), st.content.x, ui.s(ui.theme.metrics.scroll_thumb_min));
         let travel = (view.width() - tw).max(0.0);
         let max_s = (st.content.x - view.width()).max(0.0);
         let tx = if max_s > 0.0 && travel > 0.0 {
@@ -377,8 +376,8 @@ fn draw_bars(
             min: Vec2::new(view.min.x, view.max.y + gap),
             max: Vec2::new(view.max.x, view.max.y + gap + bar),
         };
-        ui.round_rect(track, 0.0, theme::SCROLL_BG);
-        let tw = thumb_len(view.width(), st.content.x, ui.s(theme::SCROLL_THUMB_MIN));
+        ui.round_rect(track, 0.0, ui.theme.scroll.bg);
+        let tw = thumb_len(view.width(), st.content.x, ui.s(ui.theme.metrics.scroll_thumb_min));
         let travel = (view.width() - tw).max(0.0);
         let max_s = (st.content.x - view.width()).max(0.0);
         let tx = if max_s > 0.0 && travel > 0.0 {
@@ -392,9 +391,9 @@ fn draw_bars(
             thumb,
             3.0,
             if hot {
-                theme::SCROLL_THUMB_HOT
+                ui.theme.scroll.thumb_hot
             } else {
-                theme::SCROLL_THUMB
+                ui.theme.scroll.thumb
             },
         );
     }
@@ -404,7 +403,7 @@ fn draw_bars(
             min: Vec2::new(view.max.x + gap, view.max.y + gap),
             max: outer.max,
         };
-        ui.round_rect(corner, 0.0, theme::SCROLL_BG);
+        ui.round_rect(corner, 0.0, ui.theme.scroll.bg);
     }
 }
 

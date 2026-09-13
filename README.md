@@ -6,7 +6,13 @@ Immediate/retained UI для игровых движков. **Сама ниче�
 Опционально `features = ["wgpu"]` — pipeline helpers (`mega_ui::wgpu::UiRenderer`, шейдер kinds 0–3, wgpu 30).  
 winit остаётся только в `examples/` (dev-dependencies).
 
-Тема сейчас одна (тёмная) и зашита внутри crate (`theme` — `pub(crate)`). Публичного API кастомизации цветов пока нет.
+Тема — `Theme` на `Ui`. `Theme::default()` — палитра как раньше; `Theme::dark()` — почти чёрная. Хост клонирует пресет и правит поля:
+
+```rust
+let mut t = Theme::default();
+t.accent = [0.85, 0.35, 0.12, 1.0];
+ui.set_theme(t);
+```
 
 ---
 

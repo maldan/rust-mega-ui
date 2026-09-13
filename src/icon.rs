@@ -6,7 +6,6 @@ use glam::Vec2;
 
 use crate::Ui;
 use crate::font::{Font, push_textured};
-use crate::theme;
 use crate::types::{CursorIcon, Rect};
 
 #[derive(Clone, Copy)]
@@ -176,13 +175,13 @@ impl Ui {
             enabled && self.active_id == Some(widget_id) && hovered && self.input.mouse_released;
 
         let color = if !enabled {
-            theme::TEXT_DISABLED
+            self.theme.text.disabled
         } else if pressed {
-            theme::TEXT_BRIGHT
+            self.theme.text.bright
         } else if hovered || active {
-            theme::TEXT
+            self.theme.text.primary
         } else {
-            theme::TEXT_DIM
+            self.theme.text.dim
         };
         let pad = self.s(3.0);
         self.draw_icon_at(
@@ -199,7 +198,7 @@ impl Ui {
 
     /// Layout an icon (`size` in UI points). Tinted with theme text color.
     pub fn icon(&mut self, id: &str, size: f32) {
-        self.icon_colored(id, size, theme::TEXT);
+        self.icon_colored(id, size, self.theme.text.primary);
     }
 
     pub fn icon_colored(&mut self, id: &str, size: f32, color: [f32; 4]) {

@@ -1,7 +1,6 @@
 use glam::{Vec2, Vec3};
 
 use crate::Ui;
-use crate::theme;
 use crate::types::Response;
 use crate::widgets::drag_float::format_float;
 
@@ -14,14 +13,15 @@ impl Ui {
         let mut changed = false;
         let mut hovered = false;
 
+        let axis = self.theme.axis;
         self.horizontal(|ui| {
             let icon = if locked { "lock" } else { "unlock" };
             if ui.icon_button("lock", icon, locked) {
                 locked = !locked;
             }
 
-            let rx = ui.drag_float_grip("x", &mut v.x, step, Some(theme::AXIS_X));
-            let ry = ui.drag_float_grip("y", &mut v.y, step, Some(theme::AXIS_Y));
+            let rx = ui.drag_float_grip("x", &mut v.x, step, Some(axis.x));
+            let ry = ui.drag_float_grip("y", &mut v.y, step, Some(axis.y));
             hovered |= rx.hovered || ry.hovered;
 
             if locked {
@@ -65,15 +65,16 @@ impl Ui {
         let mut changed = false;
         let mut hovered = false;
 
+        let axis = self.theme.axis;
         self.horizontal(|ui| {
             let icon = if locked { "lock" } else { "unlock" };
             if ui.icon_button("lock", icon, locked) {
                 locked = !locked;
             }
 
-            let rx = ui.drag_float_grip("x", &mut v.x, step, Some(theme::AXIS_X));
-            let ry = ui.drag_float_grip("y", &mut v.y, step, Some(theme::AXIS_Y));
-            let rz = ui.drag_float_grip("z", &mut v.z, step, Some(theme::AXIS_Z));
+            let rx = ui.drag_float_grip("x", &mut v.x, step, Some(axis.x));
+            let ry = ui.drag_float_grip("y", &mut v.y, step, Some(axis.y));
+            let rz = ui.drag_float_grip("z", &mut v.z, step, Some(axis.z));
             hovered |= rx.hovered || ry.hovered || rz.hovered;
 
             if locked {

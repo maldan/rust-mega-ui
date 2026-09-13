@@ -1,6 +1,5 @@
 use glam::Vec2;
 
-use crate::theme;
 use crate::types::{CursorIcon, Response};
 use crate::{CrossAlign, LayoutDir, Ui, new_layer};
 
@@ -25,7 +24,7 @@ impl Ui {
     ) -> Response {
         let widget_id = self.current_id(id);
         let pad = self.s(10.0);
-        let radius = self.s(theme::GROUP_RADIUS);
+        let radius = self.s(self.theme.metrics.group_radius);
         let border = self.s(1.0).max(1.0);
 
         let sc = self.scale.max(1e-4);
@@ -60,12 +59,12 @@ impl Ui {
             // ~2% lighter than GROUP_BG — barely noticeable lift.
             [0.09, 0.09, 0.09, 1.0]
         } else {
-            theme::GROUP_BG
+            self.theme.group.bg
         };
         let border_col = if selected {
-            theme::ACCENT
+            self.theme.accent
         } else {
-            theme::GROUP_BORDER
+            self.theme.group.border
         };
         self.round_rect(frame, radius, border_col);
         self.round_rect(frame.inset(border), (radius - border).max(0.0), bg);

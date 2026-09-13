@@ -1,5 +1,4 @@
 use crate::Ui;
-use crate::theme;
 use crate::types::Rect;
 use glam::Vec2;
 
@@ -174,7 +173,7 @@ pub(crate) fn draw_sel_line(ui: &mut Ui, x0: f32, x1: f32, y: f32, h: f32) {
     ui.round_rect(
         Rect::from_min_size(Vec2::new(min_x, y), Vec2::new(max_x - min_x, h)),
         0.0,
-        theme::SELECTION,
+        ui.theme.text.selection,
     );
 }
 

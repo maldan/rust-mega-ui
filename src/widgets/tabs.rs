@@ -1,6 +1,5 @@
 use glam::Vec2;
 
-use crate::theme;
 use crate::types::{CursorIcon, Rect};
 use crate::{CrossAlign, LayoutDir, Ui};
 
@@ -12,10 +11,10 @@ impl Ui {
             selected = selected.min(titles.len() - 1);
         }
 
-        let tab_h = self.s(theme::DOCK_TAB_H);
+        let tab_h = self.s(self.theme.metrics.dock_tab_h);
         let tab_pad_x = self.s(10.0);
         let tab_gap = self.s(1.0);
-        let radius = self.s(theme::DOCK_TAB_RADIUS);
+        let radius = self.s(self.theme.metrics.dock_tab_radius);
         let pad = self.s(8.0);
         let avail = self.available_size();
         let width = if avail.x > 0.0 {
@@ -40,14 +39,14 @@ impl Ui {
         let outer = self.allocate(Vec2::new(width, total_h));
 
         // Outer frame.
-        self.round_rect(outer, radius, theme::WIN_BORDER);
-        self.round_rect(outer.inset(1.0), (radius - 1.0).max(0.0), theme::WIN_BODY);
+        self.round_rect(outer, radius, self.theme.window.border);
+        self.round_rect(outer.inset(1.0), (radius - 1.0).max(0.0), self.theme.window.body);
 
         let bar = Rect {
             min: outer.min + Vec2::splat(1.0),
             max: Vec2::new(outer.max.x - 1.0, outer.min.y + 1.0 + tab_h),
         };
-        self.round_rect(bar, 0.0, theme::DOCK_TAB_BAR);
+        self.round_rect(bar, 0.0, self.theme.dock.tab_bar);
 
         let mut x = bar.min.x + self.s(2.0);
         for (i, title) in titles.iter().enumerate() {
@@ -84,19 +83,19 @@ impl Ui {
             }
 
             let color = if is_active {
-                theme::DOCK_TAB_ACTIVE
+                self.theme.dock.tab_active
             } else if hovered {
-                theme::DOCK_TAB_HOVER
+                self.theme.dock.tab_hover
             } else {
-                theme::DOCK_TAB
+                self.theme.dock.tab
             };
             self.round_rect_corners(tr, radius, color, true, false);
 
             let th = self.text_height();
             let text_col = if is_active {
-                theme::DOCK_TAB_TEXT_ACTIVE
+                self.theme.dock.tab_text_active
             } else {
-                theme::DOCK_TAB_TEXT
+                self.theme.dock.tab_text
             };
             self.text(
                 Vec2::new(tr.min.x + tab_pad_x, tr.min.y + (tr.height() - th) * 0.5),

@@ -144,6 +144,32 @@ pub trait Scene {
     fn build(ui: &mut Ui, state: &mut Self, viewport: Vec2, dt: f32, stats: DrawStats) -> bool;
 }
 
+pub fn apply_theme(ui: &mut Ui, dark: bool) {
+    ui.set_theme(if dark {
+        mega_ui::Theme::dark()
+    } else {
+        mega_ui::Theme::default()
+    });
+}
+
+/// Top-level menu bar item so theme switching is easy to find.
+pub fn theme_menu(ui: &mut Ui, dark: &mut bool) {
+    ui.menu("theme", "Theme", |ui| {
+        if ui.menu_item("theme_default", "Default").clicked() {
+            *dark = false;
+        }
+        if ui.menu_item("theme_dark", "Dark").clicked() {
+            *dark = true;
+        }
+    });
+}
+
+pub fn theme_toggle(ui: &mut Ui, dark: &mut bool) {
+    let mut idx = usize::from(*dark);
+    ui.toggle("Theme", &mut idx, &["Default", "Dark"]);
+    *dark = idx != 0;
+}
+
 pub struct Host<S: Scene> {
     window: Option<Arc<WinitWindow>>,
     gpu: Option<Gpu>,

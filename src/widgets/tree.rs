@@ -6,7 +6,6 @@
 
 use glam::Vec2;
 
-use crate::theme;
 use crate::types::CursorIcon;
 use crate::types::Rect;
 use crate::{CrossAlign, LayoutDir, Ui};
@@ -55,7 +54,7 @@ impl TreeRow<'_> {
     pub fn icon(&mut self, icon: &str) {
         let rect = self.next_rect();
         self.ui
-            .draw_icon_at(icon, rect.inset(self.ui.s(2.0)), theme::TEXT_DIM, false);
+            .draw_icon_at(icon, rect.inset(self.ui.s(2.0)), self.ui.theme.text.dim, false);
     }
 
     /// Clickable icon button. Returns `true` on click.
@@ -99,18 +98,18 @@ impl TreeRow<'_> {
             && self.ui.input.mouse_released;
 
         if hovered || active {
-            self.ui.round_rect(rect, self.ui.s(3.0), theme::BTN_HOVER);
+            self.ui.round_rect(rect, self.ui.s(3.0), self.ui.theme.button.hover);
         }
         let color = if !enabled {
-            theme::TEXT_DISABLED
+            self.ui.theme.text.disabled
         } else if pressed {
-            theme::TEXT_BRIGHT
+            self.ui.theme.text.bright
         } else if active {
-            theme::ACCENT
+            self.ui.theme.accent
         } else if hovered {
-            theme::TEXT
+            self.ui.theme.text.primary
         } else {
-            theme::TEXT_DIM
+            self.ui.theme.text.dim
         };
         let pad = self.ui.s(3.0);
         self.ui.draw_icon_at(
@@ -264,9 +263,9 @@ impl Ui {
         // Background first so icons/text paint on top.
         if is_selected || row_hovered {
             let bg = if is_selected {
-                theme::BROWSER_SELECTED
+                self.theme.table.selected
             } else {
-                theme::HEADER_HOVER
+                self.theme.header.hover
             };
             self.round_rect(rect, self.s(3.0), bg);
         }
@@ -300,7 +299,7 @@ impl Ui {
             } else {
                 "chevron_right"
             };
-            self.draw_icon_at(arrow, draw_rect, theme::TEXT_DIM, false);
+            self.draw_icon_at(arrow, draw_rect, self.theme.text.dim, false);
         }
 
         let mut x = rect.min.x + self.s(2.0) + arrow_slot;
@@ -309,7 +308,7 @@ impl Ui {
                 Vec2::new(x, rect.min.y + (height - icon_s) * 0.5),
                 Vec2::splat(icon_s),
             );
-            self.draw_icon_at(icon_id, icon_rect, theme::TEXT, false);
+            self.draw_icon_at(icon_id, icon_rect, self.theme.text.primary, false);
             x += icon_s + self.s(4.0);
         }
 
@@ -317,7 +316,7 @@ impl Ui {
         self.text(
             Vec2::new(x, rect.min.y + (height - th) * 0.5),
             label,
-            theme::TEXT,
+            self.theme.text.primary,
         );
         let mid_x = x + self.text_width(label) + self.s(4.0);
 

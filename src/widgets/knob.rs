@@ -4,7 +4,6 @@ use glam::Vec2;
 
 use crate::Ui;
 use crate::draw::{push_arc_cw, push_line, push_round_rect};
-use crate::theme;
 use crate::types::{CursorIcon, Rect, Response};
 
 /// Math angles: 0 = +x, CCW, y-up. Screen dir = (cos, -sin).
@@ -31,7 +30,7 @@ impl Ui {
         value: &mut f32,
         range: std::ops::RangeInclusive<f32>,
     ) -> Response {
-        self.knob_sized(id, value, range, theme::KNOB_SIZE)
+        self.knob_sized(id, value, range, self.theme.metrics.knob_size)
     }
 
     /// Rotary knob with dial size in UI points.
@@ -42,7 +41,7 @@ impl Ui {
         range: std::ops::RangeInclusive<f32>,
         size: f32,
     ) -> Response {
-        self.knob_ex(id, value, range, theme::KNOB_FILL, size)
+        self.knob_ex(id, value, range, self.theme.knob.fill, size)
     }
 
     /// Rotary knob with custom arc fill color.
@@ -53,7 +52,7 @@ impl Ui {
         range: std::ops::RangeInclusive<f32>,
         fill: [f32; 4],
     ) -> Response {
-        self.knob_ex(id, value, range, fill, theme::KNOB_SIZE)
+        self.knob_ex(id, value, range, fill, self.theme.metrics.knob_size)
     }
 
     fn knob_ex(
@@ -69,7 +68,7 @@ impl Ui {
         let (min, max) = (*range.start(), *range.end());
         let span = max - min;
 
-        let k = (size / theme::KNOB_SIZE).clamp(0.4, 2.0);
+        let k = (size / self.theme.metrics.knob_size).clamp(0.4, 2.0);
         let dial = self.s(size.max(12.0));
         let th = self.text_height();
         let gap = self.s(6.0 * k);
@@ -154,7 +153,7 @@ impl Ui {
                 KNOB_SWEEP,
                 0.0,
                 1.0,
-                theme::KNOB_TRACK,
+                self.theme.knob.track,
                 uv,
                 clip,
             );
@@ -171,7 +170,7 @@ impl Ui {
                     Vec2::splat((face_r + border_w) * 2.0),
                 ),
                 face_r + border_w,
-                theme::KNOB_BORDER,
+                self.theme.knob.border,
                 true,
                 true,
                 uv,
@@ -181,7 +180,7 @@ impl Ui {
                 list,
                 Rect::from_min_size(center - Vec2::splat(face_r), Vec2::splat(face_r * 2.0)),
                 face_r,
-                theme::KNOB_FACE,
+                self.theme.knob.face,
                 true,
                 true,
                 uv,
@@ -191,15 +190,15 @@ impl Ui {
             let d = dir_from_t(t);
             let a = center + d * (face_r * 0.22);
             let b = center + d * (face_r * 0.82);
-            push_line(list, a, b, needle_w, theme::KNOB_INDICATOR, uv, clip);
+            push_line(list, a, b, needle_w, self.theme.knob.indicator, uv, clip);
         }
 
         let label_x = rect.min.x + (w - label_w) * 0.5;
         let label_y = rect.min.y + dial + gap;
         let label_color = if enabled {
-            theme::TEXT
+            self.theme.text.primary
         } else {
-            theme::TEXT_DISABLED
+            self.theme.text.disabled
         };
         self.text(Vec2::new(label_x, label_y), id, label_color);
 

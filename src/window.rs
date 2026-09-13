@@ -1,7 +1,6 @@
 use glam::Vec2;
 
 use super::draw::push_round_rect;
-use super::theme;
 use super::types::{CursorIcon, Id, Rect};
 use super::{CrossAlign, LayoutDir, Ui, WinState, new_layer};
 
@@ -80,9 +79,9 @@ impl Ui {
     fn draw_title_btn(&mut self, rect: Rect, label: &str, hovered: bool, id: Id) {
         let pressed = self.active_id == Some(id) && self.input.mouse_down;
         let color = if pressed {
-            theme::BTN_PRESS
+            self.theme.button.press
         } else if hovered {
-            theme::BTN_HOVER
+            self.theme.button.hover
         } else {
             [0.20, 0.20, 0.20, 1.0]
         };
@@ -95,7 +94,7 @@ impl Ui {
                 rect.min.y + (rect.height() - th) * 0.5,
             ),
             label,
-            theme::TITLE_TEXT,
+            self.theme.text.title,
         );
     }
 
@@ -137,7 +136,7 @@ impl Ui {
             &mut self.modal_layer,
             dim,
             0.0,
-            theme::MODAL_DIM,
+            self.theme.window.modal_dim,
             true,
             true,
             uv,
@@ -225,7 +224,7 @@ impl Ui {
             cfg.collapsible = false;
         }
 
-        let title_h = self.s(theme::WIN_TITLE_H);
+        let title_h = self.s(self.theme.metrics.window_title_h);
 
         let mut btn_i = 0;
         let mut on_chrome = false;
@@ -330,7 +329,7 @@ impl Ui {
             }
         }
 
-        let min = Vec2::new(self.s(theme::WIN_MIN_W), self.s(theme::WIN_MIN_H));
+        let min = Vec2::new(self.s(self.theme.metrics.window_min_w), self.s(self.theme.metrics.window_min_h));
         let vis_h = if collapsed { title_h } else { size.y };
         clamp_win(
             &mut pos,
@@ -367,21 +366,21 @@ impl Ui {
 
         let title_pressed = self.active_id == Some(title_id) && self.input.mouse_down;
         let title_color = if title_pressed {
-            theme::WIN_TITLE_PRESS
+            self.theme.window.title_press
         } else if title_hover {
-            theme::WIN_TITLE_HOVER
+            self.theme.window.title_hover
         } else {
-            theme::WIN_TITLE
+            self.theme.window.title
         };
 
-        self.round_rect(rect, self.s(theme::WIN_RADIUS), theme::WIN_BORDER);
+        self.round_rect(rect, self.s(self.theme.metrics.window_radius), self.theme.window.border);
         self.round_rect(
             rect.inset(1.0),
-            self.s(theme::WIN_RADIUS) - 1.0,
-            theme::WIN_BODY,
+            self.s(self.theme.metrics.window_radius) - 1.0,
+            self.theme.window.body,
         );
         let uv = self.font.white_uv();
-        let title_r = self.s(theme::WIN_RADIUS) - 1.0;
+        let title_r = self.s(self.theme.metrics.window_radius) - 1.0;
         push_round_rect(
             &mut self.draw_list,
             Rect {
@@ -399,7 +398,7 @@ impl Ui {
         self.text(
             pos + Vec2::new(self.s(10.0), (title_h - th) * 0.5),
             cfg.title,
-            theme::TITLE_TEXT,
+            self.theme.text.title,
         );
 
         let mut btn_i = 0;

@@ -1,6 +1,5 @@
 use glam::Vec2;
 
-use crate::theme;
 use crate::types::{CursorIcon, Rect, Response};
 use crate::{CrossAlign, LayoutDir, Ui, new_layer};
 
@@ -30,11 +29,11 @@ impl Ui {
             }
         }
         let total_w = widths.iter().sum::<f32>();
-        let row_h = self.s(theme::TABLE_ROW_H);
+        let row_h = self.s(self.theme.metrics.table_row_h);
         let pad = self.s(6.0);
 
         let header = self.allocate(Vec2::new(total_w, row_h));
-        self.round_rect(header, 0.0, theme::TABLE_HEADER);
+        self.round_rect(header, 0.0, self.theme.table.header);
         {
             let mut x = header.min.x;
             let th = self.text_height();
@@ -43,7 +42,7 @@ impl Ui {
                 self.text(
                     Vec2::new(x + pad, header.min.y + (row_h - th) * 0.5),
                     col.name,
-                    theme::TITLE_TEXT,
+                    self.theme.text.title,
                 );
                 x += w;
             }
@@ -74,7 +73,7 @@ impl Ui {
         let widths = ctx.widths.clone();
         let row_i = ctx.row_i;
         let total_w = widths.iter().sum::<f32>();
-        let row_h = self.s(theme::TABLE_ROW_H);
+        let row_h = self.s(self.theme.metrics.table_row_h);
         let row = self.allocate(Vec2::new(total_w.max(1.0), row_h));
         let id = self.current_id(&format!("#row{row_i}"));
 
@@ -90,13 +89,13 @@ impl Ui {
         let clicked = self.active_id == Some(id) && hovered && self.input.mouse_released;
 
         let bg = if selected {
-            theme::BROWSER_SELECTED
+            self.theme.table.selected
         } else if hovered {
-            theme::TABLE_ROW_HOVER
+            self.theme.table.row_hover
         } else if row_i % 2 == 0 {
-            theme::TABLE_ROW
+            self.theme.table.row
         } else {
-            theme::TABLE_ROW_ALT
+            self.theme.table.row_alt
         };
         self.round_rect(row, 0.0, bg);
 

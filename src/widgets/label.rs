@@ -1,7 +1,7 @@
 use glam::Vec2;
 
 use crate::Ui;
-use crate::theme;
+use crate::theme::Theme;
 
 #[derive(Clone, Copy)]
 pub struct TextStyle {
@@ -9,12 +9,18 @@ pub struct TextStyle {
     pub size: f32,
 }
 
+impl TextStyle {
+    pub fn from_theme(theme: &Theme) -> Self {
+        Self {
+            color: theme.text.primary,
+            size: theme.metrics.font_size,
+        }
+    }
+}
+
 impl Default for TextStyle {
     fn default() -> Self {
-        Self {
-            color: theme::TEXT,
-            size: theme::FONT_SIZE,
-        }
+        Self::from_theme(&Theme::default())
     }
 }
 
@@ -22,11 +28,11 @@ impl Ui {
     pub fn label(&mut self, text: &str) {
         let style = TextStyle {
             color: if self.enabled() {
-                theme::TEXT
+                self.theme.text.primary
             } else {
-                theme::TEXT_DISABLED
+                self.theme.text.disabled
             },
-            size: theme::FONT_SIZE,
+            size: self.theme.metrics.font_size,
         };
         self.label_styled(text, style);
     }
@@ -50,11 +56,11 @@ impl Ui {
     /// Left-aligned label in a **fixed** width (UI points). Short/long names share a column.
     pub fn label_fixed(&mut self, width: f32, text: &str) {
         let color = if self.enabled() {
-            theme::TEXT
+            self.theme.text.primary
         } else {
-            theme::TEXT_DISABLED
+            self.theme.text.disabled
         };
-        let px = self.s(theme::FONT_SIZE);
+        let px = self.s(self.theme.metrics.font_size);
         let th = self.text_height_at(px);
         let (h, y_off) = if matches!(self.layer().dir, crate::LayoutDir::Vertical) {
             (th + self.s(4.0), self.s(2.0))

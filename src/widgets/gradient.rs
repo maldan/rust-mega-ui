@@ -2,7 +2,6 @@
 
 use glam::Vec2;
 
-use crate::theme;
 use crate::types::{CursorIcon, Rect};
 use crate::{LayoutDir, Ui};
 
@@ -266,7 +265,7 @@ impl Ui {
         };
 
         // Bar: checker + rgba segments
-        self.round_rect(bar.inset(-1.0), self.s(2.0), theme::BTN_BORDER);
+        self.round_rect(bar.inset(-1.0), self.s(2.0), self.theme.button.border);
         draw_checker(self, bar);
         self.push_clip(bar);
         let knots = knot_ts(colors, opacities);
@@ -600,11 +599,11 @@ fn draw_house_marker(
     let mh = ui.s(MARKER_H);
     let tip_h = ui.s(TIP_H);
     let border = if selected {
-        theme::ACCENT
+        ui.theme.accent
     } else if hot {
-        theme::SLIDER_THUMB_HOT
+        ui.theme.slider.thumb_hot
     } else {
-        theme::BTN_BORDER
+        ui.theme.button.border
     };
 
     let (body, tip_apex, tip_base_y) = if tip_up {
@@ -639,7 +638,7 @@ fn draw_house_marker(
                 max: Vec2::new(ring.max.x, ring.min.y + ui.s(2.0)),
             },
             0.0,
-            theme::ACCENT,
+            ui.theme.accent,
         );
     }
 }

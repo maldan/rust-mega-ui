@@ -1,6 +1,5 @@
 use glam::Vec2;
 
-use crate::theme;
 use crate::types::Rect;
 use crate::{CrossAlign, LayoutDir, Ui, new_layer};
 
@@ -16,7 +15,7 @@ impl Ui {
     pub fn group(&mut self, id: &str, title: &str, add: impl FnOnce(&mut Self)) {
         let widget_id = self.current_id(id);
         let pad = self.s(10.0);
-        let radius = self.s(theme::GROUP_RADIUS);
+        let radius = self.s(self.theme.metrics.group_radius);
         let border = self.s(1.0).max(1.0);
         let th = self.text_height();
         let has_title = !title.is_empty();
@@ -60,11 +59,11 @@ impl Ui {
         };
 
         // Subtle fill + border (outer stroke via inset).
-        self.round_rect(frame, radius, theme::GROUP_BORDER);
+        self.round_rect(frame, radius, self.theme.group.border);
         self.round_rect(
             frame.inset(border),
             (radius - border).max(0.0),
-            theme::GROUP_BG,
+            self.theme.group.bg,
         );
 
         if has_title {
@@ -76,11 +75,11 @@ impl Ui {
                 Vec2::new(label_w, th),
             );
             // Cut the border under the title (match window so it doesn't float).
-            self.round_rect(label_rect, 0.0, theme::WIN_BODY);
+            self.round_rect(label_rect, 0.0, self.theme.window.body);
             self.text(
                 Vec2::new(label_x + title_pad_x, label_rect.min.y),
                 title,
-                theme::TITLE_TEXT,
+                self.theme.text.title,
             );
         }
 

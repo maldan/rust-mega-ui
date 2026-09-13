@@ -4,7 +4,6 @@ use glam::Vec2;
 
 use crate::draw::push_polyline;
 use crate::layout::new_layer;
-use crate::theme;
 use crate::types::{CursorIcon, Rect};
 use crate::{CrossAlign, LayoutDir, Ui};
 
@@ -444,7 +443,7 @@ impl Ui {
 
     fn draw_node_frames(&mut self, space: &mut NodeSpace) {
         let z = space.zoom;
-        let radius = self.s(theme::WIN_RADIUS);
+        let radius = self.s(self.theme.metrics.window_radius);
         let frames: Vec<(String, String, Rect, bool)> = space
             .frames
             .iter()
@@ -468,14 +467,14 @@ impl Ui {
             };
             space.frame_screen_rects.insert(id, hit);
             let fill = if selected {
-                theme::NODE_FRAME_SEL
+                self.theme.node.frame_sel
             } else {
-                theme::NODE_FRAME
+                self.theme.node.frame
             };
             let border = if selected {
-                theme::NODE_FRAME_BORDER_SEL
+                self.theme.node.frame_border_sel
             } else {
-                theme::NODE_FRAME_BORDER
+                self.theme.node.frame_border
             };
             self.round_rect(rect, radius, fill);
             let t = 1.0;
@@ -507,7 +506,7 @@ impl Ui {
                 self.text_sized(
                     Vec2::new(rect.min.x, rect.min.y - lh - gap),
                     &label,
-                    theme::TITLE_TEXT,
+                    self.theme.text.title,
                     px,
                 );
             }
@@ -588,7 +587,7 @@ impl Ui {
         }
 
         let z = space.zoom;
-        let title_h = theme::WIN_TITLE_H;
+        let title_h = self.theme.metrics.window_title_h;
         let min_w = NODE_MIN_W;
         let last = space
             .node_sizes
@@ -636,13 +635,13 @@ impl Ui {
         let bypassed = space.bypassed_nodes.contains(id);
         let running = space.running_nodes.contains(id);
         let border = if bypassed {
-            theme::NODE_BYPASS
+            self.theme.node.bypass
         } else if running {
-            theme::NODE_RUNNING
+            self.theme.node.running
         } else if selected {
-            theme::ACCENT
+            self.theme.accent
         } else {
-            theme::WIN_BORDER
+            self.theme.window.border
         };
 
         // Widgets layout in screen pixels; scale must track zoom (not a lower cap).
@@ -653,7 +652,7 @@ impl Ui {
         let old_spacing = self.spacing;
         self.scale = node_content_scale(old_scale, z);
         self.spacing = self.base_spacing * self.scale;
-        let radius = self.s(theme::WIN_RADIUS);
+        let radius = self.s(self.theme.metrics.window_radius);
 
         // Refresh geometry after drag write
         screen_pos = space.world_to_screen(*pos);
@@ -661,25 +660,25 @@ impl Ui {
 
         self.round_rect(rect, radius, border);
         let body = if bypassed {
-            theme::WIN_BODY_BYPASS
+            self.theme.window.body_bypass
         } else {
-            theme::WIN_BODY
+            self.theme.window.body
         };
         self.round_rect(rect.inset(1.0), (radius - 1.0).max(0.0), body);
         space.node_screen_rects.insert(id.to_string(), rect);
 
         let title_color = if bypassed {
             if title_hover || dragging {
-                theme::WIN_TITLE_BYPASS_HOVER
+                self.theme.window.title_bypass_hover
             } else {
-                theme::WIN_TITLE_BYPASS
+                self.theme.window.title_bypass
             }
         } else if self.active_id == Some(title_id) || dragging {
-            theme::WIN_TITLE_PRESS
+            self.theme.window.title_press
         } else if title_hover {
-            theme::WIN_TITLE_HOVER
+            self.theme.window.title_hover
         } else {
-            theme::WIN_TITLE
+            self.theme.window.title
         };
         let title_draw = Rect {
             min: rect.min + Vec2::new(1.0, 1.0),
@@ -697,9 +696,9 @@ impl Ui {
             rect.min + Vec2::new(self.s(10.0), (title_h * z - th) * 0.5),
             title,
             if bypassed {
-                theme::TEXT_DISABLED
+                self.theme.text.disabled
             } else {
-                theme::TITLE_TEXT
+                self.theme.text.title
             },
         );
 
@@ -740,7 +739,7 @@ impl Ui {
             let tw = self.text_width_at(text, cap_px);
             let x = rect.min.x + ((rect.width() - tw) * 0.5).max(0.0);
             let y = rect.max.y + 3.0 * z;
-            self.text_sized(Vec2::new(x, y), text, theme::TEXT_DISABLED, cap_px);
+            self.text_sized(Vec2::new(x, y), text, self.theme.text.disabled, cap_px);
         }
 
         let body_h = used.y + pad * 1.2;
@@ -822,7 +821,7 @@ impl Ui {
         self.text(
             Vec2::new(text_x, row.min.y + (row_h - self.text_height()) * 0.5),
             label,
-            theme::TEXT,
+            self.theme.text.primary,
         );
 
         space
@@ -851,7 +850,7 @@ impl Ui {
         self.round_rect(
             pin_rect.inset(ring),
             (pin_d * 0.5 - ring).max(0.4),
-            theme::WIN_BODY,
+            self.theme.window.body,
         );
         self.round_rect(pin_rect.inset(core), (pin_d * 0.5 - core).max(0.4), color);
         if hovered {

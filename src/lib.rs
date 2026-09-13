@@ -5,7 +5,7 @@ mod icon;
 mod layout;
 mod node_graph;
 mod plot_view;
-pub(crate) mod theme;
+pub mod theme;
 mod types;
 mod widgets;
 mod window;
@@ -13,6 +13,7 @@ mod window;
 #[cfg(feature = "wgpu")]
 pub mod wgpu;
 
+pub use theme::Theme;
 pub use dock::{DockNode, DockState};
 pub use layout::{CrossAlign, LayoutOpts, MainAlign};
 pub use node_graph::{NodeFrame, NodeLink, NodePortSide, NodeSpace, PortType, port_type};
@@ -148,6 +149,7 @@ pub struct Ui {
     pub(crate) spacing: f32,
     pub(crate) base_spacing: f32,
     pub(crate) scale: f32,
+    pub(crate) theme: Theme,
     pub(crate) enabled_stack: Vec<bool>,
     pub(crate) font: Font,
     pub(crate) icons: Icons,
@@ -242,8 +244,9 @@ impl Ui {
             spacing: 6.0,
             base_spacing: 6.0,
             scale: 1.0,
+            theme: Theme::default(),
             enabled_stack: Vec::new(),
-            font: Font::load_default(theme::FONT_SIZE),
+            font: Font::load_default(Theme::default().metrics.font_size),
             icons: Icons::default(),
             scroll_wheel_target: None,
             scroll_hover: None,
@@ -278,8 +281,8 @@ impl Ui {
     /// window geometry (window pos/size are stored in UI points).
     pub fn set_scale(&mut self, scale: f32) {
         let scale = scale.clamp(0.5, 3.0);
-        let old_key = font_px_key(theme::FONT_SIZE * self.scale);
-        let new_key = font_px_key(theme::FONT_SIZE * scale);
+        let old_key = font_px_key(self.theme.metrics.font_size * self.scale);
+        let new_key = font_px_key(self.theme.metrics.font_size * scale);
         self.scale = scale;
         self.spacing = self.base_spacing * self.scale;
         // New font pixel size → drop old glyphs/icons so the atlas doesn't fill up
@@ -287,6 +290,26 @@ impl Ui {
         if old_key != new_key {
             self.reset_font_atlas();
         }
+    }
+
+    pub fn theme(&self) -> &Theme {
+        &self.theme
+    }
+
+    /// Mutate colors in place. If you change [`theme::Metrics::font_size`], call
+    /// [`Ui::set_theme`] instead so the font atlas is rebuilt.
+    pub fn theme_mut(&mut self) -> &mut Theme {
+        &mut self.theme
+    }
+
+    pub fn set_theme(&mut self, theme: Theme) {
+        let old_key = font_px_key(self.theme.metrics.font_size * self.scale);
+        let new_key = font_px_key(theme.metrics.font_size * self.scale);
+        self.theme = theme;
+        if old_key != new_key {
+            self.reset_font_atlas();
+        }
+        self.needs_repaint = true;
     }
 
     fn reset_font_atlas(&mut self) {
@@ -305,7 +328,7 @@ impl Ui {
     }
 
     pub(crate) fn font_size(&self) -> f32 {
-        theme::FONT_SIZE * self.scale
+        self.theme.metrics.font_size * self.scale
     }
 
     pub fn enabled(&self) -> bool {
@@ -470,11 +493,11 @@ impl Ui {
     }
 
     pub fn text_at(&mut self, pos: Vec2, text: &str) {
-        self.text(pos, text, theme::TEXT);
+        self.text(pos, text, self.theme.text.primary);
     }
 
     pub fn text_at_size(&mut self, pos: Vec2, text: &str, size: f32) {
-        self.text_sized(pos, text, theme::TEXT, size);
+        self.text_sized(pos, text, self.theme.text.primary, size);
     }
 
     pub fn set_mouse_cursor(&mut self, icon: CursorIcon) {
@@ -573,8 +596,8 @@ impl Ui {
         self.tick_toasts();
 
         let vp = self.input.viewport;
-        let title_h = self.s(theme::WIN_TITLE_H);
-        let min = Vec2::new(self.s(theme::WIN_MIN_W), self.s(theme::WIN_MIN_H));
+        let title_h = self.s(self.theme.metrics.window_title_h);
+        let min = Vec2::new(self.s(self.theme.metrics.window_min_w), self.s(self.theme.metrics.window_min_h));
         let sc = self.scale.max(0.5);
         for w in self.windows.values_mut() {
             let mut pos = w.pos * sc;

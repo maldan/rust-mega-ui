@@ -1,6 +1,5 @@
 use glam::Vec2;
 
-use crate::theme;
 use crate::types::{CursorIcon, Rect, Response};
 use crate::widgets::edit::{
     EditState, byte_at_x, clamp_edit, draw_sel_line, handle_clipboard, handle_typing, has_sel,
@@ -140,8 +139,8 @@ impl Ui {
         let rect = self.allocate(Vec2::new(width, height));
 
         let pad = self.s(8.0);
-        let bar_w = self.s(theme::SCROLL_BAR);
-        let gap = self.s(theme::SCROLL_GAP);
+        let bar_w = self.s(self.theme.metrics.scroll_bar);
+        let gap = self.s(self.theme.metrics.scroll_gap);
         let line_h = self.text_height().max(1.0);
         let shift = self.input.key_shift;
         let mut changed = false;
@@ -364,22 +363,22 @@ impl Ui {
         self.edits.insert(widget_id, st);
 
         let border = if focused {
-            theme::INPUT_BORDER_FOCUS
+            self.theme.input.border_focus
         } else {
-            theme::INPUT_BORDER
+            self.theme.input.border
         };
         let bg = if enabled {
-            theme::INPUT_BG
+            self.theme.input.bg
         } else {
-            theme::INPUT_BG_DISABLED
+            self.theme.input.bg_disabled
         };
-        self.round_rect(rect, self.s(theme::BTN_RADIUS), border);
-        self.round_rect(rect.inset(1.0), self.s(theme::BTN_RADIUS) - 1.0, bg);
+        self.round_rect(rect, self.s(self.theme.metrics.button_radius), border);
+        self.round_rect(rect.inset(1.0), self.s(self.theme.metrics.button_radius) - 1.0, bg);
 
         let text_color = if enabled {
-            theme::TEXT
+            self.theme.text.primary
         } else {
-            theme::TEXT_DISABLED
+            self.theme.text.disabled
         };
         let (sel_a, sel_b) = sel_range(st);
 
@@ -426,7 +425,7 @@ impl Ui {
             self.round_rect(
                 Rect::from_min_size(Vec2::new(caret_x, y), Vec2::new(1.0, line_h)),
                 0.0,
-                theme::TEXT,
+                self.theme.text.primary,
             );
         }
         self.pop_clip();

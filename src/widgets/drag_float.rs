@@ -1,6 +1,5 @@
 use glam::Vec2;
 
-use crate::theme;
 use crate::types::{CursorIcon, Rect, Response};
 use crate::widgets::edit::{
     EditState, byte_at_x, clamp_edit, draw_sel_line, handle_clipboard, has_sel, insert_str,
@@ -303,16 +302,16 @@ impl Ui {
         self.edits.insert(widget_id, st);
 
         let border = if focused {
-            theme::INPUT_BORDER_FOCUS
+            self.theme.input.border_focus
         } else {
-            theme::INPUT_BORDER
+            self.theme.input.border
         };
         let bg = if enabled {
-            theme::INPUT_BG
+            self.theme.input.bg
         } else {
-            theme::INPUT_BG_DISABLED
+            self.theme.input.bg_disabled
         };
-        let r = self.s(theme::BTN_RADIUS);
+        let r = self.s(self.theme.metrics.button_radius);
         self.round_rect(rect, r, border);
         self.round_rect(rect.inset(1.0), (r - 1.0).max(0.0), bg);
 
@@ -329,11 +328,11 @@ impl Ui {
             }
             None => {
                 if dragging {
-                    theme::SLIDER_THUMB_HOT
+                    self.theme.slider.thumb_hot
                 } else if grip_hov {
-                    theme::SLIDER_THUMB
+                    self.theme.slider.thumb
                 } else {
-                    theme::SLIDER_FILL
+                    self.theme.slider.fill
                 }
             }
         };
@@ -371,9 +370,9 @@ impl Ui {
         let draw = &text[view_start..end];
         let text_pos = Vec2::new(text_rect.min.x + pad, rect.min.y + (height - th) * 0.5);
         let text_color = if enabled {
-            theme::TEXT
+            self.theme.text.primary
         } else {
-            theme::TEXT_DISABLED
+            self.theme.text.disabled
         };
 
         if focused && has_sel(st) {
@@ -397,7 +396,7 @@ impl Ui {
                     Vec2::new(1.0, height - self.s(12.0)),
                 ),
                 0.0,
-                theme::TEXT,
+                self.theme.text.primary,
             );
         }
 

@@ -2,7 +2,6 @@
 
 use glam::Vec2;
 
-use crate::theme;
 use crate::types::{CursorIcon, Rect};
 use crate::{LayoutDir, Ui};
 
@@ -131,9 +130,9 @@ impl Ui {
 
                 if is_sel || hovered {
                     let bg = if is_sel {
-                        theme::BROWSER_SELECTED
+                        self.theme.table.selected
                     } else {
-                        theme::TABLE_ROW_HOVER
+                        self.theme.table.row_hover
                     };
                     self.round_rect(cell, self.s(4.0), bg);
                 }
@@ -143,9 +142,9 @@ impl Ui {
                     Vec2::splat(icon_s),
                 );
                 let icon_col = if item.is_folder {
-                    theme::DOCK_TAB_TEXT_ACTIVE
+                    self.theme.dock.tab_text_active
                 } else {
-                    theme::TEXT
+                    self.theme.text.primary
                 };
                 self.draw_icon_at(item.icon, icon_rect, icon_col, false);
 
@@ -153,9 +152,9 @@ impl Ui {
                 let label = fit_label(self, item.label, label_max_w);
                 let tw = self.text_width(&label);
                 let text_col = if is_sel {
-                    theme::DOCK_TAB_TEXT_ACTIVE
+                    self.theme.dock.tab_text_active
                 } else {
-                    theme::TEXT
+                    self.theme.text.primary
                 };
                 let label_y = icon_rect.max.y + self.s(4.0);
                 self.text(

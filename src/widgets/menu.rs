@@ -1,7 +1,6 @@
 use glam::Vec2;
 
 use crate::Ui;
-use crate::theme;
 use crate::types::{CursorIcon, Id, Rect, Response};
 
 pub(crate) struct MenuBarCtx {
@@ -29,7 +28,7 @@ impl Ui {
     /// Application-style menu bar (File / Edit / …). Fill width of the current layout
     /// (or the viewport when unconstrained).
     pub fn menu_bar(&mut self, add: impl FnOnce(&mut Self)) {
-        let bar_h = self.s(theme::MENU_BAR_H);
+        let bar_h = self.s(self.theme.metrics.menu_bar_h);
         let pad = self.s(6.0);
         let fill_w = self.layer().fill_w;
         let width = if fill_w > 0.0 {
@@ -42,12 +41,12 @@ impl Ui {
         let id = self.current_id("#menubar");
         self.push_id("#menubar");
 
-        self.round_rect(bar, 0.0, theme::MENU_BAR_BG);
+        self.round_rect(bar, 0.0, self.theme.menu.bar_bg);
         let line = Rect {
             min: Vec2::new(bar.min.x, bar.max.y - 1.0),
             max: bar.max,
         };
-        self.round_rect(line, 0.0, theme::WIN_BORDER);
+        self.round_rect(line, 0.0, self.theme.window.border);
 
         let mut open = self.menu_bar_open.get(&id).copied().flatten();
         let bar_hovered = self.hovered_overlay(bar) || self.hovered_rect(bar);
@@ -158,7 +157,7 @@ impl Ui {
         let Some(ctx) = self.menu_stack.last() else {
             return;
         };
-        let item_h = self.s(theme::MENU_ITEM_H);
+        let item_h = self.s(self.theme.metrics.menu_item_h);
         let pad = self.s(10.0);
         let width = ctx.width;
         let y = ctx.cursor_y;
@@ -179,7 +178,7 @@ impl Ui {
         self.text_overlay(
             Vec2::new(rect.min.x + pad, rect.min.y + (item_h - text_h) * 0.5),
             label,
-            theme::TEXT_DIM,
+            self.theme.text.dim,
         );
     }
 
@@ -258,16 +257,16 @@ impl Ui {
                 btn.inset(self.s(2.0)),
                 self.s(3.0),
                 if open {
-                    theme::MENU_ACTIVE
+                    self.theme.menu.active
                 } else {
-                    theme::MENU_HOVER
+                    self.theme.menu.hover
                 },
             );
         }
         self.text(
             Vec2::new(btn.min.x + pad_x, btn.min.y + (btn.height() - text_h) * 0.5),
             label,
-            theme::TEXT,
+            self.theme.text.primary,
         );
 
         if open {
@@ -284,7 +283,7 @@ impl Ui {
         // Minimal fallback: a button that opens a popup below itself.
         let widget_id = self.current_id(id);
         let pad_x = self.s(10.0);
-        let height = self.s(theme::MENU_BAR_H);
+        let height = self.s(self.theme.metrics.menu_bar_h);
         let width = self.text_width(label) + pad_x * 2.0;
         let btn = self.allocate(Vec2::new(width, height));
         let hovered = self.hovered_rect(btn);
@@ -296,7 +295,7 @@ impl Ui {
         if hovered {
             self.want_capture = true;
             self.set_cursor(CursorIcon::Pointer);
-            self.round_rect(btn.inset(1.0), self.s(3.0), theme::MENU_HOVER);
+            self.round_rect(btn.inset(1.0), self.s(3.0), self.theme.menu.hover);
         }
         self.text(
             Vec2::new(
@@ -304,7 +303,7 @@ impl Ui {
                 btn.min.y + (btn.height() - self.text_height()) * 0.5,
             ),
             label,
-            theme::TEXT,
+            self.theme.text.primary,
         );
 
         if open {
@@ -348,7 +347,7 @@ impl Ui {
             .menu_popup_size
             .get(&item_id)
             .map(|s| s.x)
-            .unwrap_or(self.s(theme::MENU_MIN_W));
+            .unwrap_or(self.s(self.theme.metrics.menu_min_w));
         let mut origin = Vec2::new(parent_popup.max.x - self.s(4.0), item.rect.min.y);
         if origin.x + est_w > self.input.viewport.x - self.s(4.0) {
             origin.x = (parent_popup.min.x - est_w + self.s(4.0)).max(0.0);
@@ -358,11 +357,11 @@ impl Ui {
     }
 
     fn open_menu_popup(&mut self, id: Id, origin: Vec2, add: impl FnOnce(&mut Self)) {
-        let min_w = self.s(theme::MENU_MIN_W);
+        let min_w = self.s(self.theme.metrics.menu_min_w);
         let pad = self.s(4.0);
         let prev = self.menu_popup_size.get(&id).copied().unwrap_or(Vec2::new(
             min_w,
-            self.s(theme::MENU_ITEM_H) * 12.0 + pad * 2.0,
+            self.s(self.theme.metrics.menu_item_h) * 12.0 + pad * 2.0,
         ));
 
         let mut popup = Rect::from_min_size(origin, prev);
@@ -377,9 +376,9 @@ impl Ui {
             popup.max.x = popup.min.x + prev.x;
         }
 
-        let radius = self.s(theme::BTN_RADIUS);
-        self.round_rect_overlay(popup, radius, theme::BTN_BORDER);
-        self.round_rect_overlay(popup.inset(1.0), (radius - 1.0).max(0.0), theme::POPUP_BG);
+        let radius = self.s(self.theme.metrics.button_radius);
+        self.round_rect_overlay(popup, radius, self.theme.button.border);
+        self.round_rect_overlay(popup.inset(1.0), (radius - 1.0).max(0.0), self.theme.popup.bg);
 
         let pointer_inside = self.hovered_overlay(popup);
         if pointer_inside {
@@ -404,7 +403,7 @@ impl Ui {
         add(self);
 
         let ctx = self.menu_stack.pop().unwrap();
-        let content_h = (ctx.cursor_y - popup.min.y + pad).max(self.s(theme::MENU_ITEM_H));
+        let content_h = (ctx.cursor_y - popup.min.y + pad).max(self.s(self.theme.metrics.menu_item_h));
         let chevron_room = self.s(18.0);
         let content_w = (ctx.max_label_w + self.s(20.0) + chevron_room + pad * 2.0).max(min_w);
         self.menu_popup_size
@@ -436,7 +435,7 @@ impl Ui {
     ) -> Option<MenuRow> {
         let ctx = self.menu_stack.last()?;
         let id = self.current_id(id);
-        let item_h = self.s(theme::MENU_ITEM_H);
+        let item_h = self.s(self.theme.metrics.menu_item_h);
         let pad = self.s(10.0);
         let icon_s = self.s(14.0);
         let icon_gap = if icon.is_some() {
@@ -465,7 +464,7 @@ impl Ui {
         if hovered {
             self.want_capture = true;
             self.set_cursor(CursorIcon::Pointer);
-            self.round_rect_overlay(rect, self.s(3.0), theme::POPUP_HOVER);
+            self.round_rect_overlay(rect, self.s(3.0), self.theme.popup.hover);
             if let Some(b) = self.menu_bar_stack.last_mut() {
                 b.pointer_in_menu = true;
             }
@@ -480,9 +479,9 @@ impl Ui {
 
         let text_h = self.text_height();
         let color = if enabled {
-            theme::TEXT
+            self.theme.text.primary
         } else {
-            theme::TEXT_DISABLED
+            self.theme.text.disabled
         };
 
         let mut text_x = rect.min.x + pad;
@@ -510,7 +509,7 @@ impl Ui {
                 ),
                 Vec2::splat(arrow_s),
             );
-            self.draw_icon_at("chevron_right", arrow_rect, theme::TEXT_DIM, true);
+            self.draw_icon_at("chevron_right", arrow_rect, self.theme.text.dim, true);
         }
 
         Some(MenuRow { id, rect, hovered })
@@ -520,7 +519,7 @@ impl Ui {
         let Some(ctx) = self.menu_stack.last() else {
             return;
         };
-        let sep_h = self.s(theme::MENU_SEP_H);
+        let sep_h = self.s(self.theme.metrics.menu_sep_h);
         let y = ctx.cursor_y;
         let x0 = ctx.origin.x + self.s(8.0);
         let x1 = ctx.origin.x + ctx.width - self.s(8.0);
@@ -531,7 +530,7 @@ impl Ui {
         if let Some(ctx) = self.menu_stack.last_mut() {
             ctx.cursor_y += sep_h;
         }
-        self.round_rect_overlay(line, 0.0, theme::MENU_SEP);
+        self.round_rect_overlay(line, 0.0, self.theme.menu.sep);
     }
 
     fn close_all_menus(&mut self) {

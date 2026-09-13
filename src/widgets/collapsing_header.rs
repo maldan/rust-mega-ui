@@ -1,6 +1,5 @@
 use glam::Vec2;
 
-use crate::theme;
 use crate::types::{CursorIcon, Rect};
 use crate::{CrossAlign, LayoutDir, Ui};
 
@@ -21,7 +20,7 @@ impl Ui {
         let mut open = self.headers.get(&id).copied().unwrap_or(default_open);
 
         let height = self.s(26.0);
-        let radius = self.s(theme::BTN_RADIUS);
+        let radius = self.s(self.theme.metrics.button_radius);
         let indent = self.s(8.0);
         let fill_w = self.layer().fill_w;
         let width = if fill_w > 0.0 && matches!(self.layer().dir, LayoutDir::Vertical) {
@@ -49,13 +48,13 @@ impl Ui {
         self.headers.insert(id, open);
 
         let color = if pressed {
-            theme::HEADER_PRESS
+            self.theme.header.press
         } else if hovered {
-            theme::HEADER_HOVER
+            self.theme.header.hover
         } else {
-            theme::HEADER
+            self.theme.header.bg
         };
-        self.round_rect(rect, radius, theme::BTN_BORDER);
+        self.round_rect(rect, radius, self.theme.button.border);
         self.round_rect(rect.inset(1.0), (radius - 1.0).max(0.0), color);
 
         let arrow_s = self.s(12.0);
@@ -68,13 +67,13 @@ impl Ui {
         } else {
             "chevron_right"
         };
-        self.draw_icon_at(arrow, arrow_rect, theme::TEXT_DIM, false);
+        self.draw_icon_at(arrow, arrow_rect, self.theme.text.dim, false);
 
         let th = self.text_height();
         self.text(
             Vec2::new(rect.min.x + self.s(24.0), rect.min.y + (height - th) * 0.5),
             label,
-            theme::TEXT,
+            self.theme.text.primary,
         );
 
         if open {

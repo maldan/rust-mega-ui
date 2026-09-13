@@ -7,7 +7,7 @@
 #[path = "framework.rs"]
 mod framework;
 
-use framework::{DrawStats, Host, Scene};
+use framework::{DrawStats, Host, Scene, apply_theme, theme_menu, theme_toggle};
 use glam::{Vec2, Vec3};
 use mega_ui::{
     BrowserItem, DockNode, DockState, GradientStop, OpacityStop, ScrollAxes, TableColumn,
@@ -17,6 +17,7 @@ use mega_ui::{
 struct DockDemo {
     dock: DockState,
     scale: f32,
+    dark: bool,
     name: String,
     fov: f32,
     exposure: f32,
@@ -71,6 +72,7 @@ impl Default for DockDemo {
         Self {
             dock,
             scale: 1.0,
+            dark: false,
             name: String::from("Main Camera"),
             fov: 60.0,
             exposure: 1.0,
@@ -152,6 +154,7 @@ impl Scene for DockDemo {
         }
 
         ui.set_scale(state.scale);
+        apply_theme(ui, state.dark);
 
         ui.menu_bar(|ui| {
             ui.menu("file", "File", |ui| {
@@ -240,6 +243,7 @@ impl Scene for DockDemo {
                         .push_str(&format!("shadows = {}\n", state.shadows));
                 }
             });
+            theme_menu(ui, &mut state.dark);
             ui.menu("help", "Help", |ui| {
                 if ui.menu_item_icon("about", "info", "About").clicked() {
                     ui.notify("mega-ui dock demo");
@@ -261,6 +265,7 @@ impl Scene for DockDemo {
                 .collapsible(true),
             |ui| {
                 ui.label(&format!("scale = {:.2}", state.scale));
+                theme_toggle(ui, &mut state.dark);
                 ui.label(&format!("menu: {}", state.last_menu));
                 if ui.slider("Scale", &mut state.scale, 0.75..=2.0).changed() {
                     state
@@ -926,7 +931,10 @@ impl Scene for DockDemo {
 
         let fps = (1.0 / dt.max(1e-4)).min(999.0);
         ui.status_bar(|ui| {
-            ui.label(&format!("{}", state.last_menu));
+            ui.label(&format!(
+                "theme {}",
+                if state.dark { "Dark" } else { "Default" }
+            ));
             ui.label("·");
             ui.label("RMB in Viewport");
             ui.label("·");
