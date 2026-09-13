@@ -67,11 +67,8 @@ impl Ui {
         }
 
         // Wheel is applied after content so children (knob, …) can consume it first.
-        let max_scroll = Vec2::new(
-            (st.content.x - view.width()).max(0.0),
-            (st.content.y - view.height()).max(0.0),
-        );
-        st.target = st.target.clamp(Vec2::ZERO, max_scroll);
+        // Do not clamp to last-frame content: zoom/layout may grow the region this frame.
+        st.target = st.target.max(Vec2::ZERO);
         if dragging {
             st.offset = st.target;
         } else {
@@ -84,7 +81,7 @@ impl Ui {
                 st.offset = st.target;
             }
         }
-        st.offset = st.offset.clamp(Vec2::ZERO, max_scroll);
+        st.offset = st.offset.max(Vec2::ZERO);
 
         self.push_id(id);
         self.push_clip(view);

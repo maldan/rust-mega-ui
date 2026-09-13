@@ -272,4 +272,11 @@ pub struct Pointer {
     pub right_down: bool,
     pub right_pressed: bool,
     pub scroll: Vec2,
+    pub ctrl: bool,
+    pub delete: bool,
+    pub duplicate: bool,
+    pub copy: bool,
+    pub cut: bool,
+    pub paste: bool,
+    pub select_all: bool,
 }

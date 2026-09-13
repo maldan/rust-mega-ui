@@ -151,6 +151,10 @@ impl Ui {
                 "visibility_off",
                 include_bytes!("../icons/visibility_off.svg").as_slice(),
             ),
+            (
+                "music/piano",
+                include_bytes!("../icons/music/piano.svg").as_slice(),
+            ),
         ]);
     }
 

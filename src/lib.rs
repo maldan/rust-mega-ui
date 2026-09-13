@@ -423,7 +423,20 @@ impl Ui {
             right_down: self.input.mouse_right_down,
             right_pressed: self.input.mouse_right_pressed,
             scroll: self.input.scroll_delta,
+            ctrl: self.input.key_ctrl,
+            delete: self.input.key_delete,
+            duplicate: self.input.key_duplicate,
+            copy: self.input.key_copy,
+            cut: self.input.key_cut,
+            paste: self.input.key_paste,
+            select_all: self.input.key_select_all,
         }
+    }
+
+    /// Swallow Delete/Backspace so node-space does not also delete the selected node.
+    pub fn consume_delete(&mut self) {
+        self.input.key_delete = false;
+        self.input.key_backspace = false;
     }
 
     /// Empty hit-area. Draw into `area.rect` with [`Self::fill_rect`] / [`Self::text_at`].

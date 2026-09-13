@@ -31,7 +31,18 @@ impl Ui {
         value: &mut f32,
         range: std::ops::RangeInclusive<f32>,
     ) -> Response {
-        self.knob_colored(id, value, range, theme::KNOB_FILL)
+        self.knob_sized(id, value, range, theme::KNOB_SIZE)
+    }
+
+    /// Rotary knob with dial size in UI points.
+    pub fn knob_sized(
+        &mut self,
+        id: &str,
+        value: &mut f32,
+        range: std::ops::RangeInclusive<f32>,
+        size: f32,
+    ) -> Response {
+        self.knob_ex(id, value, range, theme::KNOB_FILL, size)
     }
 
     /// Rotary knob with custom arc fill color.
@@ -42,24 +53,39 @@ impl Ui {
         range: std::ops::RangeInclusive<f32>,
         fill: [f32; 4],
     ) -> Response {
+        self.knob_ex(id, value, range, fill, theme::KNOB_SIZE)
+    }
+
+    fn knob_ex(
+        &mut self,
+        id: &str,
+        value: &mut f32,
+        range: std::ops::RangeInclusive<f32>,
+        fill: [f32; 4],
+        size: f32,
+    ) -> Response {
         let enabled = self.enabled();
         let widget_id = self.current_id(id);
         let (min, max) = (*range.start(), *range.end());
         let span = max - min;
 
-        let dial = self.s(theme::KNOB_SIZE);
+        let k = (size / theme::KNOB_SIZE).clamp(0.4, 2.0);
+        let dial = self.s(size.max(12.0));
         let th = self.text_height();
-        let gap = self.s(6.0);
-        let total = Vec2::new(dial, dial + gap + th);
+        let gap = self.s(6.0 * k);
+        let label_w = self.text_width(id);
+        let w = dial.max(label_w + self.s(4.0));
+        let total = Vec2::new(w, dial + gap + th);
         let rect = self.allocate(total);
 
-        let center = Vec2::new(rect.min.x + dial * 0.5, rect.min.y + dial * 0.5);
-        let r_out = dial * 0.5 - self.s(1.0);
-        let arc_w = self.s(3.5);
+        let dial_x = rect.min.x + (w - dial) * 0.5;
+        let center = Vec2::new(dial_x + dial * 0.5, rect.min.y + dial * 0.5);
+        let r_out = dial * 0.5 - self.s(1.0 * k);
+        let arc_w = self.s(3.5 * k);
         let r_in = r_out - arc_w;
-        let face_r = r_in - self.s(3.0);
+        let face_r = (r_in - self.s(3.0 * k)).max(dial * 0.2);
 
-        let hit = Rect::from_min_size(rect.min, Vec2::splat(dial));
+        let hit = Rect::from_min_size(Vec2::new(dial_x, rect.min.y), Vec2::splat(dial));
         let hovered = enabled && self.hovered_rect(hit);
         if hovered {
             self.hover_id = Some(widget_id);
@@ -110,8 +136,8 @@ impl Ui {
             self.clip()
         };
         let uv = self.font.white_uv();
-        let border_w = self.s(2.0);
-        let needle_w = self.s(2.0);
+        let border_w = self.s(2.0 * k);
+        let needle_w = self.s(2.0 * k);
         {
             let list = if self.draw_to_overlay {
                 &mut self.overlay
@@ -178,8 +204,7 @@ impl Ui {
             push_line(list, a, b, needle_w, theme::KNOB_INDICATOR, uv, clip);
         }
 
-        let label_w = self.text_width(id);
-        let label_x = rect.min.x + (dial - label_w) * 0.5;
+        let label_x = rect.min.x + (w - label_w) * 0.5;
         let label_y = rect.min.y + dial + gap;
         let label_color = if enabled {
             theme::TEXT

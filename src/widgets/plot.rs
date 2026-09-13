@@ -111,8 +111,95 @@ impl Ui {
         self.interact_rect(self.current_id(id), rect)
     }
 
+    /// Same as [`Self::plot_bars`], drag paints amplitude (`0..=1`).
+    pub fn plot_bars_edit(
+        &mut self,
+        id: &str,
+        size: Vec2,
+        values: &mut [f32],
+        ticks: &[(f32, &str)],
+    ) -> Response {
+        let (rect, radius) = plot_rect(self, size);
+        self.round_rect(rect, radius, theme::PLOT_BG);
+        let axis_h = self.s(13.0);
+        let plot = Rect {
+            min: rect.min,
+            max: Vec2::new(rect.max.x, (rect.max.y - axis_h).max(rect.min.y + 8.0)),
+        };
+        self.push_clip(plot);
+        if !values.is_empty() {
+            let n = values.len() as f32;
+            let gap = self.s(1.0).min(plot.width() / n * 0.25);
+            let bw = ((plot.width() - gap * (n - 1.0)) / n).max(1.0);
+            for (i, v) in values.iter().enumerate() {
+                let h = plot.height() * v.clamp(0.0, 1.0);
+                if h < 0.5 {
+                    continue;
+                }
+                let x = plot.min.x + i as f32 * (bw + gap);
+                let bar = Rect {
+                    min: Vec2::new(x, plot.max.y - h),
+                    max: Vec2::new(x + bw, plot.max.y),
+                };
+                self.fill_rect(bar, theme::PLOT_LINE);
+            }
+        }
+        draw_tick_grid_x(self, plot, ticks);
+        self.pop_clip();
+        draw_tick_labels_x(self, rect, plot, ticks);
+        let widget_id = self.current_id(id);
+        let mut resp = self.interact_rect(widget_id, plot);
+        if self.active_id == Some(widget_id) && self.input.mouse_down && !values.is_empty() {
+            self.want_capture = true;
+            let n = values.len() as f32;
+            let t = ((self.input.mouse_pos.x - plot.min.x) / plot.width().max(1.0)).clamp(0.0, 0.999);
+            let i = (t * n) as usize;
+            let v = ((plot.max.y - self.input.mouse_pos.y) / plot.height().max(1.0)).clamp(0.0, 1.0);
+            if (values[i] - v).abs() > 1e-4 {
+                values[i] = v;
+                resp.changed = true;
+            }
+        }
+        resp
+    }
+
+    /// Line through `values` in `0..=1`, left = first sample. Same X ticks as `plot_bars`.
+    pub fn plot_line(
+        &mut self,
+        id: &str,
+        size: Vec2,
+        values: &[f32],
+        ticks: &[(f32, &str)],
+    ) -> Response {
+        let (rect, radius) = plot_rect(self, size);
+        self.round_rect(rect, radius, theme::PLOT_BG);
+        let axis_h = self.s(13.0);
+        let plot = Rect {
+            min: rect.min,
+            max: Vec2::new(rect.max.x, (rect.max.y - axis_h).max(rect.min.y + 8.0)),
+        };
+        self.push_clip(plot);
+        if values.len() >= 2 {
+            let n = (values.len() - 1) as f32;
+            let mut pts = Vec::with_capacity(values.len());
+            for (i, v) in values.iter().enumerate() {
+                let t = i as f32 / n;
+                pts.push(Vec2::new(
+                    plot.min.x + plot.width() * t,
+                    plot.max.y - plot.height() * v.clamp(0.0, 1.0),
+                ));
+            }
+            self.draw_polyline(&pts, self.s(1.5), theme::PLOT_LINE);
+        }
+        draw_tick_grid_x(self, plot, ticks);
+        self.pop_clip();
+        draw_tick_labels_x(self, rect, plot, ticks);
+        self.interact_rect(self.current_id(id), rect)
+    }
+
     /// Heatmap: `values.len() == cols * rows`, column-major, row 0 at the bottom.
-    /// `ticks` are `(0..=1, label)` along the Y axis (bottom → top).
+    /// `ticks` / `notes` are `(0..=1, label)` along the Y axis (bottom → top).
+    /// Notes draw in a left column; Hz ticks sit next to the plot.
     pub fn plot_heatmap(
         &mut self,
         id: &str,
@@ -121,10 +208,16 @@ impl Ui {
         rows: usize,
         values: &[f32],
         ticks: &[(f32, &str)],
+        notes: &[(f32, &str)],
     ) -> Response {
         let (rect, radius) = plot_rect(self, size);
         self.round_rect(rect, radius, theme::PLOT_BG);
-        let axis_w = self.s(26.0);
+        let note_w = if notes.is_empty() {
+            0.0
+        } else {
+            self.s(22.0)
+        };
+        let axis_w = note_w + self.s(26.0);
         let plot = Rect {
             min: Vec2::new((rect.min.x + axis_w).min(rect.max.x - 8.0), rect.min.y),
             max: rect.max,
@@ -155,7 +248,10 @@ impl Ui {
         }
         draw_tick_grid_y(self, plot, ticks);
         self.pop_clip();
-        draw_tick_labels_y(self, rect, plot, ticks);
+        if !notes.is_empty() {
+            draw_tick_labels_y(self, rect.min.x + self.s(2.0), rect, plot, notes);
+        }
+        draw_tick_labels_y(self, rect.min.x + note_w + self.s(2.0), rect, plot, ticks);
         self.interact_rect(self.current_id(id), rect)
     }
 }
@@ -204,7 +300,7 @@ pub(crate) fn draw_tick_labels_x(ui: &mut Ui, outer: Rect, plot: Rect, ticks: &[
     }
 }
 
-fn draw_tick_labels_y(ui: &mut Ui, outer: Rect, plot: Rect, ticks: &[(f32, &str)]) {
+fn draw_tick_labels_y(ui: &mut Ui, x: f32, outer: Rect, plot: Rect, ticks: &[(f32, &str)]) {
     let px = ui.s(10.0);
     let th = ui.text_height_at(px);
     let mut last_y = f32::INFINITY;
@@ -214,12 +310,7 @@ fn draw_tick_labels_y(ui: &mut Ui, outer: Rect, plot: Rect, ticks: &[(f32, &str)
         if (last_y - ty).abs() < th {
             continue;
         }
-        ui.text_sized(
-            Vec2::new(outer.min.x + ui.s(2.0), ty),
-            label,
-            theme::TEXT_DISABLED,
-            px,
-        );
+        ui.text_sized(Vec2::new(x, ty), label, theme::TEXT_DISABLED, px);
         last_y = ty;
     }
 }
