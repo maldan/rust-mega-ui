@@ -32,6 +32,7 @@ pub use widgets::{
 };
 pub use window::Window;
 
+use std::cell::RefCell;
 use std::collections::{HashMap, HashSet};
 use std::path::Path;
 use std::ptr::NonNull;
@@ -184,6 +185,10 @@ pub struct Ui {
     pub(crate) node_port_in: u32,
     pub(crate) node_port_out: u32,
     pub(crate) node_port_rows: Vec<Rect>,
+    /// Monotonic frame index (incremented in \egin_frame\).
+    pub(crate) frame: u32,
+    /// Last frame each retained widget id was written (for GC).
+    pub(crate) state_alive: RefCell<HashMap<Id, u32>>,
 }
 
 impl Default for Ui {
@@ -274,6 +279,8 @@ impl Ui {
             node_port_in: 0,
             node_port_out: 0,
             node_port_rows: Vec::new(),
+            frame: 0,
+            state_alive: RefCell::new(HashMap::new()),
         }
     }
 
@@ -544,9 +551,15 @@ impl Ui {
         self.modal_open = false;
         self.modal_request_close = false;
 
-        // Drop stale hit-boxes (closed windows, etc.) before hover hit-test.
-        self.win_rects
-            .retain(|id, _| self.windows_built_last_frame.contains(id));
+        self.frame = self.frame.wrapping_add(1);
+        self.gc_retained_state();
+
+        // Drop stale hit-boxes / window state (closed windows, etc.) before hover hit-test.
+        let built = &self.windows_built_last_frame;
+        self.win_rects.retain(|id, _| built.contains(id));
+        self.windows.retain(|id, _| built.contains(id));
+        self.window_titles.retain(|id, _| built.contains(id));
+        self.win_order.retain(|id| built.contains(id));
         self.windows_built_this_frame.clear();
 
         self.hover_window = self
@@ -670,6 +683,44 @@ impl Ui {
         }
     }
 
+    /// Mark retained widget state as used this frame.
+    pub(crate) fn keep(&self, id: Id) {
+        self.state_alive.borrow_mut().insert(id, self.frame);
+    }
+
+    /// Drop retained entries not touched for a couple of frames (dynamic ids / closed panels).
+    fn gc_retained_state(&mut self) {
+        let frame = self.frame;
+        let grace = 1u32; // alive if touched this frame or the previous one
+        let alive_map = self.state_alive.borrow();
+        let alive = |id: &Id| {
+            alive_map.get(id).is_some_and(|&f| frame.wrapping_sub(f) <= grace)
+        };
+
+        self.headers.retain(|id, _| alive(id));
+        self.trees.retain(|id, _| alive(id));
+        self.selects.retain(|id, _| alive(id));
+        self.vec_locks.retain(|id, _| alive(id));
+        self.color_edits.retain(|id, _| alive(id));
+        self.scrolls.retain(|id, _| alive(id));
+        self.edits.retain(|id, _| alive(id));
+        self.num_bufs.retain(|id, _| alive(id));
+        self.tabs.retain(|id, _| alive(id));
+        self.tab_content_sizes.retain(|id, _| alive(id));
+        self.browser_clicks.retain(|id, _| alive(id));
+        self.menu_bar_open.retain(|id, _| alive(id));
+        self.menu_sub_open.retain(|id, _| alive(id));
+        self.menu_popup_size.retain(|id, _| alive(id));
+        self.button_sizes.retain(|id, _| alive(id));
+        self.group_sizes.retain(|id, _| alive(id));
+        self.curve_edits.retain(|id, _| alive(id));
+        self.gradient_edits.retain(|id, _| alive(id));
+        drop(alive_map);
+        self.state_alive
+            .borrow_mut()
+            .retain(|_, f| frame.wrapping_sub(*f) <= grace);
+    }
+
     pub(crate) fn bring_to_front(&mut self, id: Id) {
         self.win_order.retain(|x| *x != id);
         self.win_order.push(id);
@@ -718,10 +769,13 @@ impl Ui {
     }
 
     pub(crate) fn current_id(&self, local: &str) -> Id {
-        match self.id_stack.last() {
+        let id = match self.id_stack.last() {
             Some(parent) => parent.child(local),
             None => Id::new(local),
-        }
+        };
+        // Retained maps are GC'd by frame; any id minted for a widget counts as live.
+        self.keep(id);
+        id
     }
 
     pub(crate) fn push_id(&mut self, local: &str) {

@@ -203,6 +203,26 @@ impl<S: Scene> Host<S> {
 
     pub fn run(state: S) {
         env_logger::Builder::from_env(env_logger::Env::default().default_filter_or("warn")).init();
+
+        // Keep the server alive for the whole event loop.
+        #[cfg(feature = "profile-puffin")]
+        let _puffin_server = {
+            let addr = format!("127.0.0.1:{}", puffin_http::DEFAULT_PORT);
+            match puffin_http::Server::new(&addr) {
+                Ok(server) => {
+                    puffin::set_scopes_on(true);
+                    eprintln!(
+                        "puffin: serving on {addr} — run `puffin_viewer --url {addr}`"
+                    );
+                    Some(server)
+                }
+                Err(err) => {
+                    eprintln!("puffin: failed to bind {addr}: {err}");
+                    None
+                }
+            }
+        };
+
         let event_loop = EventLoop::new().expect("event loop");
         event_loop.set_control_flow(ControlFlow::Wait);
         let mut host = Self::new(state);
@@ -289,6 +309,11 @@ impl<S: Scene> Host<S> {
     }
 
     fn redraw(&mut self) {
+        #[cfg(feature = "profile-puffin")]
+        puffin::GlobalProfiler::lock().new_frame();
+        #[cfg(feature = "profile-puffin")]
+        puffin::profile_scope!("frame");
+
         let Some(window) = self.window.clone() else {
             return;
         };
@@ -303,9 +328,15 @@ impl<S: Scene> Host<S> {
 
         let viewport = Vec2::new(size.width as f32, size.height as f32);
         let input = self.input.to_ui(viewport, dt);
-        self.ui.begin_frame(input);
-        let keep = S::build(&mut self.ui, &mut self.state, viewport, dt, self.draw_stats);
-        let out = self.ui.end_frame();
+
+        let (keep, out) = {
+            #[cfg(feature = "profile-puffin")]
+            puffin::profile_scope!("ui.build");
+            self.ui.begin_frame(input);
+            let keep = S::build(&mut self.ui, &mut self.state, viewport, dt, self.draw_stats);
+            let out = self.ui.end_frame();
+            (keep, out)
+        };
         let needs_repaint = out.needs_repaint || keep;
 
         if let Some(text) = out.clipboard {
@@ -320,22 +351,30 @@ impl<S: Scene> Host<S> {
             return;
         };
 
-        gpu.renderer
-            .sync_atlases(&gpu.device, &gpu.queue, &mut self.ui);
+        {
+            #[cfg(feature = "profile-puffin")]
+            puffin::profile_scope!("gpu.sync_atlases");
+            gpu.renderer
+                .sync_atlases(&gpu.device, &gpu.queue, &mut self.ui);
+        }
 
-        let frame = match gpu.surface.get_current_texture() {
-            wgpu::CurrentSurfaceTexture::Success(frame)
-            | wgpu::CurrentSurfaceTexture::Suboptimal(frame) => frame,
-            wgpu::CurrentSurfaceTexture::Lost | wgpu::CurrentSurfaceTexture::Outdated => {
-                gpu.surface.configure(&gpu.device, &gpu.config);
-                window.request_redraw();
-                return;
-            }
-            wgpu::CurrentSurfaceTexture::Timeout
-            | wgpu::CurrentSurfaceTexture::Occluded
-            | wgpu::CurrentSurfaceTexture::Validation => {
-                window.request_redraw();
-                return;
+        let frame = {
+            #[cfg(feature = "profile-puffin")]
+            puffin::profile_scope!("gpu.acquire");
+            match gpu.surface.get_current_texture() {
+                wgpu::CurrentSurfaceTexture::Success(frame)
+                | wgpu::CurrentSurfaceTexture::Suboptimal(frame) => frame,
+                wgpu::CurrentSurfaceTexture::Lost | wgpu::CurrentSurfaceTexture::Outdated => {
+                    gpu.surface.configure(&gpu.device, &gpu.config);
+                    window.request_redraw();
+                    return;
+                }
+                wgpu::CurrentSurfaceTexture::Timeout
+                | wgpu::CurrentSurfaceTexture::Occluded
+                | wgpu::CurrentSurfaceTexture::Validation => {
+                    window.request_redraw();
+                    return;
+                }
             }
         };
 
@@ -349,6 +388,8 @@ impl<S: Scene> Host<S> {
             });
 
         {
+            #[cfg(feature = "profile-puffin")]
+            puffin::profile_scope!("gpu.draw");
             let mut pass = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
                 label: Some("ui pass"),
                 color_attachments: &[Some(wgpu::RenderPassColorAttachment {
@@ -373,8 +414,12 @@ impl<S: Scene> Host<S> {
             self.draw_stats = gpu.renderer.draw(&gpu.queue, &mut pass, &out.draw_list);
         }
 
-        gpu.queue.submit(Some(encoder.finish()));
-        gpu.queue.present(frame);
+        {
+            #[cfg(feature = "profile-puffin")]
+            puffin::profile_scope!("gpu.submit_present");
+            gpu.queue.submit(Some(encoder.finish()));
+            gpu.queue.present(frame);
+        }
         self.input.clear_edges();
 
         if needs_repaint {

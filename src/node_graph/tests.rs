@@ -4,8 +4,8 @@ use glam::Vec2;
 
 use super::NodeSpace;
 use super::geom::{
-    ZOOM_MIN, dist_point_polyline, dist_point_segment, link_handle, node_content_scale,
-    rect_from_points, rects_overlap, snap_vec,
+    ZOOM_MIN, dist_point_link, dist_point_polyline, dist_point_segment, link_aabb, link_handle,
+    link_seg_count, node_content_scale, rect_from_points, rects_overlap, snap_vec,
 };
 use super::types::{NodeLink, NodePortSide, port_type};
 use crate::types::Rect;
@@ -61,26 +61,94 @@ fn link_handle_shrinks_when_zoomed_out() {
 #[test]
 fn same_port_name_keeps_input_and_output() {
     let mut space = NodeSpace::new();
-    space.port_pos.insert(
-        ("seq".into(), NodePortSide::Input, "clock".into()),
-        Vec2::new(0.0, 0.0),
-    );
-    space.port_pos.insert(
-        ("seq".into(), NodePortSide::Output, "clock".into()),
-        Vec2::new(10.0, 0.0),
+    space.set_pin_pos("seq", NodePortSide::Input, "clock", Vec2::new(0.0, 0.0));
+    space.set_pin_pos("seq", NodePortSide::Output, "clock", Vec2::new(10.0, 0.0));
+    assert_eq!(
+        space.pin_pos("seq", NodePortSide::Input, "clock"),
+        Some(Vec2::new(0.0, 0.0))
     );
     assert_eq!(
-        space
-            .port_pos
-            .get(&("seq".into(), NodePortSide::Input, "clock".into())),
-        Some(&Vec2::new(0.0, 0.0))
+        space.pin_pos("seq", NodePortSide::Output, "clock"),
+        Some(Vec2::new(10.0, 0.0))
     );
+}
+
+#[test]
+fn pin_screen_applies_pan_zoom() {
+    let mut space = NodeSpace::new();
+    space.zoom = 2.0;
+    space.pan = Vec2::new(10.0, 5.0);
+    space.set_pin_pos("n", NodePortSide::Output, "o", Vec2::new(1.0, 2.0));
     assert_eq!(
-        space
-            .port_pos
-            .get(&("seq".into(), NodePortSide::Output, "clock".into())),
-        Some(&Vec2::new(10.0, 0.0))
+        space.pin_screen("n", NodePortSide::Output, "o"),
+        Some(Vec2::new(12.0, 9.0))
     );
+}
+
+#[test]
+fn translate_node_pins_keeps_culled_wires_attached() {
+    let mut space = NodeSpace::new();
+    space.set_pin_pos("n", NodePortSide::Output, "o", Vec2::new(4.0, 8.0));
+    space.translate_node_pins("n", Vec2::new(3.0, -1.0));
+    assert_eq!(
+        space.pin_pos("n", NodePortSide::Output, "o"),
+        Some(Vec2::new(7.0, 7.0))
+    );
+}
+
+#[test]
+fn pin_epoch_drops_removed_ports_keeps_string_keys() {
+    let mut space = NodeSpace::new();
+    space.begin_node_pins("n");
+    space.set_pin_pos("n", NodePortSide::Input, "a", Vec2::new(1.0, 0.0));
+    space.set_pin_pos("n", NodePortSide::Input, "b", Vec2::new(2.0, 0.0));
+    space.finish_node_pins("n");
+    assert!(space.pin_pos("n", NodePortSide::Input, "a").is_some());
+    assert!(space.pin_pos("n", NodePortSide::Input, "b").is_some());
+
+    // Same ports again: keys reused (no clear); "b" dropped when omitted.
+    space.begin_node_pins("n");
+    space.set_pin_pos("n", NodePortSide::Input, "a", Vec2::new(3.0, 4.0));
+    space.finish_node_pins("n");
+    assert_eq!(
+        space.pin_pos("n", NodePortSide::Input, "a"),
+        Some(Vec2::new(3.0, 4.0))
+    );
+    assert!(space.pin_pos("n", NodePortSide::Input, "b").is_none());
+}
+
+#[test]
+fn link_aabb_skips_wires_far_from_the_canvas() {
+    let a = Vec2::new(0.0, 0.0);
+    let b = Vec2::new(40.0, 0.0);
+    let aabb = link_aabb(a, b, 1.0, 4.0);
+    let view = Rect::from_min_size(Vec2::new(400.0, 400.0), Vec2::splat(100.0));
+    assert!(!rects_overlap(aabb, view));
+}
+
+#[test]
+fn link_aabb_keeps_wires_that_cross_the_canvas() {
+    let a = Vec2::new(-80.0, 50.0);
+    let b = Vec2::new(80.0, 50.0);
+    let aabb = link_aabb(a, b, 1.0, 4.0);
+    let view = Rect::from_min_size(Vec2::new(0.0, 0.0), Vec2::new(20.0, 100.0));
+    assert!(rects_overlap(aabb, view));
+}
+
+#[test]
+fn link_seg_count_uses_fewer_segments_on_short_wires() {
+    let short = link_seg_count(Vec2::ZERO, Vec2::new(20.0, 0.0), 1.0);
+    let long = link_seg_count(Vec2::ZERO, Vec2::new(800.0, 0.0), 1.0);
+    assert_eq!(short, 4);
+    assert_eq!(long, 18);
+}
+
+#[test]
+fn dist_point_link_is_near_zero_on_the_curve() {
+    let a = Vec2::ZERO;
+    let b = Vec2::new(100.0, 0.0);
+    let d = dist_point_link(Vec2::new(50.0, 0.0), a, b, 1.0);
+    assert!(d < 2.0);
 }
 
 // -- coordinate transforms ---------------------------------------------------

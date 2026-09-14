@@ -7,6 +7,73 @@ use crate::types::Rect;
 use super::geom::{FRAME_PAD, NODE_MIN_W, ZOOM_MIN, snap_vec};
 use super::types::{NodeFrame, NodeLink, NodePortSide, PortType, default_port_types, port_type};
 
+/// Upsert by `&str`: allocate `String` only when the key is new.
+pub(crate) fn map_upsert<V>(map: &mut HashMap<String, V>, key: &str, val: V) {
+    if let Some(slot) = map.get_mut(key) {
+        *slot = val;
+    } else {
+        map.insert(key.to_string(), val);
+    }
+}
+
+#[derive(Clone, Copy, Debug)]
+struct PinSlot {
+    pos: Vec2,
+    epoch: u32,
+}
+
+/// World-space pin positions on one node. Nested maps so lookup is `&str` (no `String` clone).
+/// `epoch` keeps port `String` keys alive across frames; stale ports are retained away.
+#[derive(Clone, Debug, Default)]
+pub(crate) struct NodePins {
+    inputs: HashMap<String, PinSlot>,
+    outputs: HashMap<String, PinSlot>,
+    epoch: u32,
+}
+
+impl NodePins {
+    fn begin_frame(&mut self) {
+        self.epoch = self.epoch.wrapping_add(1);
+    }
+
+    fn retain_current(&mut self) {
+        let e = self.epoch;
+        self.inputs.retain(|_, s| s.epoch == e);
+        self.outputs.retain(|_, s| s.epoch == e);
+    }
+
+    fn get(&self, side: NodePortSide, port: &str) -> Option<Vec2> {
+        let slot = match side {
+            NodePortSide::Input => self.inputs.get(port),
+            NodePortSide::Output => self.outputs.get(port),
+        }?;
+        Some(slot.pos)
+    }
+
+    fn insert(&mut self, side: NodePortSide, port: &str, pos: Vec2) {
+        let map = match side {
+            NodePortSide::Input => &mut self.inputs,
+            NodePortSide::Output => &mut self.outputs,
+        };
+        let epoch = self.epoch;
+        if let Some(slot) = map.get_mut(port) {
+            slot.pos = pos;
+            slot.epoch = epoch;
+        } else {
+            map.insert(port.to_string(), PinSlot { pos, epoch });
+        }
+    }
+
+    fn translate(&mut self, delta: Vec2) {
+        for v in self.inputs.values_mut() {
+            v.pos += delta;
+        }
+        for v in self.outputs.values_mut() {
+            v.pos += delta;
+        }
+    }
+}
+
 #[derive(Clone, Debug)]
 pub(crate) struct PendingWire {
     pub(crate) from_node: String,
@@ -97,7 +164,7 @@ pub struct NodeSpace {
 
     pub next_link_id: u64,
     pub(crate) pending: Option<PendingWire>,
-    pub(crate) port_pos: HashMap<(String, NodePortSide, String), Vec2>,
+    pub(crate) port_pos: HashMap<String, NodePins>,
     /// Last frame outer size in **world** units (title + body).
     pub(crate) node_sizes: HashMap<String, Vec2>,
     /// Screen-space node bounds from the current/last build (for marquee).
@@ -322,7 +389,7 @@ impl NodeSpace {
         self.links
             .retain(|l| l.from_node != node_id && l.to_node != node_id);
         self.selected_nodes.retain(|id| id != node_id);
-        self.port_pos.retain(|(n, _, _), _| n != node_id);
+        self.port_pos.remove(node_id);
         self.node_sizes.remove(node_id);
         self.node_screen_rects.remove(node_id);
         self.node_world_pos.remove(node_id);
@@ -343,6 +410,47 @@ impl NodeSpace {
         self.links.retain(|l| l.id != id);
         if self.selected_link == Some(id) {
             self.selected_link = None;
+        }
+    }
+
+    pub(crate) fn pin_pos(&self, node: &str, side: NodePortSide, port: &str) -> Option<Vec2> {
+        self.port_pos.get(node)?.get(side, port)
+    }
+
+    pub(crate) fn pin_screen(&self, node: &str, side: NodePortSide, port: &str) -> Option<Vec2> {
+        Some(self.world_to_screen(self.pin_pos(node, side, port)?))
+    }
+
+    pub(crate) fn set_pin_pos(&mut self, node: &str, side: NodePortSide, port: &str, pos: Vec2) {
+        if let Some(pins) = self.port_pos.get_mut(node) {
+            pins.insert(side, port, pos);
+            return;
+        }
+        let mut pins = NodePins::default();
+        pins.insert(side, port, pos);
+        self.port_pos.insert(node.to_string(), pins);
+    }
+
+    /// Start a pin rebuild for `node` this frame (keeps `String` keys; bumps epoch).
+    pub(crate) fn begin_node_pins(&mut self, node: &str) {
+        if let Some(pins) = self.port_pos.get_mut(node) {
+            pins.begin_frame();
+        }
+    }
+
+    /// Drop ports not touched since [`Self::begin_node_pins`].
+    pub(crate) fn finish_node_pins(&mut self, node: &str) {
+        if let Some(pins) = self.port_pos.get_mut(node) {
+            pins.retain_current();
+        }
+    }
+
+    pub(crate) fn translate_node_pins(&mut self, node: &str, delta: Vec2) {
+        if delta.length_squared() < 1e-10 {
+            return;
+        }
+        if let Some(pins) = self.port_pos.get_mut(node) {
+            pins.translate(delta);
         }
     }
 

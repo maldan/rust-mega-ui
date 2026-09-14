@@ -8,6 +8,8 @@ autoexamples = false
 default = []
 ## wgpu pipeline helpers (`mega_ui::wgpu::UiRenderer` + bundled UI shader).
 wgpu = ["dep:wgpu", "dep:bytemuck", "dep:windows"]
+## Puffin scopes in examples + `puffin_http` server (connect with `puffin_viewer`).
+profile-puffin = ["dep:puffin", "dep:puffin_http"]
 
 [dependencies]
 glam = "0.33.2"
@@ -15,6 +17,8 @@ fontdue = "0.9.4"
 resvg = { version = "0.47", default-features = false }
 wgpu = { version = "30", optional = true }
 bytemuck = { version = "1.22", optional = true, features = ["derive"] }
+puffin = { version = "0.20", optional = true }
+puffin_http = { version = "0.17", optional = true }
 
 [dev-dependencies]
 arboard = "3"

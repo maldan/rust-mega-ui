@@ -2,6 +2,11 @@
 //!
 //! ```text
 //! cargo run --example demo_nodes --features wgpu
+//!
+//! # optional: Puffin frame scopes (HTTP → puffin_viewer)
+//! cargo install puffin_viewer
+//! cargo run --release --example demo_nodes --features wgpu,profile-puffin
+//! # then: puffin_viewer --url 127.0.0.1:8585
 //! ```
 //!
 //! Controls:

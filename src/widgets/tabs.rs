@@ -26,6 +26,10 @@ impl Ui {
         // In a filled parent (dock leaf / window body) expand to remaining height.
         // Otherwise shrink-wrap to last frame's content measure.
         let content_id = widget_id.child("__content");
+        // `child` does not go through `current_id`, so mark this map key live or
+        // `gc_retained_state` drops the measure every frame and shrink-wrap
+        // stays at the 48px default (clips plots inside nodes).
+        self.keep(content_id);
         let prev = self
             .tab_content_sizes
             .get(&content_id)
@@ -128,10 +132,62 @@ impl Ui {
         ));
         add(self, selected);
         let used = self.layers.pop().unwrap().used;
-        self.tab_content_sizes.insert(
-            content_id,
-            Vec2::new(used.x.max(inner_w * 0.5), used.y.max(self.s(24.0))),
-        );
+        let measured = Vec2::new(used.x.max(inner_w * 0.5), used.y.max(self.s(24.0)));
+        if (measured.y - prev.y).abs() > 1.0 {
+            self.request_repaint();
+        }
+        self.tab_content_sizes.insert(content_id, measured);
         self.pop_id();
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use glam::Vec2;
+    use crate::types::UiInput;
+    use crate::{LayoutDir, Ui, new_layer};
+
+    fn tab_h(ui: &mut Ui) -> f32 {
+        ui.layers.push(new_layer(
+            LayoutDir::Vertical,
+            Vec2::ZERO,
+            ui.spacing,
+            280.0,
+            0.0,
+            CrossAlign::Start,
+        ));
+        ui.tabs("env", &["Volume", "Pitch"], |ui, _| {
+            let _ = ui.area("plot", Vec2::new(260.0, 120.0));
+        });
+        ui.layers.pop().unwrap().used.y
+    }
+
+    #[test]
+    fn shrink_wrap_tabs_keep_content_height_across_frames() {
+        let mut ui = Ui::new();
+        let mut input = UiInput::default();
+        input.viewport = Vec2::new(800.0, 600.0);
+
+        ui.begin_frame(input.clone());
+        let first = tab_h(&mut ui);
+        ui.end_frame();
+
+        ui.begin_frame(input.clone());
+        let second = tab_h(&mut ui);
+        ui.end_frame();
+
+        ui.begin_frame(input);
+        let third = tab_h(&mut ui);
+        ui.end_frame();
+
+        assert!(
+            second > first + 40.0,
+            "second frame should grow from measured plot, first={first} second={second}"
+        );
+        assert!(
+            (third - second).abs() < 2.0,
+            "height must persist after GC, second={second} third={third}"
+        );
     }
 }

@@ -26,17 +26,42 @@ pub(crate) fn link_handle(from: Vec2, to: Vec2, zoom: f32) -> f32 {
     ((to.x - from.x).abs() * 0.5).max(48.0 * zoom.clamp(ZOOM_MIN, 1.0))
 }
 
-pub(crate) fn link_curve(from: Vec2, to: Vec2, zoom: f32) -> Vec<Vec2> {
+pub(crate) fn link_controls(from: Vec2, to: Vec2, zoom: f32) -> (Vec2, Vec2) {
     let dx = link_handle(from, to, zoom);
-    let c1 = from + Vec2::new(dx, 0.0);
-    let c2 = to - Vec2::new(dx, 0.0);
-    let n = 18;
-    let mut pts = Vec::with_capacity(n + 1);
-    for i in 0..=n {
-        let t = i as f32 / n as f32;
-        pts.push(cubic_bezier(from, c1, c2, to, t));
+    (from + Vec2::new(dx, 0.0), to - Vec2::new(dx, 0.0))
+}
+
+/// Screen AABB of the cubic (endpoints + horizontal handles), inflated by `pad`.
+pub(crate) fn link_aabb(from: Vec2, to: Vec2, zoom: f32, pad: f32) -> Rect {
+    let (c1, c2) = link_controls(from, to, zoom);
+    let min = from.min(to).min(c1).min(c2) - Vec2::splat(pad);
+    let max = from.max(to).max(c1).max(c2) + Vec2::splat(pad);
+    Rect { min, max }
+}
+
+pub(crate) fn link_seg_count(from: Vec2, to: Vec2, zoom: f32) -> usize {
+    let dx = link_handle(from, to, zoom);
+    let approx = from.distance(to) + dx * 0.35;
+    ((approx / 14.0).ceil() as usize).clamp(4, 18)
+}
+
+pub(crate) fn for_link_segments(from: Vec2, to: Vec2, zoom: f32, mut emit: impl FnMut(Vec2, Vec2)) {
+    let (c1, c2) = link_controls(from, to, zoom);
+    let n = link_seg_count(from, to, zoom);
+    let mut prev = from;
+    for i in 1..=n {
+        let p = cubic_bezier(from, c1, c2, to, i as f32 / n as f32);
+        emit(prev, p);
+        prev = p;
     }
-    pts
+}
+
+pub(crate) fn dist_point_link(p: Vec2, from: Vec2, to: Vec2, zoom: f32) -> f32 {
+    let mut best = f32::MAX;
+    for_link_segments(from, to, zoom, |a, b| {
+        best = best.min(dist_point_segment(p, a, b));
+    });
+    best
 }
 
 pub(crate) fn dist_point_segment(p: Vec2, a: Vec2, b: Vec2) -> f32 {

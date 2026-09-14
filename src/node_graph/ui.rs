@@ -2,17 +2,17 @@ use std::ptr::NonNull;
 
 use glam::Vec2;
 
-use crate::draw::push_polyline;
+use crate::draw::push_line_segment;
 use crate::layout::new_layer;
 use crate::types::{CursorIcon, Rect};
 use crate::{CrossAlign, LayoutDir, Ui};
 
 use super::NodeSpace;
 use super::geom::{
-    FRAME_LABEL, NODE_MIN_W, NODE_PAD, PIN_HIT, PIN_R, ZOOM_MAX, ZOOM_MIN, dist_point_polyline,
-    link_curve, node_content_scale, rect_from_points, rects_overlap,
+    FRAME_LABEL, NODE_MIN_W, NODE_PAD, PIN_HIT, PIN_R, ZOOM_MAX, ZOOM_MIN, dist_point_link,
+    for_link_segments, link_aabb, node_content_scale, rect_from_points, rects_overlap,
 };
-use super::space::{BoxSelect, PendingNodePress, PendingWire};
+use super::space::{BoxSelect, PendingNodePress, PendingWire, map_upsert};
 use super::types::{NodeLink, NodePortSide};
 
 impl Ui {
@@ -58,7 +58,7 @@ impl Ui {
         space.pointer_in_space = false;
         space.request_paste_at = None;
         space.request_copy_nodes.clear();
-        space.node_screen_rects.clear();
+        // Keep String keys in screen-rect maps; upserts overwrite live entries.
         space.frame_screen_rects.clear();
 
         // Background
@@ -84,24 +84,23 @@ impl Ui {
             && space.box_select.is_none()
         {
             let mut best: Option<(u64, f32)> = None;
+            let hit_pad = 9.0;
             for link in &space.links {
-                let Some(&a) = space.port_pos.get(&(
-                    link.from_node.clone(),
-                    NodePortSide::Output,
-                    link.from_port.clone(),
-                )) else {
+                let Some(a) =
+                    space.pin_screen(&link.from_node, NodePortSide::Output, &link.from_port)
+                else {
                     continue;
                 };
-                let Some(&b) = space.port_pos.get(&(
-                    link.to_node.clone(),
-                    NodePortSide::Input,
-                    link.to_port.clone(),
-                )) else {
+                let Some(b) = space.pin_screen(&link.to_node, NodePortSide::Input, &link.to_port)
+                else {
                     continue;
                 };
-                let pts = link_curve(a, b, space.zoom);
-                let d = dist_point_polyline(mouse, &pts);
-                if d < 9.0 && best.map(|(_, bd)| d < bd).unwrap_or(true) {
+                let aabb = link_aabb(a, b, space.zoom, hit_pad);
+                if !aabb.contains(mouse) {
+                    continue;
+                }
+                let d = dist_point_link(mouse, a, b, space.zoom);
+                if d < hit_pad && best.map(|(_, bd)| d < bd).unwrap_or(true) {
                     best = Some((link.id, d));
                 }
             }
@@ -112,36 +111,36 @@ impl Ui {
             let clip = self.clip();
             let out = &mut self.draw_list;
             for link in &space.links {
-                let Some(&a) = space.port_pos.get(&(
-                    link.from_node.clone(),
-                    NodePortSide::Output,
-                    link.from_port.clone(),
-                )) else {
+                let Some(a) =
+                    space.pin_screen(&link.from_node, NodePortSide::Output, &link.from_port)
+                else {
                     continue;
                 };
-                let Some(&b) = space.port_pos.get(&(
-                    link.to_node.clone(),
-                    NodePortSide::Input,
-                    link.to_port.clone(),
-                )) else {
+                let Some(b) = space.pin_screen(&link.to_node, NodePortSide::Input, &link.to_port)
+                else {
                     continue;
                 };
-                let mut color = space.type_color(link.ty);
                 let selected =
                     space.selected_link == Some(link.id) || space.link_hit == Some(link.id);
+                let thick = if selected { 3.2 } else { 2.2 } * space.zoom.clamp(0.7, 1.4);
+                let aabb = link_aabb(a, b, space.zoom, thick);
+                if let Some(c) = clip
+                    && !rects_overlap(c, aabb)
+                {
+                    continue;
+                }
+                let mut color = space.type_color(link.ty);
                 if selected {
                     color[0] = (color[0] + 0.25).min(1.0);
                     color[1] = (color[1] + 0.25).min(1.0);
                     color[2] = (color[2] + 0.25).min(1.0);
                 }
-                let thick = if selected { 3.2 } else { 2.2 } * space.zoom.clamp(0.7, 1.4);
-                let pts = link_curve(a, b, space.zoom);
-                push_polyline(out, &pts, thick, color, clip);
+                let z = space.zoom;
+                for_link_segments(a, b, z, |p0, p1| {
+                    push_line_segment(out, p0, p1, thick, color, clip);
+                });
             }
         }
-
-        // Clear port positions; nodes rewrite this frame
-        space.port_pos.clear();
 
         let prev_ptr = self.node_space_ptr;
         let prev_clip = self.node_space_clip;
@@ -231,17 +230,23 @@ impl Ui {
             }
         }
 
-        // Pending wire
-        if let Some(ref pending) = space.pending {
-            let color = space.type_color(pending.ty);
-            let end = mouse;
-            let (a, b) = match pending.side {
-                NodePortSide::Output => (pending.start, end),
-                NodePortSide::Input => (end, pending.start),
+        let pending_stroke = space.pending.as_ref().map(|p| {
+            (
+                space.type_color(p.ty),
+                space.zoom,
+                p.side,
+                p.start,
+            )
+        });
+        if let Some((color, z, side, start)) = pending_stroke {
+            let thick = 2.4 * z.clamp(0.7, 1.4);
+            let (a, b) = match side {
+                NodePortSide::Output => (start, mouse),
+                NodePortSide::Input => (mouse, start),
             };
-            let pts = link_curve(a, b, space.zoom);
-            let thick = 2.4 * space.zoom.clamp(0.7, 1.4);
-            self.draw_polyline(&pts, thick, color);
+            for_link_segments(a, b, z, |p0, p1| {
+                self.draw_line_segment(p0, p1, thick, color);
+            });
             self.want_capture = true;
             self.request_repaint();
         }
@@ -575,12 +580,14 @@ impl Ui {
         let mouse_world = space.screen_to_world(mouse);
         let ctrl = self.input.key_ctrl;
 
-        space.node_world_pos.insert(id.to_string(), *pos);
+        let last_world = space.node_world_pos.get(id).copied();
+        let known_size = space.node_sizes.contains_key(id);
+        map_upsert(&mut space.node_world_pos, id, *pos);
 
         // Apply ongoing group drag before layout (followers move same frame).
         let dragging = space.apply_node_drag(id, pos, mouse_world);
         if dragging {
-            space.node_world_pos.insert(id.to_string(), *pos);
+            map_upsert(&mut space.node_world_pos, id, *pos);
             self.set_cursor(CursorIcon::Move);
             self.want_capture = true;
             self.request_repaint();
@@ -600,6 +607,21 @@ impl Ui {
         let mut screen_pos = space.world_to_screen(*pos);
         let mut rect = Rect::from_min_size(screen_pos, screen_size);
         let title_bar = Rect::from_min_size(screen_pos, Vec2::new(screen_size.x, title_h * z));
+
+        if known_size {
+            let pad = PIN_HIT * z + 2.0;
+            let cull = Rect {
+                min: rect.min - Vec2::splat(pad),
+                max: rect.max + Vec2::splat(pad),
+            };
+            if !rects_overlap(clip, cull) {
+                map_upsert(&mut space.node_screen_rects, id, rect);
+                if let Some(old) = last_world {
+                    space.translate_node_pins(id, *pos - old);
+                }
+                return;
+            }
+        }
 
         let hovered = !self.block_input
             && !self.mouse_over_absorb()
@@ -665,7 +687,7 @@ impl Ui {
             self.theme.window.body
         };
         self.round_rect(rect.inset(1.0), (radius - 1.0).max(0.0), body);
-        space.node_screen_rects.insert(id.to_string(), rect);
+        map_upsert(&mut space.node_screen_rects, id, rect);
 
         let title_color = if bypassed {
             if title_hover || dragging {
@@ -724,7 +746,9 @@ impl Ui {
         self.node_port_in = 0;
         self.node_port_out = 0;
         self.node_port_rows.clear();
+        space.begin_node_pins(id);
         add(self);
+        space.finish_node_pins(id);
         let caption = self.current_node_caption.take();
         self.current_node_id = None;
         self.node_port_rows.clear();
@@ -746,9 +770,11 @@ impl Ui {
         let layout_z = (self.scale / old_scale.max(1e-4)).max(1e-4);
         let world_h = (title_h + body_h / layout_z).max(title_h + 24.0);
         let world_w = (hug_x / layout_z + NODE_PAD * 2.0).max(min_w);
-        space
-            .node_sizes
-            .insert(id.to_string(), Vec2::new(world_w, world_h));
+        map_upsert(
+            &mut space.node_sizes,
+            id,
+            Vec2::new(world_w, world_h),
+        );
 
         self.scale = old_scale;
         self.spacing = old_spacing;
@@ -824,9 +850,7 @@ impl Ui {
             self.theme.text.primary,
         );
 
-        space
-            .port_pos
-            .insert((node_id.clone(), side, port_id.to_string()), pin_center);
+        space.set_pin_pos(&node_id, side, port_id, space.screen_to_world(pin_center));
 
         let pin_rect =
             Rect::from_min_size(pin_center - Vec2::splat(pin_d * 0.5), Vec2::splat(pin_d));
