@@ -29,6 +29,10 @@ struct Gpu {
 #[derive(Default)]
 pub struct FrameInput {
     pub mouse_pos: Vec2,
+    /// Accumulated mouse motion since last frame (cleared in [`Self::clear_edges`]).
+    mouse_delta: Vec2,
+    /// Last cursor position for delta from `CursorMoved` (None until first move).
+    last_mouse_pos: Option<Vec2>,
     pub mouse_down: bool,
     mouse_pressed: bool,
     mouse_released: bool,
@@ -86,6 +90,7 @@ impl FrameInput {
         self.key_select_all = false;
         self.key_duplicate = false;
         self.clipboard_paste.clear();
+        self.mouse_delta = Vec2::ZERO;
     }
 
     fn shortcut_mod(&self) -> bool {
@@ -106,7 +111,7 @@ impl FrameInput {
             mouse_middle_released: self.mouse_middle_released,
             viewport,
             scroll_delta: self.scroll_delta,
-            mouse_delta: Vec2::ZERO,
+            mouse_delta: self.mouse_delta,
             dt,
             text: self.text.clone(),
             key_backspace: self.key_backspace,
@@ -486,7 +491,12 @@ impl<S: Scene> ApplicationHandler for Host<S> {
             }
             WindowEvent::RedrawRequested => self.redraw(),
             WindowEvent::CursorMoved { position, .. } => {
-                self.input.mouse_pos = Vec2::new(position.x as f32, position.y as f32);
+                let pos = Vec2::new(position.x as f32, position.y as f32);
+                if let Some(prev) = self.input.last_mouse_pos {
+                    self.input.mouse_delta += pos - prev;
+                }
+                self.input.last_mouse_pos = Some(pos);
+                self.input.mouse_pos = pos;
                 if let Some(window) = &self.window {
                     window.request_redraw();
                 }

@@ -22,6 +22,60 @@ impl Ui {
         rect
     }
 
+    /// Host texture in an explicit screen rect, sampling `uv_min`..`uv_max` (0..1).
+    /// Clipped to the current clip rect; UVs follow the visible portion.
+    pub fn texture_rect(&mut self, slot: u32, rect: Rect, uv_min: [f32; 2], uv_max: [f32; 2]) {
+        let (rect, uv_min, uv_max) = match self.clip() {
+            Some(clip) => {
+                let Some(visible) = rect.intersect(clip) else {
+                    return;
+                };
+                let (uv_min, uv_max) = remap_uv(rect, visible, uv_min, uv_max);
+                (visible, uv_min, uv_max)
+            }
+            None => (rect, uv_min, uv_max),
+        };
+        self.draw_list.push(DrawCommand::solid(
+            rect,
+            uv_min,
+            uv_max,
+            [1.0, 1.0, 1.0, 1.0],
+            1.0,
+            slot,
+        ));
+    }
+
+    /// Host texture as a (possibly rotated) quad. Corners are TL, TR, BR, BL.
+    /// Clipped to the current clip rect with UV interpolation.
+    pub fn texture_quad(&mut self, slot: u32, pos: [Vec2; 4], uv: [[f32; 2]; 4]) {
+        let mut poly: Vec<(Vec2, [f32; 2])> = pos
+            .into_iter()
+            .zip(uv)
+            .map(|(p, u)| (p, u))
+            .collect();
+        if let Some(clip) = self.clip() {
+            poly = clip_poly_to_rect(poly, clip);
+        }
+        if poly.len() < 3 {
+            return;
+        }
+        let origin = poly[0];
+        for i in 1..poly.len().saturating_sub(1) {
+            let a = poly[i];
+            let b = poly[i + 1];
+            self.draw_list.push(DrawCommand::textured_quad(
+                [
+                    [origin.0.x, origin.0.y],
+                    [a.0.x, a.0.y],
+                    [b.0.x, b.0.y],
+                    [origin.0.x, origin.0.y],
+                ],
+                [origin.1, a.1, b.1, origin.1],
+                slot,
+            ));
+        }
+    }
+
     /// Convenience: texture slot 0, size in UI points (scaled).
     pub fn image(&mut self, size: Vec2) {
         let fill_w = self.layer().fill_w;
@@ -396,6 +450,86 @@ fn draw_plot_series(ui: &mut Ui, rect: Rect, view: &PlotView, values: &[f32], co
         pts.push(view.plot_to_screen(rect, t, *v));
     }
     ui.draw_polyline(&pts, ui.s(2.0), color);
+}
+
+fn clip_poly_to_rect(
+    poly: Vec<(Vec2, [f32; 2])>,
+    clip: Rect,
+) -> Vec<(Vec2, [f32; 2])> {
+    let edges = [
+        (clip.min.x, true, true),
+        (clip.max.x, true, false),
+        (clip.min.y, false, true),
+        (clip.max.y, false, false),
+    ];
+    let mut current = poly;
+    for (bound, is_x, keep_less) in edges {
+        if current.is_empty() {
+            break;
+        }
+        let mut next = Vec::with_capacity(current.len() + 1);
+        for i in 0..current.len() {
+            let a = current[i];
+            let b = current[(i + 1) % current.len()];
+            let a_in = inside(a.0, bound, is_x, keep_less);
+            let b_in = inside(b.0, bound, is_x, keep_less);
+            if a_in {
+                next.push(a);
+            }
+            if a_in != b_in {
+                next.push(intersect(a, b, bound, is_x));
+            }
+        }
+        current = next;
+    }
+    current
+}
+
+fn inside(p: Vec2, bound: f32, is_x: bool, keep_less: bool) -> bool {
+    let v = if is_x { p.x } else { p.y };
+    if keep_less {
+        v >= bound
+    } else {
+        v <= bound
+    }
+}
+
+fn intersect(
+    a: (Vec2, [f32; 2]),
+    b: (Vec2, [f32; 2]),
+    bound: f32,
+    is_x: bool,
+) -> (Vec2, [f32; 2]) {
+    let (av, bv) = if is_x {
+        (a.0.x, b.0.x)
+    } else {
+        (a.0.y, b.0.y)
+    };
+    let denom = bv - av;
+    let t = if denom.abs() < 1e-8 {
+        0.0
+    } else {
+        (bound - av) / denom
+    };
+    let t = t.clamp(0.0, 1.0);
+    let pos = a.0 + (b.0 - a.0) * t;
+    let uv = [
+        a.1[0] + (b.1[0] - a.1[0]) * t,
+        a.1[1] + (b.1[1] - a.1[1]) * t,
+    ];
+    (pos, uv)
+}
+
+fn remap_uv(full: crate::types::Rect, visible: crate::types::Rect, uv_min: [f32; 2], uv_max: [f32; 2]) -> ([f32; 2], [f32; 2]) {
+    let rw = full.width().max(1e-4);
+    let rh = full.height().max(1e-4);
+    let su = uv_max[0] - uv_min[0];
+    let sv = uv_max[1] - uv_min[1];
+    let u0 = uv_min[0] + su * (visible.min.x - full.min.x) / rw;
+    let u1 = uv_min[0] + su * (visible.max.x - full.min.x) / rw;
+    let v0 = uv_min[1] + sv * (visible.min.y - full.min.y) / rh;
+    let v1 = uv_min[1] + sv * (visible.max.y - full.min.y) / rh;
+    ([u0, v0], [u1, v1])
 }
 
 fn push_tex_cmd(ui: &mut Ui, rect: crate::types::Rect, slot: u32) {

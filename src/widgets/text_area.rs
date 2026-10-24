@@ -214,9 +214,6 @@ impl Ui {
             scroll_st.target.y = scroll_st.offset.y;
         }
 
-        let focused = enabled && self.focus_id == Some(widget_id);
-        let editing = focused && self.active_id != Some(bar_id);
-
         if hovered && self.input.mouse_pressed && !on_bar {
             self.focus_id = Some(widget_id);
             self.active_id = Some(widget_id);
@@ -224,6 +221,10 @@ impl Ui {
         if on_bar && self.input.mouse_pressed && enabled {
             self.focus_id = Some(widget_id);
         }
+
+        // A press may focus the field this frame; hit-test it immediately.
+        let focused = enabled && self.focus_id == Some(widget_id);
+        let editing = focused && self.active_id != Some(bar_id);
 
         if focused {
             self.want_capture = true;

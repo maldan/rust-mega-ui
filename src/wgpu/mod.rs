@@ -51,6 +51,7 @@ struct TexSlot {
     view: ::wgpu::TextureView,
     /// Pixel size for owned RGBA uploads (`None` for external views).
     size: Option<(u32, u32)>,
+    nearest: bool,
     bind_group: ::wgpu::BindGroup,
 }
 
@@ -75,6 +76,7 @@ pub struct UiRenderer {
     font_view: ::wgpu::TextureView,
     font_size: (u32, u32),
     sampler: ::wgpu::Sampler,
+    sampler_nearest: ::wgpu::Sampler,
     /// Fallback when a batch has no host texture (font/solid/SDF only).
     default_bind_group: ::wgpu::BindGroup,
     _placeholder_tex: ::wgpu::Texture,
@@ -210,6 +212,15 @@ impl UiRenderer {
             min_filter: ::wgpu::FilterMode::Linear,
             ..Default::default()
         });
+        let sampler_nearest = device.create_sampler(&::wgpu::SamplerDescriptor {
+            label: Some("mega-ui sampler nearest"),
+            address_mode_u: ::wgpu::AddressMode::ClampToEdge,
+            address_mode_v: ::wgpu::AddressMode::ClampToEdge,
+            address_mode_w: ::wgpu::AddressMode::ClampToEdge,
+            mag_filter: ::wgpu::FilterMode::Nearest,
+            min_filter: ::wgpu::FilterMode::Nearest,
+            ..Default::default()
+        });
 
         let (pixels, atlas_w, atlas_h) = ui.font_atlas();
         let (font_tex, font_view) = create_font_texture(device, queue, pixels, atlas_w, atlas_h);
@@ -233,6 +244,7 @@ impl UiRenderer {
             font_view,
             font_size: (atlas_w, atlas_h),
             sampler,
+            sampler_nearest,
             default_bind_group,
             _placeholder_tex: placeholder_tex,
             placeholder_view,
@@ -283,10 +295,39 @@ impl UiRenderer {
         h: u32,
         label: &str,
     ) {
+        self.set_texture_rgba_filtered(device, queue, slot, pixels, w, h, label, false);
+    }
+
+    /// Like [`Self::set_texture_rgba`], with nearest-neighbor sampling (sharp pixels).
+    pub fn set_texture_rgba_nearest(
+        &mut self,
+        device: &::wgpu::Device,
+        queue: &::wgpu::Queue,
+        slot: u32,
+        pixels: &[u8],
+        w: u32,
+        h: u32,
+        label: &str,
+    ) {
+        self.set_texture_rgba_filtered(device, queue, slot, pixels, w, h, label, true);
+    }
+
+    fn set_texture_rgba_filtered(
+        &mut self,
+        device: &::wgpu::Device,
+        queue: &::wgpu::Queue,
+        slot: u32,
+        pixels: &[u8],
+        w: u32,
+        h: u32,
+        label: &str,
+        nearest: bool,
+    ) {
         let w = w.max(1);
         let h = h.max(1);
         if let Some(existing) = self.tex_slots.get_mut(&slot)
             && existing.size == Some((w, h))
+            && existing.nearest == nearest
             && let Some(texture) = existing._texture.as_ref()
         {
             queue.write_texture(
@@ -312,12 +353,17 @@ impl UiRenderer {
         }
 
         let (texture, view) = create_rgba_texture(device, queue, pixels, w, h, label);
+        let sampler = if nearest {
+            &self.sampler_nearest
+        } else {
+            &self.sampler
+        };
         let bind_group = make_bind_group(
             device,
             &self.bind_layout,
             &self.uniform_buf,
             &self.font_view,
-            &self.sampler,
+            sampler,
             &view,
         );
         self.tex_slots.insert(
@@ -326,6 +372,7 @@ impl UiRenderer {
                 _texture: Some(texture),
                 view,
                 size: Some((w, h)),
+                nearest,
                 bind_group,
             },
         );
@@ -355,6 +402,7 @@ impl UiRenderer {
                 _texture: None,
                 view,
                 size: None,
+                nearest: false,
                 bind_group,
             },
         );
@@ -448,12 +496,17 @@ impl UiRenderer {
             &self.placeholder_view,
         );
         for slot in self.tex_slots.values_mut() {
+            let sampler = if slot.nearest {
+                &self.sampler_nearest
+            } else {
+                &self.sampler
+            };
             slot.bind_group = make_bind_group(
                 device,
                 &self.bind_layout,
                 &self.uniform_buf,
                 &self.font_view,
-                &self.sampler,
+                sampler,
                 &slot.view,
             );
         }
@@ -463,14 +516,22 @@ impl UiRenderer {
 fn build_vertices(cmds: &[DrawCommand]) -> Vec<UiVertex> {
     let mut out = Vec::with_capacity(cmds.len().min(MAX_QUADS) * 6);
     for cmd in cmds.iter().take(MAX_QUADS) {
-        let x0 = cmd.rect.min.x;
-        let y0 = cmd.rect.min.y;
-        let x1 = cmd.rect.max.x;
-        let y1 = cmd.rect.max.y;
-        let u0 = cmd.uv_min[0];
-        let v0 = cmd.uv_min[1];
-        let u1 = cmd.uv_max[0];
-        let v1 = cmd.uv_max[1];
+        let (pos, uv) = if cmd.shaped {
+            (cmd.pos, cmd.uv_corners)
+        } else {
+            let x0 = cmd.rect.min.x;
+            let y0 = cmd.rect.min.y;
+            let x1 = cmd.rect.max.x;
+            let y1 = cmd.rect.max.y;
+            let u0 = cmd.uv_min[0];
+            let v0 = cmd.uv_min[1];
+            let u1 = cmd.uv_max[0];
+            let v1 = cmd.uv_max[1];
+            (
+                [[x0, y0], [x1, y0], [x1, y1], [x0, y1]],
+                [[u0, v0], [u1, v0], [u1, v1], [u0, v1]],
+            )
+        };
         let c_tl = cmd.colors[0];
         let c_tr = cmd.colors[1];
         let c_br = cmd.colors[2];
@@ -480,48 +541,48 @@ fn build_vertices(cmds: &[DrawCommand]) -> Vec<UiVertex> {
         let params = cmd.params;
         out.extend_from_slice(&[
             UiVertex {
-                pos: [x0, y0],
-                uv: [u0, v0],
+                pos: pos[0],
+                uv: uv[0],
                 color: c_tl,
                 kind,
                 tex,
                 params,
             },
             UiVertex {
-                pos: [x1, y0],
-                uv: [u1, v0],
+                pos: pos[1],
+                uv: uv[1],
                 color: c_tr,
                 kind,
                 tex,
                 params,
             },
             UiVertex {
-                pos: [x1, y1],
-                uv: [u1, v1],
+                pos: pos[2],
+                uv: uv[2],
                 color: c_br,
                 kind,
                 tex,
                 params,
             },
             UiVertex {
-                pos: [x0, y0],
-                uv: [u0, v0],
+                pos: pos[0],
+                uv: uv[0],
                 color: c_tl,
                 kind,
                 tex,
                 params,
             },
             UiVertex {
-                pos: [x1, y1],
-                uv: [u1, v1],
+                pos: pos[2],
+                uv: uv[2],
                 color: c_br,
                 kind,
                 tex,
                 params,
             },
             UiVertex {
-                pos: [x0, y1],
-                uv: [u0, v1],
+                pos: pos[3],
+                uv: uv[3],
                 color: c_bl,
                 kind,
                 tex,

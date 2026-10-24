@@ -158,6 +158,16 @@ pub(crate) fn handle_typing(ui: &Ui, text: &mut String, st: &mut EditState) -> b
             changed = true;
         }
     }
+    if ui.input.key_delete {
+        if delete_sel(text, st) {
+            changed = true;
+        } else if st.caret < text.len() {
+            let next = st.caret + text[st.caret..].chars().next().unwrap().len_utf8();
+            text.replace_range(st.caret..next, "");
+            st.anchor = st.caret;
+            changed = true;
+        }
+    }
     if !ui.input.key_ctrl && !ui.input.text.is_empty() {
         insert_str(text, st, &ui.input.text);
         changed = true;

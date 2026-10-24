@@ -93,6 +93,12 @@ pub struct DrawCommand {
     /// Extra per-quad data. SDF round: `[w, h, radius, corners]` where corners
     /// is 0=all, 1=top only, 2=bottom only.
     pub params: [f32; 4],
+    /// When true, `pos` / `uv_corners` are used instead of `rect` + `uv_min`/`uv_max`.
+    pub shaped: bool,
+    /// Screen-space corners TL, TR, BR, BL (used when `shaped`).
+    pub pos: [[f32; 2]; 4],
+    /// UVs at TL, TR, BR, BL (used when `shaped`).
+    pub uv_corners: [[f32; 2]; 4],
 }
 
 impl DrawCommand {
@@ -113,6 +119,9 @@ impl DrawCommand {
             kind,
             tex,
             params: [0.0; 4],
+            shaped: false,
+            pos: [[0.0; 2]; 4],
+            uv_corners: [[0.0; 2]; 4],
         }
     }
 
@@ -133,6 +142,39 @@ impl DrawCommand {
             kind,
             tex,
             params: [0.0; 4],
+            shaped: false,
+            pos: [[0.0; 2]; 4],
+            uv_corners: [[0.0; 2]; 4],
+        }
+    }
+
+    /// Textured quad with independent corner positions and UVs (TL, TR, BR, BL).
+    pub fn textured_quad(
+        pos: [[f32; 2]; 4],
+        uv_corners: [[f32; 2]; 4],
+        tex: u32,
+    ) -> Self {
+        let rect = Rect {
+            min: Vec2::new(
+                pos[0][0].min(pos[1][0]).min(pos[2][0]).min(pos[3][0]),
+                pos[0][1].min(pos[1][1]).min(pos[2][1]).min(pos[3][1]),
+            ),
+            max: Vec2::new(
+                pos[0][0].max(pos[1][0]).max(pos[2][0]).max(pos[3][0]),
+                pos[0][1].max(pos[1][1]).max(pos[2][1]).max(pos[3][1]),
+            ),
+        };
+        Self {
+            rect,
+            uv_min: uv_corners[0],
+            uv_max: uv_corners[2],
+            colors: [[1.0, 1.0, 1.0, 1.0]; 4],
+            kind: 1.0,
+            tex,
+            params: [0.0; 4],
+            shaped: true,
+            pos,
+            uv_corners,
         }
     }
 }

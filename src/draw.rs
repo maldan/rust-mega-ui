@@ -69,15 +69,9 @@ pub fn push_round_rect(
         None => (outer, [-pad / w, -pad / h], [1.0 + pad / w, 1.0 + pad / h]),
     };
 
-    out.push(DrawCommand {
-        rect: draw,
-        uv_min,
-        uv_max,
-        colors: [color; 4],
-        kind: KIND_SDF_ROUND,
-        tex: 0,
-        params: [w, h, r, corner],
-    });
+    let mut cmd = DrawCommand::solid(draw, uv_min, uv_max, color, KIND_SDF_ROUND, 0);
+    cmd.params = [w, h, r, corner];
+    out.push(cmd);
 }
 
 /// Ring sector: clockwise sweep from `start_rad` (math angle, 0=+x, CCW, y-up).
@@ -153,15 +147,16 @@ pub fn push_line_segment(
     if draw.is_none() {
         return;
     }
-    out.push(DrawCommand {
-        rect: draw.unwrap(),
-        uv_min: [thickness, 0.0],
-        uv_max: [thickness, 0.0],
-        colors: [color; 4],
-        kind: KIND_SDF_LINE,
-        tex: 0,
-        params: [a.x, a.y, b.x, b.y],
-    });
+    let mut cmd = DrawCommand::solid(
+        draw.unwrap(),
+        [thickness, 0.0],
+        [thickness, 0.0],
+        color,
+        KIND_SDF_LINE,
+        0,
+    );
+    cmd.params = [a.x, a.y, b.x, b.y];
+    out.push(cmd);
 }
 
 pub fn push_polyline(
