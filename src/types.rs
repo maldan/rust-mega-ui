@@ -149,11 +149,7 @@ impl DrawCommand {
     }
 
     /// Textured quad with independent corner positions and UVs (TL, TR, BR, BL).
-    pub fn textured_quad(
-        pos: [[f32; 2]; 4],
-        uv_corners: [[f32; 2]; 4],
-        tex: u32,
-    ) -> Self {
+    pub fn textured_quad(pos: [[f32; 2]; 4], uv_corners: [[f32; 2]; 4], tex: u32) -> Self {
         let rect = Rect {
             min: Vec2::new(
                 pos[0][0].min(pos[1][0]).min(pos[2][0]).min(pos[3][0]),
@@ -205,6 +201,7 @@ pub struct UiInput {
     pub key_backspace: bool,
     pub key_delete: bool,
     pub key_enter: bool,
+    pub key_escape: bool,
     pub key_left: bool,
     pub key_right: bool,
     pub key_up: bool,

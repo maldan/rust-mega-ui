@@ -329,7 +329,10 @@ impl Ui {
             }
         }
 
-        let min = Vec2::new(self.s(self.theme.metrics.window_min_w), self.s(self.theme.metrics.window_min_h));
+        let min = Vec2::new(
+            self.s(self.theme.metrics.window_min_w),
+            self.s(self.theme.metrics.window_min_h),
+        );
         let vis_h = if collapsed { title_h } else { size.y };
         clamp_win(
             &mut pos,
@@ -373,7 +376,11 @@ impl Ui {
             self.theme.window.title
         };
 
-        self.round_rect(rect, self.s(self.theme.metrics.window_radius), self.theme.window.border);
+        self.round_rect(
+            rect,
+            self.s(self.theme.metrics.window_radius),
+            self.theme.window.border,
+        );
         self.round_rect(
             rect.inset(1.0),
             self.s(self.theme.metrics.window_radius) - 1.0,

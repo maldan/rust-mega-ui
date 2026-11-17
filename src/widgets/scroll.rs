@@ -40,6 +40,7 @@ impl Ui {
                 offset: Vec2::ZERO,
                 target: Vec2::ZERO,
                 content: Vec2::ZERO,
+                text_scale: 0.0,
             });
 
         let bar = self.s(self.theme.metrics.scroll_bar);
@@ -170,6 +171,7 @@ impl Ui {
                 offset: Vec2::ZERO,
                 target: Vec2::ZERO,
                 content: Vec2::ZERO,
+                text_scale: 0.0,
             });
         st.target = target;
         st.offset = target;
@@ -313,7 +315,11 @@ fn interact_bars(
             min: Vec2::new(view.min.x, view.max.y + gap),
             max: Vec2::new(view.max.x, view.max.y + gap + bar),
         };
-        let tw = thumb_len(view.width(), st.content.x, ui.s(ui.theme.metrics.scroll_thumb_min));
+        let tw = thumb_len(
+            view.width(),
+            st.content.x,
+            ui.s(ui.theme.metrics.scroll_thumb_min),
+        );
         let travel = (view.width() - tw).max(0.0);
         let max_s = (st.content.x - view.width()).max(0.0);
         let tx = if max_s > 0.0 && travel > 0.0 {
@@ -377,7 +383,11 @@ fn draw_bars(
             max: Vec2::new(view.max.x, view.max.y + gap + bar),
         };
         ui.round_rect(track, 0.0, ui.theme.scroll.bg);
-        let tw = thumb_len(view.width(), st.content.x, ui.s(ui.theme.metrics.scroll_thumb_min));
+        let tw = thumb_len(
+            view.width(),
+            st.content.x,
+            ui.s(ui.theme.metrics.scroll_thumb_min),
+        );
         let travel = (view.width() - tw).max(0.0);
         let max_s = (st.content.x - view.width()).max(0.0);
         let tx = if max_s > 0.0 && travel > 0.0 {

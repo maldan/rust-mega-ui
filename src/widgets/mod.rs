@@ -12,6 +12,7 @@ mod knob;
 pub mod label;
 pub(crate) mod menu;
 pub mod plot;
+mod popover;
 pub mod scroll;
 pub(crate) mod select;
 mod selectable;

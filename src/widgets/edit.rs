@@ -8,6 +8,148 @@ pub(crate) struct EditState {
     pub anchor: usize,
 }
 
+// Shared by single-line and multiline fields; hosts need no extra input events.
+#[derive(Clone, Copy)]
+struct TextClick {
+    id: crate::Id,
+    pos: Vec2,
+    age: f32,
+}
+
+#[derive(Default)]
+pub(crate) struct TextMouseState {
+    last_click: Option<TextClick>,
+    candidate: Option<TextClick>,
+    word_drag: Option<(crate::Id, usize, usize)>,
+}
+
+impl TextMouseState {
+    pub(crate) fn begin_frame(&mut self, input: &crate::UiInput, tolerance: f32) {
+        if let Some(click) = &mut self.last_click {
+            click.age += input.dt.max(0.0);
+            if click.age > 0.4
+                || (input.mouse_down
+                    && !input.mouse_pressed
+                    && click.pos.distance(input.mouse_pos) > tolerance)
+            {
+                self.last_click = None;
+            }
+        }
+        // Any intervening press (including outside text fields) breaks the pair.
+        self.candidate = if input.mouse_pressed {
+            self.last_click.take()
+        } else {
+            None
+        };
+        if input.mouse_pressed || !input.mouse_down {
+            self.word_drag = None;
+        }
+    }
+
+    fn press(&mut self, id: crate::Id, pos: Vec2, tolerance: f32, shift: bool) -> bool {
+        let double = !shift
+            && self.candidate.take().is_some_and(|click| {
+                click.id == id && click.age <= 0.4 && click.pos.distance(pos) <= tolerance
+            });
+        self.last_click = if double || shift {
+            None
+        } else {
+            Some(TextClick { id, pos, age: 0.0 })
+        };
+        double
+    }
+}
+
+pub(crate) fn word_range(text: &str, at: usize) -> (usize, usize) {
+    use unicode_segmentation::UnicodeSegmentation;
+    if text.is_empty() {
+        return (0, 0);
+    }
+    let at = at.min(text.len().saturating_sub(1));
+    text.split_word_bound_indices()
+        .find(|(start, part)| at < start + part.len())
+        .map(|(start, part)| (start, start + part.len()))
+        .unwrap_or((0, 0))
+}
+
+// Unlike caret hit-testing, keep the character under the pointer even in its
+// right half, so double-clicking the last letter still selects that word.
+pub(crate) fn byte_under_x(ui: &Ui, text: &str, x: f32) -> usize {
+    let mut end = 0.0;
+    for (i, c) in text.char_indices() {
+        end += ui.text_width(&c.to_string());
+        if x < end {
+            return i;
+        }
+    }
+    text.len()
+}
+
+pub(crate) fn text_press(
+    ui: &mut Ui,
+    id: crate::Id,
+    text: &str,
+    st: &mut EditState,
+    at: usize,
+    word_at: usize,
+) {
+    let tolerance = ui.s(4.0);
+    if ui
+        .text_mouse
+        .press(id, ui.input.mouse_pos, tolerance, ui.input.key_shift)
+    {
+        let (a, b) = word_range(text, word_at);
+        st.anchor = a;
+        st.caret = b;
+        ui.text_mouse.word_drag = Some((id, a, b));
+    } else {
+        st.caret = at;
+        if !ui.input.key_shift {
+            st.anchor = at;
+        }
+    }
+}
+
+pub(crate) fn text_drag(
+    ui: &Ui,
+    id: crate::Id,
+    text: &str,
+    st: &mut EditState,
+    at: usize,
+    word_at: usize,
+) {
+    if let Some((_, a, b)) = ui
+        .text_mouse
+        .word_drag
+        .filter(|(drag_id, _, _)| *drag_id == id)
+    {
+        let (start, end) = word_range(text, word_at);
+        if start < a {
+            st.anchor = b.min(text.len());
+            st.caret = start;
+        } else {
+            st.anchor = a.min(text.len());
+            st.caret = end.max(b.min(text.len()));
+        }
+    } else {
+        st.caret = at;
+    }
+}
+
+pub(crate) fn input_view_start(ui: &Ui, text: &str, caret: usize, width: f32) -> usize {
+    if ui.text_width(&text[..caret]) > width {
+        for (i, _) in text.char_indices() {
+            if i > caret {
+                break;
+            }
+            if ui.text_width(&text[i..caret]) <= width * 0.85 {
+                return i;
+            }
+        }
+    }
+    0
+}
+
 pub(crate) fn sel_range(st: EditState) -> (usize, usize) {
     (st.caret.min(st.anchor), st.caret.max(st.anchor))
 }
@@ -371,5 +513,267 @@ mod tests {
         move_end(&mut s, 8, true);
         assert_eq!(s.caret, 8);
         assert_eq!(s.anchor, 3);
+    }
+}
+
+#[cfg(test)]
+mod text_mouse_tests {
+    use super::*;
+    use crate::UiInput;
+
+    fn frame(ui: &mut Ui, text: &mut String, multiline: bool, input: UiInput) -> (usize, usize) {
+        ui.begin_frame(UiInput {
+            viewport: Vec2::new(800.0, 600.0),
+            ..input
+        });
+        if multiline {
+            ui.text_area("field", text, Vec2::new(180.0, 100.0));
+        } else {
+            ui.text_input("field", text);
+        }
+        let range = sel_range(ui.edits[&ui.current_id("field")]);
+        ui.end_frame();
+        range
+    }
+
+    fn press(pos: Vec2) -> UiInput {
+        UiInput {
+            mouse_pos: pos,
+            mouse_pressed: true,
+            mouse_down: true,
+            dt: 0.05,
+            ..Default::default()
+        }
+    }
+
+    fn release(pos: Vec2) -> UiInput {
+        UiInput {
+            mouse_pos: pos,
+            mouse_released: true,
+            dt: 0.05,
+            ..Default::default()
+        }
+    }
+
+    #[test]
+    fn unicode_words_spaces_punctuation_and_empty_text() {
+        for (text, at, expected) in [
+            ("hello world", 2, "hello"),
+            ("привет мир", 5, "привет"),
+            ("cafe\u{301}!", 4, "cafe\u{301}"),
+            ("hello, world", 5, ","),
+            ("one   two", 4, "   "),
+            ("a😀b", 2, "😀"),
+            ("last", 4, "last"),
+            ("", 0, ""),
+        ] {
+            let (a, b) = word_range(text, at);
+            assert_eq!(&text[a..b], expected);
+        }
+    }
+
+    #[test]
+    fn double_click_selects_word_survives_hold_release_and_replaces_selection() {
+        for multiline in [false, true] {
+            let mut ui = Ui::new();
+            let mut text = "привет мир".to_owned();
+            let pos = Vec2::new(8.0 + ui.text_width("при"), 14.0);
+            let one = frame(&mut ui, &mut text, multiline, press(pos));
+            assert_eq!(one.0, one.1);
+            frame(&mut ui, &mut text, multiline, release(pos));
+            assert_eq!(
+                frame(&mut ui, &mut text, multiline, press(pos)),
+                (0, "привет".len())
+            );
+            assert_eq!(
+                frame(
+                    &mut ui,
+                    &mut text,
+                    multiline,
+                    UiInput {
+                        mouse_pos: pos,
+                        mouse_down: true,
+                        dt: 0.02,
+                        ..Default::default()
+                    }
+                ),
+                (0, "привет".len())
+            );
+            assert_eq!(
+                frame(&mut ui, &mut text, multiline, release(pos)),
+                (0, "привет".len())
+            );
+            frame(
+                &mut ui,
+                &mut text,
+                multiline,
+                UiInput {
+                    text: "hi".into(),
+                    ..Default::default()
+                },
+            );
+            assert_eq!(text, "hi мир");
+        }
+    }
+
+    #[test]
+    fn last_letter_right_half_selects_the_word_and_word_drag_extends_both_ways() {
+        for multiline in [false, true] {
+            let mut ui = Ui::new();
+            let mut text = "one two end".to_owned();
+            let pos = Vec2::new(
+                8.0 + ui.text_width("one tw") + ui.text_width("o") * 0.8,
+                14.0,
+            );
+            frame(&mut ui, &mut text, multiline, press(pos));
+            frame(&mut ui, &mut text, multiline, release(pos));
+            assert_eq!(frame(&mut ui, &mut text, multiline, press(pos)), (4, 7));
+            let right = Vec2::new(8.0 + ui.text_width("one two e"), 14.0);
+            assert_eq!(
+                frame(
+                    &mut ui,
+                    &mut text,
+                    multiline,
+                    UiInput {
+                        mouse_pos: right,
+                        mouse_down: true,
+                        ..Default::default()
+                    }
+                ),
+                (4, 11)
+            );
+            assert_eq!(
+                frame(
+                    &mut ui,
+                    &mut text,
+                    multiline,
+                    UiInput {
+                        mouse_pos: Vec2::new(10.0, 14.0),
+                        mouse_down: true,
+                        ..Default::default()
+                    }
+                ),
+                (0, 7)
+            );
+        }
+    }
+
+    #[test]
+    fn slow_distant_shift_and_intervening_clicks_do_not_select_words() {
+        for multiline in [false, true] {
+            for kind in 0..4 {
+                let mut ui = Ui::new();
+                let mut text = "hello world".to_owned();
+                let pos = Vec2::new(12.0, 14.0);
+                frame(&mut ui, &mut text, multiline, press(pos));
+                frame(&mut ui, &mut text, multiline, release(pos));
+                let mut next = press(pos);
+                match kind {
+                    0 => next.dt = 0.6,
+                    1 => next.mouse_pos.x += 20.0,
+                    2 => next.key_shift = true,
+                    _ => {
+                        let outside = Vec2::new(500.0, 400.0);
+                        frame(&mut ui, &mut text, multiline, press(outside));
+                        frame(&mut ui, &mut text, multiline, release(outside));
+                    }
+                }
+                let range = frame(&mut ui, &mut text, multiline, next);
+                assert_ne!(range, (0, 5), "kind={kind}, multiline={multiline}");
+            }
+        }
+    }
+
+    #[test]
+    fn ordinary_drag_remains_character_based_and_breaks_double_click_pair() {
+        for multiline in [false, true] {
+            let mut ui = Ui::new();
+            let mut text = "hello world".to_owned();
+            let pos = Vec2::new(8.0, 14.0);
+            frame(&mut ui, &mut text, multiline, press(pos));
+            let end = Vec2::new(8.0 + ui.text_width("hel"), 14.0);
+            assert_eq!(
+                frame(
+                    &mut ui,
+                    &mut text,
+                    multiline,
+                    UiInput {
+                        mouse_pos: end,
+                        mouse_down: true,
+                        ..Default::default()
+                    }
+                ),
+                (0, 3)
+            );
+            frame(&mut ui, &mut text, multiline, release(end));
+            let range = frame(&mut ui, &mut text, multiline, press(pos));
+            assert_eq!(range, (0, 0));
+        }
+    }
+
+    #[test]
+    fn scrolled_input_hit_testing_uses_visible_text() {
+        let mut ui = Ui::new();
+        let mut text = "first second third fourth fifth sixth seventh".to_owned();
+        let start = input_view_start(&ui, &text, text.len(), ui.s(164.0));
+        assert!(start > 0);
+        let pos = Vec2::new(8.0 + ui.text_width(&text[start..start + 1]) * 0.2, 14.0);
+        assert_eq!(frame(&mut ui, &mut text, false, press(pos)), (start, start));
+    }
+
+    #[test]
+    fn click_pair_requires_same_widget() {
+        let mut mouse = TextMouseState::default();
+        let ui = Ui::new();
+        let a = ui.current_id("a");
+        let b = ui.current_id("b");
+        let pos = Vec2::ZERO;
+        mouse.begin_frame(&press(pos), 4.0);
+        assert!(!mouse.press(a, pos, 4.0, false));
+        mouse.begin_frame(&release(pos), 4.0);
+        mouse.begin_frame(&press(pos), 4.0);
+        assert!(!mouse.press(b, pos, 4.0, false));
+    }
+
+    #[test]
+    fn multiline_double_click_handles_soft_wrap_and_vertical_scroll() {
+        let mut ui = Ui::new();
+        let mut text = "extraordinarilylongwordwithoutspaces".to_owned();
+        // The same logical word spans several visual lines.
+        let pos = Vec2::new(12.0, 8.0 + ui.text_height() * 1.5);
+        frame(&mut ui, &mut text, true, press(pos));
+        frame(&mut ui, &mut text, true, release(pos));
+        let len = text.len();
+        assert_eq!(frame(&mut ui, &mut text, true, press(pos)), (0, len));
+
+        let mut text = "zero\none\ntwo\nthree\nfour\nfive\nsix\nseven\neight".to_owned();
+        frame(&mut ui, &mut text, true, UiInput::default());
+        let id = ui.current_id("field");
+        ui.edits.insert(
+            id,
+            EditState {
+                caret: 0,
+                anchor: 0,
+            },
+        );
+        let offset = ui.text_height() * 3.0;
+        let scroll = ui.scrolls.get_mut(&id).unwrap();
+        scroll.offset.y = offset;
+        scroll.target.y = offset;
+        let pos = Vec2::new(12.0, 8.0 + ui.text_height() * 0.5);
+        // Break any pair left by the previous example.
+        frame(
+            &mut ui,
+            &mut text,
+            true,
+            UiInput {
+                dt: 0.6,
+                ..Default::default()
+            },
+        );
+        frame(&mut ui, &mut text, true, press(pos));
+        frame(&mut ui, &mut text, true, release(pos));
+        let (a, b) = frame(&mut ui, &mut text, true, press(pos));
+        assert_eq!(&text[a..b], "three");
     }
 }

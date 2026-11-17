@@ -947,7 +947,10 @@ impl Scene for NodesDemo {
                     state.space.selected_nodes.clear();
                     state.space.selected_link = None;
                 }
-                if ui.menu_item("clone_selected_ctrld", "Clone selected (Ctrl+D)").clicked() {
+                if ui
+                    .menu_item("clone_selected_ctrld", "Clone selected (Ctrl+D)")
+                    .clicked()
+                {
                     if !state.space.selected_nodes.is_empty() {
                         state.space.request_clone_nodes = state.space.selected_nodes.clone();
                     }

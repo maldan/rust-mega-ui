@@ -44,7 +44,11 @@ impl Ui {
 
         // Outer frame.
         self.round_rect(outer, radius, self.theme.window.border);
-        self.round_rect(outer.inset(1.0), (radius - 1.0).max(0.0), self.theme.window.body);
+        self.round_rect(
+            outer.inset(1.0),
+            (radius - 1.0).max(0.0),
+            self.theme.window.body,
+        );
 
         let bar = Rect {
             min: outer.min + Vec2::splat(1.0),
@@ -144,9 +148,9 @@ impl Ui {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use glam::Vec2;
     use crate::types::UiInput;
     use crate::{LayoutDir, Ui, new_layer};
+    use glam::Vec2;
 
     fn tab_h(ui: &mut Ui) -> f32 {
         ui.layers.push(new_layer(

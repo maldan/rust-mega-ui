@@ -158,7 +158,10 @@ impl Scene for DockDemo {
 
         ui.menu_bar(|ui| {
             ui.menu("file", "File", |ui| {
-                if ui.menu_item_icon("new_scene", "plus", "New Scene").clicked() {
+                if ui
+                    .menu_item_icon("new_scene", "plus", "New Scene")
+                    .clicked()
+                {
                     state.last_menu = String::from("File / New Scene");
                     state.log.push_str("new scene\n");
                     ui.notify_success("New scene");
@@ -173,11 +176,17 @@ impl Scene for DockDemo {
                     ui.notify_success("Saved");
                 }
                 ui.menu("open_recent", "Open Recent", |ui| {
-                    if ui.menu_item_icon("level_01mega", "file", "level_01.mega").clicked() {
+                    if ui
+                        .menu_item_icon("level_01mega", "file", "level_01.mega")
+                        .clicked()
+                    {
                         state.last_menu = String::from("File / Open Recent / level_01.mega");
                         state.log.push_str("open level_01.mega\n");
                     }
-                    if ui.menu_item_icon("sandboxmega", "file", "sandbox.mega").clicked() {
+                    if ui
+                        .menu_item_icon("sandboxmega", "file", "sandbox.mega")
+                        .clicked()
+                    {
                         state.last_menu = String::from("File / Open Recent / sandbox.mega");
                         state.log.push_str("open sandbox.mega\n");
                     }
@@ -196,7 +205,10 @@ impl Scene for DockDemo {
                     state.log.push_str("redo\n");
                 }
                 ui.separator();
-                if ui.menu_item_icon("duplicate", "copy", "Duplicate").clicked() {
+                if ui
+                    .menu_item_icon("duplicate", "copy", "Duplicate")
+                    .clicked()
+                {
                     state.log.push_str("duplicate\n");
                 }
                 if ui.menu_item_icon("rename", "edit", "Rename").clicked() {
@@ -227,10 +239,16 @@ impl Scene for DockDemo {
                     }
                 });
                 ui.separator();
-                if ui.menu_item_icon("settings_panel", "settings", "Settings panel").clicked() {
+                if ui
+                    .menu_item_icon("settings_panel", "settings", "Settings panel")
+                    .clicked()
+                {
                     state.last_menu = String::from("View / Settings");
                 }
-                if ui.menu_item("toggle_wireframe", "Toggle Wireframe").clicked() {
+                if ui
+                    .menu_item("toggle_wireframe", "Toggle Wireframe")
+                    .clicked()
+                {
                     state.wireframe = !state.wireframe;
                     state
                         .log
@@ -248,7 +266,10 @@ impl Scene for DockDemo {
                 if ui.menu_item_icon("about", "info", "About").clicked() {
                     ui.notify("mega-ui dock demo");
                 }
-                if ui.menu_item_icon("report_issue", "warning", "Report issue").clicked() {
+                if ui
+                    .menu_item_icon("report_issue", "warning", "Report issue")
+                    .clicked()
+                {
                     ui.notify_warn("Issue tracker…");
                 }
             });
@@ -394,19 +415,31 @@ impl Scene for DockDemo {
                 let tex_size = ui.available_size();
                 let zone = ui.surface(tex_size, *clear);
                 ui.context_menu("viewport_ctx", ui.rect_hovered(zone), |ui| {
-                    if ui.menu_item_icon("frame_selected", "search", "Frame selected").clicked() {
+                    if ui
+                        .menu_item_icon("frame_selected", "search", "Frame selected")
+                        .clicked()
+                    {
                         log.push_str("frame selected\n");
                         ui.notify("Frame selected");
                     }
-                    if ui.menu_item("toggle_wireframe", "Toggle wireframe").clicked() {
+                    if ui
+                        .menu_item("toggle_wireframe", "Toggle wireframe")
+                        .clicked()
+                    {
                         *wireframe = !*wireframe;
                         ui.notify(&format!("wireframe = {}", *wireframe));
                     }
-                    if ui.menu_item_icon("copy_view", "copy", "Copy view").clicked() {
+                    if ui
+                        .menu_item_icon("copy_view", "copy", "Copy view")
+                        .clicked()
+                    {
                         log.push_str("copy view\n");
                     }
                     ui.separator();
-                    if ui.menu_item_icon("clear_selection", "delete", "Clear selection").clicked() {
+                    if ui
+                        .menu_item_icon("clear_selection", "delete", "Clear selection")
+                        .clicked()
+                    {
                         ui.notify_warn("Selection cleared");
                     }
                 });

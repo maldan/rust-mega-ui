@@ -436,7 +436,10 @@ impl Scene for Demo {
                     ui.notify("Open dialog…");
                 }
                 ui.menu("open_recent", "Open Recent", |ui| {
-                    if ui.menu_item_icon("projectmega", "file", "project.mega").clicked() {
+                    if ui
+                        .menu_item_icon("projectmega", "file", "project.mega")
+                        .clicked()
+                    {
                         state.last_menu = String::from("File / Open Recent / project.mega");
                     }
                     if ui.menu_item_icon("demomega", "file", "demo.mega").clicked() {
@@ -448,20 +451,32 @@ impl Scene for Demo {
                     });
                 });
                 ui.separator();
-                if ui.menu_item_icon("file_manager", "folder", "File Manager").clicked() {
+                if ui
+                    .menu_item_icon("file_manager", "folder", "File Manager")
+                    .clicked()
+                {
                     state.show_fm = true;
                     state.last_menu = String::from("File / File Manager");
                 }
-                if ui.menu_item_icon("explorer", "folder", "Explorer").clicked() {
+                if ui
+                    .menu_item_icon("explorer", "folder", "Explorer")
+                    .clicked()
+                {
                     state.show_explorer = true;
                     state.last_menu = String::from("File / Explorer");
                 }
-                if ui.menu_item_icon("asset_manager", "file", "Asset Manager").clicked() {
+                if ui
+                    .menu_item_icon("asset_manager", "file", "Asset Manager")
+                    .clicked()
+                {
                     state.show_assets = true;
                     state.last_menu = String::from("File / Asset Manager");
                 }
                 ui.separator();
-                if ui.menu_item_icon("delete_project", "delete", "Delete project…").clicked() {
+                if ui
+                    .menu_item_icon("delete_project", "delete", "Delete project…")
+                    .clicked()
+                {
                     state.confirm_open = true;
                     state.last_menu = String::from("File / Delete project");
                 }
@@ -496,7 +511,10 @@ impl Scene for Demo {
                 if ui.menu_item("toggle_inputs", "Toggle Inputs").clicked() {
                     state.show_inputs = !state.show_inputs;
                 }
-                if ui.menu_item("toggle_file_manager", "Toggle File Manager").clicked() {
+                if ui
+                    .menu_item("toggle_file_manager", "Toggle File Manager")
+                    .clicked()
+                {
                     state.show_fm = !state.show_fm;
                 }
                 if ui.menu_item("calculator", "Calculator").clicked() {

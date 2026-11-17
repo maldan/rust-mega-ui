@@ -34,7 +34,8 @@ pub struct Font {
 }
 
 fn px_key(px: f32) -> u32 {
-    // 1px buckets — avoids packing dozens of near-identical sizes while dragging scale.
+    // Rasterization and measurement must use this same canonical size.
+    // 1px buckets avoid packing near-identical sizes while dragging scale.
     px.round().clamp(1.0, 256.0) as u32
 }
 
@@ -130,15 +131,19 @@ impl Font {
     }
 
     pub fn line_height_at(&self, px: f32) -> f32 {
-        match self.font.horizontal_line_metrics(px) {
-            Some(m) => m.new_line_size,
-            None => px * 1.2,
+        let raster_px = px_key(px) as f32;
+        let ratio = px.clamp(1.0, 256.0) / raster_px;
+        match self.font.horizontal_line_metrics(raster_px) {
+            Some(m) => m.new_line_size * ratio,
+            None => raster_px * 1.2 * ratio,
         }
     }
 
     pub fn text_width_at(&self, text: &str, px: f32) -> f32 {
+        let raster_px = px_key(px) as f32;
+        let ratio = px.clamp(1.0, 256.0) / raster_px;
         text.chars()
-            .map(|c| self.font.metrics(c, px).advance_width)
+            .map(|c| self.font.metrics(c, raster_px).advance_width * ratio)
             .sum()
     }
 
@@ -206,6 +211,7 @@ impl Font {
     }
 
     fn glyph(&mut self, c: char, px: f32) -> Glyph {
+        let px = px_key(px) as f32;
         let key = (c, px_key(px));
         if let Some(g) = self.glyphs.get(&key) {
             return *g;
@@ -279,14 +285,15 @@ impl Font {
         clip: Option<Rect>,
     ) {
         let mut pen = pos.x;
+        let ratio = px.clamp(1.0, 256.0) / px_key(px) as f32;
         for c in text.chars() {
             let g = self.glyph(c, px);
             if g.w > 0.0 && g.h > 0.0 {
                 let rect =
-                    Rect::from_min_size(Vec2::new(pen + g.x, pos.y + g.y), Vec2::new(g.w, g.h));
+                    Rect::from_min_size(Vec2::new(pen + g.x * ratio, pos.y + g.y * ratio), Vec2::new(g.w * ratio, g.h * ratio));
                 push_textured(out, rect, g.uv_min, g.uv_max, color, clip);
             }
-            pen += g.advance;
+            pen += g.advance * ratio;
         }
     }
 }
@@ -388,4 +395,67 @@ pub fn push_gradient(
     out.push(DrawCommand::gradient(
         draw, white_uv, white_uv, cols, 0.0, 0,
     ));
+}
+
+#[cfg(test)]
+mod scale_metrics_tests {
+    use super::*;
+
+    #[test]
+    fn measurements_scale_smoothly_across_raster_size_boundaries() {
+        let font = Font::load_default(14.0);
+        let text = "Проверка wrapping and cursor alignment";
+        let reference_width = font.text_width_at(text, 14.0) / 14.0;
+        let reference_height = font.line_height_at(14.0) / 14.0;
+        for px in [8.49, 8.51, 14.49, 14.51, 18.49, 18.51, 29.49, 29.51] {
+            assert!((font.text_width_at(text, px) / px - reference_width).abs() < 0.001, "width at {px}");
+            assert!((font.line_height_at(px) / px - reference_height).abs() < 0.001, "height at {px}");
+        }
+    }
+
+    #[test]
+    fn caret_measurement_matches_drawn_text_after_fractional_scale_changes() {
+        let mut font = Font::load_default(14.0);
+        let origin = Vec2::new(8.0, 8.0);
+        for px in [14.0, 14.14, 14.42, 14.56, 14.84, 15.12, 14.28, 18.2] {
+            for text in [
+                "Redraw with high quality",
+                "one   two  ",
+                "привет мир",
+                "e\u{301} 😀",
+            ] {
+                let expected = origin.x + font.text_width_at(text, px);
+                let marker = font.glyph('|', px);
+                let mut commands = Vec::new();
+                font.draw_text(
+                    &mut commands,
+                    origin,
+                    &format!("{text}|"),
+                    [1.0; 4],
+                    px,
+                    None,
+                );
+                let actual = commands.last().unwrap().rect.min.x - marker.x * (px.clamp(1.0, 256.0) / px_key(px) as f32);
+                assert!(
+                    (actual - expected).abs() < 0.001,
+                    "px={px}, text={text:?}: caret={expected}, drawn end={actual}"
+                );
+            }
+        }
+    }
+
+    #[test]
+    fn glyph_metrics_do_not_depend_on_first_fractional_size_in_cache_bucket() {
+        let mut font = Font::load_default(14.14);
+        for px in [14.42, 14.14, 18.2, 18.4] {
+            for c in ['a', ' ', 'я', '😀'] {
+                let expected = font.font.metrics(c, px_key(px) as f32).advance_width;
+                let actual = font.glyph(c, px).advance;
+                assert!(
+                    (actual - expected).abs() < 0.001,
+                    "px={px}, char={c:?}: expected={expected}, actual={actual}"
+                );
+            }
+        }
+    }
 }

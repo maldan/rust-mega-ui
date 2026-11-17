@@ -214,7 +214,11 @@ impl Ui {
         let popup = Rect::from_min_size(origin, Vec2::new(popup_w, popup_h));
         let radius = self.s(self.theme.metrics.button_radius);
         self.round_rect_overlay(popup, radius, self.theme.button.border);
-        self.round_rect_overlay(popup.inset(1.0), (radius - 1.0).max(0.0), self.theme.popup.bg);
+        self.round_rect_overlay(
+            popup.inset(1.0),
+            (radius - 1.0).max(0.0),
+            self.theme.popup.bg,
+        );
         self.absorb_rect(popup);
 
         let popup_hov = popup.contains(self.input.mouse_pos);

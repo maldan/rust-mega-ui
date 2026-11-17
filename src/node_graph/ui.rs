@@ -230,14 +230,10 @@ impl Ui {
             }
         }
 
-        let pending_stroke = space.pending.as_ref().map(|p| {
-            (
-                space.type_color(p.ty),
-                space.zoom,
-                p.side,
-                p.start,
-            )
-        });
+        let pending_stroke = space
+            .pending
+            .as_ref()
+            .map(|p| (space.type_color(p.ty), space.zoom, p.side, p.start));
         if let Some((color, z, side, start)) = pending_stroke {
             let thick = 2.4 * z.clamp(0.7, 1.4);
             let (a, b) = match side {
@@ -770,11 +766,7 @@ impl Ui {
         let layout_z = (self.scale / old_scale.max(1e-4)).max(1e-4);
         let world_h = (title_h + body_h / layout_z).max(title_h + 24.0);
         let world_w = (hug_x / layout_z + NODE_PAD * 2.0).max(min_w);
-        map_upsert(
-            &mut space.node_sizes,
-            id,
-            Vec2::new(world_w, world_h),
-        );
+        map_upsert(&mut space.node_sizes, id, Vec2::new(world_w, world_h));
 
         self.scale = old_scale;
         self.spacing = old_spacing;

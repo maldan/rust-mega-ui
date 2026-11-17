@@ -216,9 +216,7 @@ impl<S: Scene> Host<S> {
             match puffin_http::Server::new(&addr) {
                 Ok(server) => {
                     puffin::set_scopes_on(true);
-                    eprintln!(
-                        "puffin: serving on {addr} — run `puffin_viewer --url {addr}`"
-                    );
+                    eprintln!("puffin: serving on {addr} — run `puffin_viewer --url {addr}`");
                     Some(server)
                 }
                 Err(err) => {

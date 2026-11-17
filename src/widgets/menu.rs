@@ -378,7 +378,11 @@ impl Ui {
 
         let radius = self.s(self.theme.metrics.button_radius);
         self.round_rect_overlay(popup, radius, self.theme.button.border);
-        self.round_rect_overlay(popup.inset(1.0), (radius - 1.0).max(0.0), self.theme.popup.bg);
+        self.round_rect_overlay(
+            popup.inset(1.0),
+            (radius - 1.0).max(0.0),
+            self.theme.popup.bg,
+        );
 
         let pointer_inside = self.hovered_overlay(popup);
         if pointer_inside {
@@ -403,7 +407,8 @@ impl Ui {
         add(self);
 
         let ctx = self.menu_stack.pop().unwrap();
-        let content_h = (ctx.cursor_y - popup.min.y + pad).max(self.s(self.theme.metrics.menu_item_h));
+        let content_h =
+            (ctx.cursor_y - popup.min.y + pad).max(self.s(self.theme.metrics.menu_item_h));
         let chevron_room = self.s(18.0);
         let content_w = (ctx.max_label_w + self.s(20.0) + chevron_room + pad * 2.0).max(min_w);
         self.menu_popup_size

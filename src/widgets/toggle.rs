@@ -29,7 +29,11 @@ impl Ui {
         };
         let rect = self.allocate(Vec2::new(width, height));
         self.round_rect(rect, radius, self.theme.button.border);
-        self.round_rect(rect.inset(1.0), (radius - 1.0).max(0.0), self.theme.toggle.off);
+        self.round_rect(
+            rect.inset(1.0),
+            (radius - 1.0).max(0.0),
+            self.theme.toggle.off,
+        );
 
         let n = options.len() as f32;
         let seg_w = rect.width() / n;

@@ -2,8 +2,9 @@ use glam::Vec2;
 
 use crate::types::{CursorIcon, Rect, Response};
 use crate::widgets::edit::{
-    EditState, byte_at_x, clamp_edit, draw_sel_line, handle_clipboard, handle_typing, has_sel,
-    insert_str, move_end, move_home, move_left, move_right, sel_range,
+    EditState, byte_at_x, byte_under_x, clamp_edit, draw_sel_line, handle_clipboard, handle_typing,
+    has_sel, insert_str, move_end, move_home, move_left, move_right, sel_range, text_drag,
+    text_press,
 };
 use crate::widgets::scroll::{
     draw_vertical_scroll_bar, interact_vertical_scroll_bar, vertical_scroll_track,
@@ -166,7 +167,17 @@ impl Ui {
                 offset: Vec2::ZERO,
                 target: Vec2::ZERO,
                 content: Vec2::ZERO,
+                text_scale: 0.0,
             });
+        // Offsets are stored in screen pixels, while the visible text grows with zoom.
+        // Preserve the same logical scroll position when the node scale changes.
+        let scale = self.scale();
+        if scroll_st.text_scale > 0.0 {
+            let ratio = scale / scroll_st.text_scale;
+            scroll_st.offset.y *= ratio;
+            scroll_st.target.y *= ratio;
+        }
+        scroll_st.text_scale = scale;
         scroll_st.offset.y = scroll_st.offset.y.clamp(0.0, max_scroll);
         scroll_st.target.y = scroll_st.target.y.clamp(0.0, max_scroll);
 
@@ -311,20 +322,30 @@ impl Ui {
                 max_scroll = (content_h - view_h).max(0.0);
             }
 
-            let hit = |ui: &Ui, pos: Vec2, offset_y: f32, lines: &[Line]| -> usize {
+            let hit = |ui: &Ui, pos: Vec2, offset_y: f32, lines: &[Line], word: bool| -> usize {
                 let local = pos - inner.min;
                 let li = ((offset_y + local.y.max(0.0)) / line_h).floor() as isize;
                 let li = li.clamp(0, lines.len().saturating_sub(1) as isize) as usize;
                 let line = &lines[li];
-                line.start + byte_at_x(ui, &text[line.start..line.end], local.x.max(0.0))
+                let line_text = &text[line.start..line.end];
+                line.start
+                    + if word {
+                        byte_under_x(ui, line_text, local.x.max(0.0))
+                    } else {
+                        byte_at_x(ui, line_text, local.x.max(0.0))
+                    }
             };
 
             if editing && hovered && self.input.mouse_pressed && !on_bar {
-                let at = hit(self, self.input.mouse_pos, scroll_st.offset.y, &lines);
-                st.caret = at;
-                if !shift {
-                    st.anchor = at;
-                }
+                let at = hit(
+                    self,
+                    self.input.mouse_pos,
+                    scroll_st.offset.y,
+                    &lines,
+                    false,
+                );
+                let word_at = hit(self, self.input.mouse_pos, scroll_st.offset.y, &lines, true);
+                text_press(self, widget_id, text, &mut st, at, word_at);
                 caret_moved = true;
             }
             if self.active_id == Some(widget_id) && self.input.mouse_down {
@@ -336,7 +357,15 @@ impl Ui {
                     scroll_st.offset.y = (scroll_st.offset.y + line_h).min(max_scroll);
                     scroll_st.target.y = scroll_st.offset.y;
                 }
-                st.caret = hit(self, self.input.mouse_pos, scroll_st.offset.y, &lines);
+                let at = hit(
+                    self,
+                    self.input.mouse_pos,
+                    scroll_st.offset.y,
+                    &lines,
+                    false,
+                );
+                let word_at = hit(self, self.input.mouse_pos, scroll_st.offset.y, &lines, true);
+                text_drag(self, widget_id, text, &mut st, at, word_at);
                 caret_moved = true;
             }
         }
@@ -374,7 +403,11 @@ impl Ui {
             self.theme.input.bg_disabled
         };
         self.round_rect(rect, self.s(self.theme.metrics.button_radius), border);
-        self.round_rect(rect.inset(1.0), self.s(self.theme.metrics.button_radius) - 1.0, bg);
+        self.round_rect(
+            rect.inset(1.0),
+            self.s(self.theme.metrics.button_radius) - 1.0,
+            bg,
+        );
 
         let text_color = if enabled {
             self.theme.text.primary
@@ -439,6 +472,46 @@ impl Ui {
             hovered,
             clicked: false,
             changed,
+        }
+    }
+}
+
+#[cfg(test)]
+mod scale_tests {
+    use super::*;
+
+    #[test]
+    fn wrapped_lines_stay_stable_at_fractional_zoom() {
+        let mut ui = Ui::new();
+        let text = "The quick brown fox jumps over the lazy dog. Проверка переноса текста.";
+        let mut expected = None;
+        for zoom in [0.69, 0.71, 0.99, 1.01, 1.49, 1.51, 2.0] {
+            ui.scale = zoom;
+            let lines: Vec<_> = wrap_lines(&ui, text, 180.0 * zoom).into_iter()
+                .map(|line| (line.start, line.end)).collect();
+            if let Some(expected) = &expected { assert_eq!(&lines, expected, "zoom={zoom}"); }
+            else { expected = Some(lines); }
+        }
+    }
+
+    #[test]
+    fn text_area_scroll_tracks_zoom_in_both_directions() {
+        let mut ui = Ui::new();
+        let mut text = (0..50).map(|i| format!("line {i}\n")).collect::<String>();
+        let input = crate::UiInput { viewport: Vec2::new(800.0, 600.0), ..Default::default() };
+        ui.begin_frame(input.clone());
+        ui.text_area("field", &mut text, Vec2::new(300.0, 100.0));
+        let id = ui.current_id("field");
+        let state = ui.scrolls.get_mut(&id).unwrap();
+        state.offset.y = 40.0;
+        state.target.y = 40.0;
+        ui.end_frame();
+        for (zoom, expected) in [(1.5, 60.0), (0.75, 30.0), (1.0, 40.0)] {
+            ui.begin_frame(input.clone());
+            ui.scale = zoom;
+            ui.text_area("field", &mut text, Vec2::new(300.0 * zoom, 100.0 * zoom));
+            assert!((ui.scrolls[&id].offset.y - expected).abs() < 0.01);
+            ui.end_frame();
         }
     }
 }

@@ -53,8 +53,12 @@ impl TreeRow<'_> {
     /// Decorative icon in the current zone (mid or trailing).
     pub fn icon(&mut self, icon: &str) {
         let rect = self.next_rect();
-        self.ui
-            .draw_icon_at(icon, rect.inset(self.ui.s(2.0)), self.ui.theme.text.dim, false);
+        self.ui.draw_icon_at(
+            icon,
+            rect.inset(self.ui.s(2.0)),
+            self.ui.theme.text.dim,
+            false,
+        );
     }
 
     /// Clickable icon button. Returns `true` on click.
@@ -98,7 +102,8 @@ impl TreeRow<'_> {
             && self.ui.input.mouse_released;
 
         if hovered || active {
-            self.ui.round_rect(rect, self.ui.s(3.0), self.ui.theme.button.hover);
+            self.ui
+                .round_rect(rect, self.ui.s(3.0), self.ui.theme.button.hover);
         }
         let color = if !enabled {
             self.ui.theme.text.disabled

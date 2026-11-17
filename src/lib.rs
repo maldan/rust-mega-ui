@@ -13,11 +13,11 @@ mod window;
 #[cfg(feature = "wgpu")]
 pub mod wgpu;
 
-pub use theme::Theme;
 pub use dock::{DockNode, DockState};
 pub use layout::{CrossAlign, LayoutOpts, MainAlign};
 pub use node_graph::{NodeFrame, NodeLink, NodePortSide, NodeSpace, PortType, port_type};
 pub use plot_view::PlotView;
+pub use theme::Theme;
 pub use types::{
     Area, CursorIcon, DrawCommand, Id, Pointer, Rect, Response, UiInput, UiInputDebug, UiOutput,
 };
@@ -91,6 +91,8 @@ pub(crate) struct ScrollState {
     pub offset: Vec2,
     pub target: Vec2,
     pub content: Vec2,
+    /// Scale at which a text area last stored its pixel scroll offset.
+    pub text_scale: f32,
 }
 
 pub struct Ui {
@@ -128,6 +130,7 @@ pub struct Ui {
     /// Dock leaf path that last received a click (Unity-style focus strip).
     pub(crate) dock_focus: Option<u32>,
     pub(crate) scrolls: HashMap<Id, ScrollState>,
+    pub(crate) text_mouse: widgets::edit::TextMouseState,
     pub(crate) edits: HashMap<Id, widgets::edit::EditState>,
     pub(crate) num_bufs: HashMap<Id, String>,
     pub(crate) tabs: HashMap<Id, usize>,
@@ -176,6 +179,9 @@ pub struct Ui {
     pub(crate) overlay_block: Vec<Rect>,
     /// When true, `text` / `round_rect` paint into the overlay list.
     pub(crate) draw_to_overlay: bool,
+    /// Last-frame popover regions also block controls built before their popup.
+    pub(crate) popover_regions: HashMap<Id, (Rect, u32)>,
+    pub(crate) popover_depth: usize,
     /// Active [`NodeSpace`] during `node_space` closure (host stack borrow).
     pub(crate) node_space_ptr: Option<NonNull<node_graph::NodeSpace>>,
     pub(crate) node_space_clip: Option<Rect>,
@@ -230,6 +236,7 @@ impl Ui {
             dock_focus: None,
             scrolls: HashMap::new(),
             edits: HashMap::new(),
+            text_mouse: widgets::edit::TextMouseState::default(),
             num_bufs: HashMap::new(),
             tabs: HashMap::new(),
             tab_content_sizes: HashMap::new(),
@@ -271,6 +278,8 @@ impl Ui {
             gradient_edits: HashMap::new(),
             overlay_block: Vec::new(),
             draw_to_overlay: false,
+            popover_regions: HashMap::new(),
+            popover_depth: 0,
             node_space_ptr: None,
             node_space_clip: None,
             node_space_id: None,
@@ -522,6 +531,7 @@ impl Ui {
             self.font.prewarm(self.font_size());
         }
 
+        self.text_mouse.begin_frame(&input, self.s(4.0));
         self.input = input;
         self.draw_list.clear();
         self.overlay.clear();
@@ -552,6 +562,7 @@ impl Ui {
         self.modal_request_close = false;
 
         self.frame = self.frame.wrapping_add(1);
+        self.popover_regions.retain(|_, (_, frame)| self.frame.wrapping_sub(*frame) <= 1);
         self.gc_retained_state();
 
         // Drop stale hit-boxes / window state (closed windows, etc.) before hover hit-test.
@@ -610,7 +621,10 @@ impl Ui {
 
         let vp = self.input.viewport;
         let title_h = self.s(self.theme.metrics.window_title_h);
-        let min = Vec2::new(self.s(self.theme.metrics.window_min_w), self.s(self.theme.metrics.window_min_h));
+        let min = Vec2::new(
+            self.s(self.theme.metrics.window_min_w),
+            self.s(self.theme.metrics.window_min_h),
+        );
         let sc = self.scale.max(0.5);
         for w in self.windows.values_mut() {
             let mut pos = w.pos * sc;
@@ -694,7 +708,9 @@ impl Ui {
         let grace = 1u32; // alive if touched this frame or the previous one
         let alive_map = self.state_alive.borrow();
         let alive = |id: &Id| {
-            alive_map.get(id).is_some_and(|&f| frame.wrapping_sub(f) <= grace)
+            alive_map
+                .get(id)
+                .is_some_and(|&f| frame.wrapping_sub(f) <= grace)
         };
 
         self.headers.retain(|id, _| alive(id));
@@ -952,6 +968,9 @@ impl Ui {
     /// Hit-test with current clip. Popup absorb blocks widgets under overlays.
     pub(crate) fn hovered_rect(&self, rect: Rect) -> bool {
         if self.block_input {
+            return false;
+        }
+        if self.popover_depth == 0 && !self.popover_regions.is_empty() {
             return false;
         }
         if self.mouse_over_absorb() {

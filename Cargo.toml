@@ -12,6 +12,7 @@ wgpu = ["dep:wgpu", "dep:bytemuck", "dep:windows"]
 profile-puffin = ["dep:puffin", "dep:puffin_http"]
 
 [dependencies]
+unicode-segmentation = "1.13"
 glam = "0.33.2"
 fontdue = "0.9.4"
 resvg = { version = "0.47", default-features = false }

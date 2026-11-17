@@ -5,17 +5,27 @@ use crate::{CrossAlign, LayoutDir, Ui, new_layer};
 
 impl Ui {
     pub fn button(&mut self, id: &str, label: &str) -> Response {
+        self.button_with_rect(id, label, None).0
+    }
+
+    pub(crate) fn button_with_rect(
+        &mut self,
+        id: &str,
+        label: &str,
+        icon: Option<&str>,
+    ) -> (Response, Rect) {
         let enabled = self.enabled();
         let id = self.current_id(id);
         let pad_x = self.s(14.0);
         let text_w = self.text_width(label);
         let text_h = self.text_height();
+        let icon_space = if icon.is_some() { self.s(20.0) } else { 0.0 };
         let height = self.s(28.0);
         let fill_w = self.layer().fill_w;
         let width = if fill_w > 0.0 && matches!(self.layer().dir, LayoutDir::Vertical) {
             fill_w
         } else {
-            (text_w + pad_x * 2.0).max(height)
+            (text_w + pad_x * 2.0 + icon_space).max(height)
         };
         let size = Vec2::new(width, height);
         let rect = self.allocate(size);
@@ -32,16 +42,34 @@ impl Ui {
             self.theme.text.disabled
         };
         let text_pos = Vec2::new(
-            draw_rect.min.x + (draw_rect.width() - text_w) * 0.5,
+            draw_rect.min.x + (draw_rect.width() - text_w - icon_space) * 0.5,
             draw_rect.min.y + (draw_rect.height() - text_h) * 0.5,
         );
         self.text(text_pos, label, text_color);
-
-        Response {
-            hovered,
-            clicked,
-            changed: false,
+        if let Some(icon) = icon {
+            let size = self.s(12.0);
+            self.draw_icon_at(
+                icon,
+                Rect::from_min_size(
+                    Vec2::new(
+                        draw_rect.max.x - self.s(22.0),
+                        draw_rect.min.y + (height - size) * 0.5,
+                    ),
+                    Vec2::splat(size),
+                ),
+                text_color,
+                false,
+            );
         }
+
+        (
+            Response {
+                hovered,
+                clicked,
+                changed: false,
+            },
+            rect,
+        )
     }
 
     /// Button with arbitrary content (icons, labels, …).

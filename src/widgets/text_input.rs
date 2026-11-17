@@ -2,8 +2,9 @@ use glam::Vec2;
 
 use crate::types::{CursorIcon, Response};
 use crate::widgets::edit::{
-    EditState, byte_at_x, clamp_edit, draw_sel_line, handle_clipboard, handle_typing, has_sel,
-    move_end, move_home, move_left, move_right, sel_range,
+    EditState, byte_at_x, byte_under_x, clamp_edit, draw_sel_line, handle_clipboard, handle_typing,
+    has_sel, input_view_start, move_end, move_home, move_left, move_right, sel_range, text_drag,
+    text_press,
 };
 use crate::{LayoutDir, Ui};
 
@@ -42,6 +43,7 @@ impl Ui {
         let mut changed = false;
         let pad = self.s(8.0);
         let shift = self.input.key_shift;
+        let inner_w = width - pad * 2.0;
 
         if focused {
             self.want_capture = true;
@@ -66,17 +68,20 @@ impl Ui {
             changed |= handle_typing(self, text, &mut st);
             clamp_edit(&mut st, text.len());
 
+            let hit_start = input_view_start(self, text, st.caret, inner_w);
             if hovered && self.input.mouse_pressed {
                 let local = (self.input.mouse_pos.x - rect.min.x - pad).max(0.0);
-                let at = byte_at_x(self, text, local);
-                st.caret = at;
-                if !shift {
-                    st.anchor = at;
-                }
+                let start = hit_start.min(text.len());
+                let at = start + byte_at_x(self, &text[start..], local);
+                let word_at = start + byte_under_x(self, &text[start..], local);
+                text_press(self, widget_id, text, &mut st, at, word_at);
             }
             if self.active_id == Some(widget_id) && self.input.mouse_down {
                 let local = (self.input.mouse_pos.x - rect.min.x - pad).max(0.0);
-                st.caret = byte_at_x(self, text, local);
+                let start = hit_start.min(text.len());
+                let at = start + byte_at_x(self, &text[start..], local);
+                let word_at = start + byte_under_x(self, &text[start..], local);
+                text_drag(self, widget_id, text, &mut st, at, word_at);
             }
         }
 
@@ -93,24 +98,15 @@ impl Ui {
             self.theme.input.bg_disabled
         };
         self.round_rect(rect, self.s(self.theme.metrics.button_radius), border);
-        self.round_rect(rect.inset(1.0), self.s(self.theme.metrics.button_radius) - 1.0, bg);
+        self.round_rect(
+            rect.inset(1.0),
+            self.s(self.theme.metrics.button_radius) - 1.0,
+            bg,
+        );
 
         let th = self.text_height();
-        let inner_w = width - pad * 2.0;
         let (sel_a, sel_b) = sel_range(st);
-
-        let mut view_start = 0usize;
-        if self.text_width(&text[..st.caret]) > inner_w {
-            for (i, _) in text.char_indices() {
-                if i > st.caret {
-                    break;
-                }
-                if self.text_width(&text[i..st.caret]) <= inner_w * 0.85 {
-                    view_start = i;
-                    break;
-                }
-            }
-        }
+        let view_start = input_view_start(self, text, st.caret, inner_w);
 
         let mut end = text.len();
         for (i, _) in text[view_start..].char_indices() {

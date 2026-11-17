@@ -48,11 +48,8 @@ impl Ui {
     /// Host texture as a (possibly rotated) quad. Corners are TL, TR, BR, BL.
     /// Clipped to the current clip rect with UV interpolation.
     pub fn texture_quad(&mut self, slot: u32, pos: [Vec2; 4], uv: [[f32; 2]; 4]) {
-        let mut poly: Vec<(Vec2, [f32; 2])> = pos
-            .into_iter()
-            .zip(uv)
-            .map(|(p, u)| (p, u))
-            .collect();
+        let mut poly: Vec<(Vec2, [f32; 2])> =
+            pos.into_iter().zip(uv).map(|(p, u)| (p, u)).collect();
         if let Some(clip) = self.clip() {
             poly = clip_poly_to_rect(poly, clip);
         }
@@ -452,10 +449,7 @@ fn draw_plot_series(ui: &mut Ui, rect: Rect, view: &PlotView, values: &[f32], co
     ui.draw_polyline(&pts, ui.s(2.0), color);
 }
 
-fn clip_poly_to_rect(
-    poly: Vec<(Vec2, [f32; 2])>,
-    clip: Rect,
-) -> Vec<(Vec2, [f32; 2])> {
+fn clip_poly_to_rect(poly: Vec<(Vec2, [f32; 2])>, clip: Rect) -> Vec<(Vec2, [f32; 2])> {
     let edges = [
         (clip.min.x, true, true),
         (clip.max.x, true, false),
@@ -487,24 +481,11 @@ fn clip_poly_to_rect(
 
 fn inside(p: Vec2, bound: f32, is_x: bool, keep_less: bool) -> bool {
     let v = if is_x { p.x } else { p.y };
-    if keep_less {
-        v >= bound
-    } else {
-        v <= bound
-    }
+    if keep_less { v >= bound } else { v <= bound }
 }
 
-fn intersect(
-    a: (Vec2, [f32; 2]),
-    b: (Vec2, [f32; 2]),
-    bound: f32,
-    is_x: bool,
-) -> (Vec2, [f32; 2]) {
-    let (av, bv) = if is_x {
-        (a.0.x, b.0.x)
-    } else {
-        (a.0.y, b.0.y)
-    };
+fn intersect(a: (Vec2, [f32; 2]), b: (Vec2, [f32; 2]), bound: f32, is_x: bool) -> (Vec2, [f32; 2]) {
+    let (av, bv) = if is_x { (a.0.x, b.0.x) } else { (a.0.y, b.0.y) };
     let denom = bv - av;
     let t = if denom.abs() < 1e-8 {
         0.0
@@ -520,7 +501,12 @@ fn intersect(
     (pos, uv)
 }
 
-fn remap_uv(full: crate::types::Rect, visible: crate::types::Rect, uv_min: [f32; 2], uv_max: [f32; 2]) -> ([f32; 2], [f32; 2]) {
+fn remap_uv(
+    full: crate::types::Rect,
+    visible: crate::types::Rect,
+    uv_min: [f32; 2],
+    uv_max: [f32; 2],
+) -> ([f32; 2], [f32; 2]) {
     let rw = full.width().max(1e-4);
     let rh = full.height().max(1e-4);
     let su = uv_max[0] - uv_min[0];

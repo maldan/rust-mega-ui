@@ -137,7 +137,11 @@ impl Ui {
             }
 
             self.round_rect_overlay(list, radius, self.theme.button.border);
-            self.round_rect_overlay(list.inset(1.0), (radius - 1.0).max(0.0), self.theme.popup.bg);
+            self.round_rect_overlay(
+                list.inset(1.0),
+                (radius - 1.0).max(0.0),
+                self.theme.popup.bg,
+            );
 
             for (i, opt) in options.iter().enumerate() {
                 let item = Self::select_item_rect(list, width, item_h, i, st.scroll);
