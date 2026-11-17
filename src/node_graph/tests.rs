@@ -296,6 +296,217 @@ fn detach_node_removes_its_links_but_keeps_others() {
 // -- geometry helpers -----------------------------------------------------
 
 #[test]
+fn annotation_is_optional_owned_and_removed_on_detach() {
+    let mut space = NodeSpace::new();
+    assert_eq!(space.node_annotation("a"), None);
+    let text = String::from("128 ms");
+    space.set_node_annotation("a", Some(&text));
+    drop(text);
+    assert_eq!(space.node_annotation("a"), Some("128 ms"));
+    space.set_node_annotation("a", Some("42 items\nsecond line"));
+    assert_eq!(space.node_annotation("a"), Some("42 items"));
+    for hidden in [None, Some(""), Some("\nsecond line")] {
+        space.set_node_annotation("a", Some("128 ms"));
+        space.set_node_annotation("a", hidden);
+        assert_eq!(space.node_annotation("a"), None);
+    }
+    space.set_node_annotation("a", Some("128 ms"));
+    space.set_node_annotation("b", Some("42 items"));
+    space.detach_node("a");
+    assert_eq!(space.node_annotation("a"), None);
+    assert_eq!(space.node_annotation("b"), Some("42 items"));
+}
+
+#[test]
+fn annotation_is_above_node_clipped_and_preserves_layout() {
+    use crate::{Ui, UiInput};
+
+    let mut ui = Ui::new();
+    let color = ui.theme.node.annotation;
+    let mut space = NodeSpace::new();
+    let mut pos = Vec2::new(30.0, 100.0);
+    let canvas = Rect::from_min_size(Vec2::ZERO, Vec2::splat(2000.0));
+    for zoom in [0.35, 1.0, 2.0] {
+        space.zoom = zoom;
+        let mut baseline = None;
+        for text in [
+            None,
+            Some("128 ms"),
+            Some("A very long annotation that exceeds the node width"),
+            None,
+        ] {
+            space.set_node_annotation("a", text);
+            ui.begin_frame(UiInput {
+                viewport: canvas.max,
+                mouse_pos: Vec2::splat(-100.0),
+                ..Default::default()
+            });
+            ui.node_space_rect("graph", canvas, &mut space, |ui| {
+                ui.node("a", "Node", &mut pos, |ui| {
+                    ui.node_port(NodePortSide::Input, "in", port_type::ANY);
+                });
+            });
+            let out = ui.end_frame();
+            let glyphs: Vec<_> = out
+                .draw_list
+                .iter()
+                .filter(|d| d.colors == [color; 4])
+                .collect();
+            assert_eq!(!glyphs.is_empty(), text.is_some());
+            let bounds = space.node_screen_rects["a"];
+            for glyph in &glyphs {
+                assert!(glyph.rect.max.y <= bounds.min.y - 3.0 * zoom + 1e-4);
+                assert!(glyph.rect.min.x >= bounds.min.x + 4.0 * zoom - 1e-4);
+                assert!(glyph.rect.max.x <= bounds.max.x - 4.0 * zoom + 1e-4);
+            }
+            if let Some("128 ms") = text {
+                let px = ui.theme.metrics.font_size * node_content_scale(ui.scale(), zoom) * 0.82;
+                let expected_x = bounds.max.x - 4.0 * zoom - ui.text_width_at("128 ms", px);
+                assert!((glyphs[0].rect.min.x - expected_x).abs() < px * 0.2);
+            }
+            let layout = (
+                space.node_sizes["a"],
+                space.pin_pos("a", NodePortSide::Input, "in"),
+            );
+            if let Some(expected) = baseline {
+                assert_eq!(layout, expected);
+            }
+            baseline = Some(layout);
+            assert_eq!(space.node_annotation("a"), text);
+        }
+    }
+}
+
+#[test]
+fn annotation_remains_visible_when_node_body_is_culled() {
+    use crate::{Ui, UiInput};
+
+    let mut ui = Ui::new();
+    ui.theme.metrics.font_size = 28.0;
+    let color = ui.theme.node.annotation;
+    let mut space = NodeSpace::new();
+    space.set_node_annotation("a", Some("128 ms"));
+    let canvas = Rect::from_min_size(Vec2::ZERO, Vec2::splat(200.0));
+    let mut pos = Vec2::new(10.0, 80.0);
+    for culled in [false, true] {
+        if culled {
+            pos.y = 218.0;
+        }
+        ui.begin_frame(UiInput {
+            viewport: canvas.max,
+            ..Default::default()
+        });
+        let mut built = false;
+        ui.node_space_rect("graph", canvas, &mut space, |ui| {
+            ui.node("a", "Node", &mut pos, |_| {
+                built = true;
+            });
+        });
+        assert_eq!(built, !culled);
+        let out = ui.end_frame();
+        let glyphs: Vec<_> = out
+            .draw_list
+            .iter()
+            .filter(|d| d.colors == [color; 4])
+            .collect();
+        assert!(!glyphs.is_empty());
+        for glyph in glyphs {
+            assert!(glyph.rect.max.y <= canvas.max.y);
+            assert!(glyph.rect.min.y >= canvas.min.y);
+        }
+    }
+}
+
+#[test]
+fn progress_is_optional_clamped_and_removed_on_detach() {
+    let mut space = NodeSpace::new();
+    assert_eq!(space.node_progress("a"), None);
+    for (value, expected) in [(-0.5, 0.0), (0.45, 0.45), (1.5, 1.0)] {
+        space.set_node_progress("a", Some(value));
+        assert_eq!(space.node_progress("a"), Some(expected));
+    }
+    for value in [
+        None,
+        Some(f32::NAN),
+        Some(f32::INFINITY),
+        Some(f32::NEG_INFINITY),
+    ] {
+        space.set_node_progress("a", Some(0.5));
+        space.set_node_progress("a", value);
+        assert_eq!(space.node_progress("a"), None);
+    }
+    space.set_node_progress("a", Some(0.5));
+    space.set_node_progress("b", Some(1.0));
+    space.detach_node("a");
+    assert_eq!(space.node_progress("a"), None);
+    assert_eq!(space.node_progress("b"), Some(1.0));
+}
+
+#[test]
+fn progress_strip_scales_and_preserves_node_and_port_layout() {
+    use crate::{Ui, UiInput};
+
+    let mut ui = Ui::new();
+    let mut space = NodeSpace::new();
+    let mut pos = Vec2::new(20.0, 20.0);
+    let fill = ui.theme.node.progress;
+    let track = ui.theme.node.progress_track;
+    let canvas = Rect::from_min_size(Vec2::ZERO, Vec2::splat(2000.0));
+    for zoom in [0.35, 1.0, 2.0] {
+        space.zoom = zoom;
+        let mut baseline = None;
+        // Warm up the retained node dimensions, then compare all states.
+        for progress in [None, None, Some(0.0), Some(0.25), Some(1.0), None] {
+            space.set_node_progress("a", progress);
+            ui.begin_frame(UiInput {
+                viewport: canvas.max,
+                mouse_pos: Vec2::splat(-100.0),
+                ..Default::default()
+            });
+            ui.node_space_rect("graph", canvas, &mut space, |ui| {
+                ui.node("a", "Node", &mut pos, |ui| {
+                    ui.node_port(NodePortSide::Input, "in", port_type::ANY);
+                });
+            });
+            let out = ui.end_frame();
+            let tracks: Vec<_> = out
+                .draw_list
+                .iter()
+                .filter(|d| d.colors == [track; 4])
+                .collect();
+            let fills: Vec<_> = out
+                .draw_list
+                .iter()
+                .filter(|d| d.colors == [fill; 4])
+                .collect();
+            assert_eq!(tracks.len(), usize::from(progress.is_some()));
+            assert_eq!(fills.len(), usize::from(progress.is_some_and(|v| v > 0.0)));
+            if let Some(value) = progress {
+                assert!((tracks[0].rect.height() - 3.0 * zoom).abs() < 1e-4);
+                let bounds = space.node_screen_rects["a"];
+                assert!(
+                    (tracks[0].rect.min.y - bounds.min.y - ui.theme.metrics.window_title_h * zoom)
+                        .abs()
+                        < 1e-4
+                );
+                if value > 0.0 {
+                    assert!((fills[0].rect.width() - tracks[0].rect.width() * value).abs() < 1e-4);
+                }
+            }
+            let layout = (
+                space.node_sizes["a"],
+                space.pin_pos("a", NodePortSide::Input, "in"),
+            );
+            if let Some(expected) = baseline {
+                assert_eq!(layout, expected);
+            }
+            baseline = Some(layout);
+            assert_eq!(space.node_progress("a"), progress);
+        }
+    }
+}
+
+#[test]
 fn dist_point_segment_zero_on_segment() {
     let d = dist_point_segment(Vec2::new(5.0, 0.0), Vec2::ZERO, Vec2::new(10.0, 0.0));
     assert!(d < 1e-4);

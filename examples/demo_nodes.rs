@@ -303,6 +303,10 @@ impl Default for NodesDemo {
             port_type::STRING,
         );
 
+        // Host-owned annotations: timing and arbitrary metadata use the same API.
+        space.set_node_annotation(&n_cross, Some("128 ms"));
+        space.set_node_annotation(&n_print_v, Some("42 items"));
+
         Self {
             dock,
             space,
@@ -1140,6 +1144,31 @@ impl Scene for NodesDemo {
                                 ui.label(&format!("Id: {}", n.id));
                                 ui.label(&format!("Type: {}", NodesDemo::kind_title(n.kind)));
                                 ui.label(&format!("Pos: ({:.0}, {:.0})", n.pos.x, n.pos.y));
+                                let mut show_progress = space.node_progress(&sel).is_some();
+                                let mut progress = space.node_progress(&sel).unwrap_or(0.0);
+                                ui.checkbox("show_progress", "Show progress", &mut show_progress);
+                                if show_progress {
+                                    ui.slider("node_progress", &mut progress, 0.0..=1.0);
+                                    ui.label(&format!("Progress: {:.0}%", progress * 100.0));
+                                }
+                                space.set_node_progress(&sel, show_progress.then_some(progress));
+                                ui.label("Annotation (above node)");
+                                let mut annotation =
+                                    space.node_annotation(&sel).unwrap_or("").to_string();
+                                if ui.text_input("node_annotation", &mut annotation).changed() {
+                                    space.set_node_annotation(&sel, Some(&annotation));
+                                }
+                                ui.horizontal(|ui| {
+                                    if ui.button("annotation_time", "128 ms").clicked() {
+                                        space.set_node_annotation(&sel, Some("128 ms"));
+                                    }
+                                    if ui.button("annotation_items", "42 items").clicked() {
+                                        space.set_node_annotation(&sel, Some("42 items"));
+                                    }
+                                    if ui.button("annotation_clear", "Clear").clicked() {
+                                        space.set_node_annotation(&sel, None);
+                                    }
+                                });
                                 if !n.preview.is_empty() {
                                     ui.label(&format!("Value: {}", n.preview));
                                 }

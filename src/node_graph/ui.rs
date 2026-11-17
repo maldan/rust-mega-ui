@@ -604,6 +604,26 @@ impl Ui {
         let mut rect = Rect::from_min_size(screen_pos, screen_size);
         let title_bar = Rect::from_min_size(screen_pos, Vec2::new(screen_size.x, title_h * z));
 
+        // Draw independently of body culling: the annotation can still be
+        // visible when the node itself is just below the canvas edge.
+        if let Some(text) = space.node_annotation(id) {
+            let px = self.theme.metrics.font_size * node_content_scale(self.scale, z) * 0.82;
+            let height = self.text_height_at(px);
+            let annotation_rect = Rect {
+                min: Vec2::new(rect.min.x + 4.0 * z, rect.min.y - height - 3.0 * z),
+                max: Vec2::new(rect.max.x - 4.0 * z, rect.min.y - 3.0 * z),
+            };
+            let x = annotation_rect.max.x - self.text_width_at(text, px);
+            self.push_clip(annotation_rect);
+            self.text_sized(
+                Vec2::new(x, annotation_rect.min.y),
+                text,
+                self.theme.node.annotation,
+                px,
+            );
+            self.pop_clip();
+        }
+
         if known_size {
             let pad = PIN_HIT * z + 2.0;
             let cull = Rect {
@@ -719,6 +739,25 @@ impl Ui {
                 self.theme.text.title
             },
         );
+
+        // Use the existing gap below the title so toggling progress never
+        // changes node size, content layout, or port positions.
+        if let Some(progress) = space.node_progress(id) {
+            let track = Rect {
+                min: Vec2::new(rect.min.x + 1.0, title_draw.max.y),
+                max: Vec2::new(rect.max.x - 1.0, title_draw.max.y + 3.0 * z),
+            };
+            self.fill_rect(track, self.theme.node.progress_track);
+            if progress > 0.0 {
+                self.fill_rect(
+                    Rect::from_min_size(
+                        track.min,
+                        Vec2::new(track.width() * progress, track.height()),
+                    ),
+                    self.theme.node.progress,
+                );
+            }
+        }
 
         let pad = NODE_PAD * z;
         let content_origin = Vec2::new(rect.min.x + pad, rect.min.y + title_h * z + pad * 0.6);

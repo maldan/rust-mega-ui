@@ -201,6 +201,11 @@ pub struct ToastTheme {
 pub struct NodeTheme {
     pub running: Rgba,
     pub bypass: Rgba,
+    /// Fill and track of the optional progress strip below the node title.
+    pub progress: Rgba,
+    pub progress_track: Rgba,
+    /// Optional annotation text above the node.
+    pub annotation: Rgba,
     pub frame: Rgba,
     pub frame_sel: Rgba,
     pub frame_border: Rgba,
@@ -399,6 +404,9 @@ impl Theme {
             node: NodeTheme {
                 running: [0.18, 0.68, 0.32, 1.0],
                 bypass: [0.55, 0.42, 0.12, 1.0],
+                progress: [0.18, 0.68, 0.32, 1.0],
+                progress_track: [0.18, 0.68, 0.32, 0.15],
+                annotation: [0.60, 0.63, 0.68, 1.0],
                 frame: [0.14, 0.22, 0.36, 0.10],
                 frame_sel: [0.16, 0.32, 0.58, 0.10],
                 frame_border: [0.32, 0.48, 0.72, 0.55],

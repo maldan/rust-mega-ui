@@ -143,6 +143,10 @@ pub struct NodeSpace {
     pub running_nodes: HashSet<String>,
     /// Host-owned: nodes with bypass on (muted chrome).
     pub bypassed_nodes: HashSet<String>,
+    /// Optional host-reported progress; updated through [`Self::set_node_progress`].
+    node_progress: HashMap<String, f32>,
+    /// Optional host text above a node; see [`Self::set_node_annotation`].
+    node_annotations: HashMap<String, String>,
     /// Cleared by host after applying (remove nodes from its list).
     pub request_delete_nodes: Vec<String>,
     /// Cleared by host after applying (duplicate node payloads + links).
@@ -207,6 +211,8 @@ impl NodeSpace {
             next_frame_id: 1,
             running_nodes: HashSet::new(),
             bypassed_nodes: HashSet::new(),
+            node_progress: HashMap::new(),
+            node_annotations: HashMap::new(),
             request_delete_nodes: Vec::new(),
             request_clone_nodes: Vec::new(),
             request_copy_nodes: Vec::new(),
@@ -233,6 +239,56 @@ impl NodeSpace {
             pointer_over_frame: false,
             frame_screen_rects: HashMap::new(),
         }
+    }
+
+    /// Set the optional progress strip below a node's title.
+    ///
+    /// Finite values are clamped to `0..=1`. `None` or a non-finite value hides
+    /// the strip. Progress persists across frames, independently of running /
+    /// bypass state; the host decides when to update or hide it and schedules
+    /// a new UI frame after updates. `Some(1.0)` stays visible until cleared.
+    pub fn set_node_progress(&mut self, node_id: &str, progress: Option<f32>) {
+        if let Some(value) = progress.filter(|v| v.is_finite()) {
+            map_upsert(&mut self.node_progress, node_id, value.clamp(0.0, 1.0));
+        } else {
+            self.node_progress.remove(node_id);
+        }
+    }
+
+    /// Current host-reported progress, or `None` when the strip is hidden.
+    pub fn node_progress(&self, node_id: &str) -> Option<f32> {
+        self.node_progress.get(node_id).copied()
+    }
+
+    /// Set a single-line annotation above the node, aligned to its right edge.
+    ///
+    /// The host supplies and formats the text (e.g. `"128 ms"` or `"42 items"`).
+    /// It persists across frames, independently of node state and progress.
+    /// `None` or an empty first line hides it; only the first line is displayed.
+    /// Long text is clipped to the node width without changing layout or ports.
+    /// The host schedules a new UI frame after updating the annotation.
+    pub fn set_node_annotation(&mut self, node_id: &str, annotation: Option<&str>) {
+        if let Some(text) = annotation
+            .and_then(|s| s.lines().next())
+            .filter(|s| !s.is_empty())
+        {
+            if let Some(stored) = self.node_annotations.get_mut(node_id) {
+                if stored != text {
+                    stored.clear();
+                    stored.push_str(text);
+                }
+            } else {
+                self.node_annotations
+                    .insert(node_id.to_string(), text.to_string());
+            }
+        } else {
+            self.node_annotations.remove(node_id);
+        }
+    }
+
+    /// Current annotation text, or `None` when hidden.
+    pub fn node_annotation(&self, node_id: &str) -> Option<&str> {
+        self.node_annotations.get(node_id).map(String::as_str)
     }
 
     pub fn register_type(&mut self, id: u16, name: impl Into<String>, color: [f32; 4]) {
@@ -390,6 +446,8 @@ impl NodeSpace {
             .retain(|l| l.from_node != node_id && l.to_node != node_id);
         self.selected_nodes.retain(|id| id != node_id);
         self.port_pos.remove(node_id);
+        self.node_progress.remove(node_id);
+        self.node_annotations.remove(node_id);
         self.node_sizes.remove(node_id);
         self.node_screen_rects.remove(node_id);
         self.node_world_pos.remove(node_id);

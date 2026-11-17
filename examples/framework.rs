@@ -47,6 +47,7 @@ pub struct FrameInput {
     key_backspace: bool,
     key_delete: bool,
     key_enter: bool,
+    key_escape: bool,
     key_left: bool,
     key_right: bool,
     key_up: bool,
@@ -78,6 +79,7 @@ impl FrameInput {
         self.key_backspace = false;
         self.key_delete = false;
         self.key_enter = false;
+        self.key_escape = false;
         self.key_left = false;
         self.key_right = false;
         self.key_up = false;
@@ -117,6 +119,7 @@ impl FrameInput {
             key_backspace: self.key_backspace,
             key_delete: self.key_delete,
             key_enter: self.key_enter,
+            key_escape: self.key_escape,
             key_left: self.key_left,
             key_right: self.key_right,
             key_up: self.key_up,
@@ -558,6 +561,7 @@ impl<S: Scene> ApplicationHandler for Host<S> {
                     Key::Named(NamedKey::Backspace) => self.input.key_backspace = true,
                     Key::Named(NamedKey::Delete) => self.input.key_delete = true,
                     Key::Named(NamedKey::Enter) => self.input.key_enter = true,
+                    Key::Named(NamedKey::Escape) => self.input.key_escape = true,
                     Key::Named(NamedKey::ArrowLeft) => self.input.key_left = true,
                     Key::Named(NamedKey::ArrowRight) => self.input.key_right = true,
                     Key::Named(NamedKey::ArrowUp) => self.input.key_up = true,
